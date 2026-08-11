@@ -203,7 +203,7 @@ test-results/
 ```ts
 import { defineConfig } from 'vitest/config'
 export default defineConfig({
-  test: { environment: 'node', include: ['tests/**/*.test.ts'] }
+  test: { environment: 'jsdom', include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'] }
 })
 ```
 
@@ -882,9 +882,9 @@ describe('rows', () => {
 
 describe('api', () => {
   it('batchGet parsea filas por rango', async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      const body = init?.body ? JSON.parse(String(init.body)) : null
-      const ranges = (body as { ranges: string[] } | null)?.ranges ?? []
+    const fetchMock = vi.fn(async (url: string) => {
+      const u = new URL(String(url))
+      const ranges = (u.searchParams.get('ranges') ?? '').split(',').filter(Boolean)
       const data: Record<string, { values?: (string | number)[][] }> = {}
       for (const r of ranges) data[r] = { values: [['a'], ['b']] }
       return { ok: true, json: async () => ({ valueRanges: Object.entries(data).map(([range, x]) => ({ range, values: x.values })) }) } as Response
@@ -893,10 +893,11 @@ describe('api', () => {
     const api = new SheetsApi(async () => 'TOKEN')
     const res = await api.batchGet('SHEET1', ['A1:A2', 'B1:B2'])
     expect(res['A1:A2']).toEqual([['a'], ['b']])
+    expect(res['B1:B2']).toEqual([['a'], ['b']])
     vi.unstubAllGlobals()
   })
   it('createSpreadsheet crea con titulo', async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ spreadsheetId: 'NEWID', spreadsheetUrl: 'http://x' }) }) as Response)
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => ({ ok: true, json: async () => ({ spreadsheetId: 'NEWID', spreadsheetUrl: 'http://x' }) }) as Response)
     vi.stubGlobal('fetch', fetchMock)
     const api = new SheetsApi(async () => 'T')
     const r = await api.createSpreadsheet('FinanceTracker')
@@ -910,15 +911,15 @@ describe('createInitialSpreadsheet', () => {
   it('crea hoja y escribe config default', async () => {
     const requests: { url: string; init: RequestInit }[] = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      requests.push({ url, init })
       const body = init?.body ? JSON.parse(String(init.body)) : {}
-      if (url.includes(':batchUpdate') && body.requests && 'addSheet' in body.requests[0]) {
+      requests.push({ url: String(url), init: init ?? ({} as RequestInit) })
+      if (String(url).includes('values:batchUpdate')) {
+        return { ok: true, json: async () => ({ responses: [] }) } as Response
+      }
+      if (String(url).includes(':batchUpdate')) {
         return { ok: true, json: async () => ({ replies: body.requests.map((_: unknown, i: number) => ({ addSheet: { properties: { sheetId: i } } })) }) } as Response
       }
-      if (String(init?.method).toUpperCase() === 'POST') {
-        return { ok: true, json: async () => ({ spreadsheetId: 'NEWID', spreadsheetUrl: 'http://x' }) } as Response
-      }
-      return { ok: true, json: async () => ({}) } as Response
+      return { ok: true, json: async () => ({ spreadsheetId: 'NEWID', spreadsheetUrl: 'http://x' }) } as Response
     })
     vi.stubGlobal('fetch', fetchMock)
     const api = new SheetsApi(async () => 'T')
@@ -1115,17 +1116,16 @@ export class SheetsApi {
   }
 
   async batchGet(spreadsheetId: string, ranges: string[]): Promise<Record<string, (string | number)[][]>> {
-    const params = new URLSearchParams({ ranges: '', majorDimension: 'ROWS', valueRenderOption: 'UNFORMATTED_VALUE' })
+    const params = new URLSearchParams()
     params.set('ranges', ranges.join(','))
+    params.set('majorDimension', 'ROWS')
+    params.set('valueRenderOption', 'UNFORMATTED_VALUE')
     const url = `${BASE}/${spreadsheetId}/values:batchGet?${params.toString()}`
-    const res = await this.request<{ valueRanges: { range: string; values?: (string | number)[][] }[] }>(url)
+    const res = await this.request<{ valueRanges: { values?: (string | number)[][] }[] }>(url)
     const out: Record<string, (string | number)[][]> = {}
-    for (const vr of res.valueRanges) {
-      const full = vr.range.split('!')[1] ?? vr.range
-      const start = full.replace(/[^A-Z0-9]/g, '').match(/^[A-Z]+/)?.[0] ?? ''
-      const key = start || vr.range
-      out[key] = vr.values ?? []
-    }
+    res.valueRanges.forEach((vr, i) => {
+      out[ranges[i]] = vr.values ?? []
+    })
     return out
   }
 
@@ -1260,10 +1260,11 @@ git add -A && git commit -m "feat(shared): sheets REST client + serialization + 
 
 `packages/shared/tests/storage.test.ts`:
 ```ts
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeEach } from 'vitest'
 import { localStorageAdapter } from '../src/data/storage'
 
 describe('localStorageAdapter', () => {
+  beforeEach(() => window.localStorage.clear())
   it('set/get/remove round-trip', async () => {
     const s = localStorageAdapter
     await s.set('k', 'v')
@@ -1274,26 +1275,7 @@ describe('localStorageAdapter', () => {
 })
 ```
 
-(En vitest `environment: 'node'` no hay localStorage; usar `vi.stubGlobal` en el test):
-
-```ts
-import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest'
-
-class FakeStorage {
-  private m = new Map<string, string>()
-  getItem(k: string) { return this.m.get(k) ?? null }
-  setItem(k: string, v: string) { this.m.set(k, v) }
-  removeItem(k: string) { this.m.delete(k) }
-}
-
-beforeAll(() => {
-  const s = new FakeStorage()
-  vi.stubGlobal('localStorage', s)
-})
-afterAll(() => vi.unstubAllGlobals())
-```
-
-(combinar ambos bloques en el mismo archivo; las declaraciones de describe/it van tras el stub).
+(jsdom provee `window.localStorage` real; no se necesita stub.)
 
 - [ ] **Step 2: Correr y verificar que falla**
 
@@ -1512,19 +1494,15 @@ function fakeApi() {
   const tables = new Map<string, (string | number)[][]>()
   const requests: { range: string; values: (string | number)[][] }[] = []
   const read = async (url: string) => {
-    const id = url.split('/spreadsheets/')[1].split('/')[0]
-    void id
-    const ranges = url.split('ranges=')[1].split('&')[0].split(',')
-    const out: Record<string, (string | number)[][]> = {}
-    for (const r of ranges) {
+    const u = new URL(String(url))
+    const ranges = (u.searchParams.get('ranges') ?? '').split(',').filter(Boolean)
+    const valueRanges = ranges.map(r => {
       const sheet = r.split('!')[0].replace(/'/g, '')
-      out[r.split('!')[1]?.match(/^[A-Z]+/)?.[0] ?? r] = tables.get(sheet) ?? []
-    }
-    return { ok: true, json: async () => ({ valueRanges: Object.entries(out).map(([range, values]) => ({ range, values })) }) }
+      return { range: r, values: tables.get(sheet) ?? [] }
+    })
+    return { ok: true, json: async () => ({ valueRanges }) }
   }
   const write = async (url: string, init: RequestInit) => {
-    const id = url.split('/spreadsheets/')[1].split('/')[0]
-    void id
     const body = JSON.parse(String(init.body)) as { data: { range: string; values: (string | number)[][] }[] }
     for (const d of body.data) {
       const sheet = d.range.split('!')[0].replace(/'/g, '')
@@ -1535,8 +1513,8 @@ function fakeApi() {
   }
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const u = String(url)
-    if (u.includes(':values:batchUpdate') || u.includes('values/batchUpdate')) return write(u, init!)
-    if (u.includes(':values:batchGet') || u.includes('values:batchGet')) return read(u)
+    if (u.includes('values:batchUpdate')) return write(u, init!)
+    if (u.includes('values:batchGet')) return read(u)
     return { ok: true, json: async () => ({}) }
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -1656,7 +1634,6 @@ import { buildFactura, estadoDesdeSaldo, round2 } from '../calc/invoice'
 import { kpisForMonth, topClientes, gastosPorCategoria, type Kpis } from '../calc/kpis'
 import type { Config, Cliente, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago } from '../types/entities'
 import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema } from '../types/schemas'
-import { DEFAULT_CURRENCY } from '../currency'
 
 export interface RepoContext {
   api: SheetsApi
@@ -1675,13 +1652,7 @@ export function createRepository(ctx: RepoContext) {
     return `'${sheetName(t)}'!A${rowStart}:${last}`
   }
 
-  function emptyRow(t: keyof typeof TABLES): Record<string, string | number> {
-    const o: Record<string, string | number> = {}
-    for (const c of TABLES[t]) o[c.key] = ''
-    return o
-  }
-
-  async function readTable(t: keyof typeof TABLES): Promise<Record<string, string | number>[]> {
+    async function readTable(t: keyof typeof TABLES): Promise<Record<string, string | number>[]> {
     const id = await sid()
     const res = await api.batchGet(id, [rangeOf(t)])
     const rows = res[Object.keys(res)[0]] ?? []
@@ -1703,14 +1674,6 @@ export function createRepository(ctx: RepoContext) {
     const spec = TABLES[t]
     const values = rows.map(r => serializeRow(spec, r))
     const last = String.fromCharCode(64 + spec.length)
-    await api.batchUpdate(id, [{ range: `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`, values }])
-  }
-
-  async function clearTable(t: keyof typeof TABLES, count: number): Promise<void> {
-    const id = await sid()
-    const spec = TABLES[t]
-    const last = String.fromCharCode(64 + spec.length)
-    const values = Array.from({ length: count }, () => spec.map(() => ''))
     await api.batchUpdate(id, [{ range: `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`, values }])
   }
 
@@ -1958,31 +1921,12 @@ export function createRepository(ctx: RepoContext) {
 export type Repository = ReturnType<typeof createRepository>
 ```
 
-- [ ] **Step 4: Ajustar fakeApi para soportar appendRows (merge con datos existentes)**
-
-El `fakeApi` del test escribe valores sobre el rango; `appendRows` escribe en la misma fila inicial. Para que los tests de folio 002 funcionen, el fake debe **acumular** filas al escribir sobre rangos con header (append). Ajustar `write` en el test:
-
-```ts
-const write = async (url: string, init: RequestInit) => {
-  const body = JSON.parse(String(init.body)) as { data: { range: string; values: (string | number)[][] }[] }
-  for (const d of body.data) {
-    const sheet = d.range.split('!')[0].replace(/'/g, '')
-    const existing = tables.get(sheet) ?? []
-    const rows = existing.length ? existing.slice(0, 1).concat(d.values) : d.values
-    tables.set(sheet, rows)
-  }
-  return { ok: true, json: async () => ({ responses: [] }) }
-}
-```
-
-(sustituir el bloque `write` anterior por este en `tests/repository.test.ts`).
-
-- [ ] **Step 5: Correr tests y arreglar**
+- [ ] **Step 4: Correr tests y arreglar**
 
 Run: `pnpm -F shared test`
-Expected: PASS. Si `registerPago` falla por el fake (append sobre `Pagos` vacía), el `readTable` de `Pagos` con tabla vacía devuelve `[]` sin header — verificar que `replaceTable`/`appendRows` manejen tabla vacía (ya cubierto: `values` usa filas completas).
+Expected: PASS. El `fakeApi` usa semántica de reemplazo (cada `batchUpdate` escribe el set completo sobre la hoja), suficiente para las aserciones de folio, saldo y config.
 
-- [ ] **Step 6: Exportar y commit**
+- [ ] **Step 5: Exportar y commit**
 
 Add to `packages/shared/src/index.ts`:
 ```ts
@@ -2050,17 +1994,17 @@ pnpm -F shared add -D @testing-library/react @testing-library/jest-dom jsdom
 pnpm -F shared add react react-dom
 ```
 
-Add a `packages/shared/vitest.config.ts`:
+Add a `packages/shared/vitest.config.ts` (reescribir el de Task 1 para añadir el plugin de React; `environment: 'jsdom'` ya está):
 ```ts
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
-  test: { environment: 'node', include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'] }
+  test: { environment: 'jsdom', include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'] }
 })
 ```
 
-(se añade plugin react; instalar `@vitejs/plugin-react`).
+(instalar `@vitejs/plugin-react`).
 
 Run: `pnpm -F shared test -- --run tests/ui.test.tsx`
 Expected: FAIL (componentes no existen).
@@ -2369,23 +2313,27 @@ git add -A && git commit -m "feat(shared): base UI components + responsive layou
 
 `packages/shared/tests/queries.test.tsx`:
 ```tsx
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createRepository, type Repository } from '../src/data/repository'
 import { AppProvider, useClientes, useConfig } from '../src/store/queries'
 import { SheetsApi } from '../src/sheets/api'
 import type { StorageAdapter } from '../src/data/storage'
 import React from 'react'
 
+beforeAll(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ valueRanges: [] }) })))
+})
+afterAll(() => vi.unstubAllGlobals())
+
 function makeRepo(): Repository {
   const storage: StorageAdapter = { get: async () => null, set: async () => {}, remove: async () => {} }
   const api = new SheetsApi(async () => 'T')
-  return createRepository({ api, storage })
+  return createRepository({ api, storage, getSpreadsheetId: async () => 'S' })
 }
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
-  <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+  <AppProvider repo={makeRepo()}>{children}</AppProvider>
 )
 
 describe('queries', () => {
@@ -2401,6 +2349,8 @@ describe('queries', () => {
   })
 })
 ```
+
+Nota: el wrapper usa `AppProvider` (provee el contexto de repo + QueryClient) y el fetch global se stubbea con `valueRanges: []`.
 
 - [ ] **Step 2: Instalar deps y correr**
 
@@ -2595,20 +2545,33 @@ git add -A && git commit -m "feat(shared): zustand store + tanstack query hooks"
 
 `packages/shared/tests/dashboard.test.tsx`:
 ```tsx
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import React from 'react'
 import { Dashboard } from '../src/features/dashboard/Dashboard'
+import { AppProvider } from '../src/store/queries'
+import { createRepository } from '../src/data/repository'
+import { SheetsApi } from '../src/sheets/api'
 
-// Dashboard requiere repo; test de humo con props mínimas.
+beforeAll(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ valueRanges: [] }) })))
+})
+afterAll(() => vi.unstubAllGlobals())
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const repo = createRepository({ api: new SheetsApi(async () => 'T'), storage: { get: async () => null, set: async () => {}, remove: async () => {} }, getSpreadsheetId: async () => 'S' })
+  return <AppProvider repo={repo}>{children}</AppProvider>
+}
+
 describe('Dashboard', () => {
-  it('renderiza títulos de sección', () => {
-    render(<Dashboard mes="2026-08" onNavigate={() => {}} />)
-    expect(screen.getAllByText(/factura/i).length).toBeGreaterThan(0)
+  it('renderiza acción rápida de nueva factura', async () => {
+    render(<Dashboard mes="2026-08" onNavigate={() => {}} />, { wrapper })
+    expect(await screen.findByText(/nueva factura/i)).toBeTruthy()
   })
 })
 ```
 
-El test de humo solo valida render sin crash; la lógica de KPIs se testea en Task 4. Si `Dashboard` requiere contexto, envolver en test con `AppProvider` y repo fake (reutilizar `makeRepo` de Task 9).
+Dashboard gated por loading → usar `findByText`.
 
 - [ ] **Step 2: Implementar Dashboard**
 
@@ -2705,19 +2668,31 @@ git add -A && git commit -m "feat(shared): dashboard feature"
 
 `packages/shared/tests/clientes.test.tsx`:
 ```tsx
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import React from 'react'
 import { Clientes } from '../src/features/clientes/Clientes'
+import { AppProvider } from '../src/store/queries'
+import { createRepository } from '../src/data/repository'
+import { SheetsApi } from '../src/sheets/api'
+
+beforeAll(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ valueRanges: [] }) })))
+})
+afterAll(() => vi.unstubAllGlobals())
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const repo = createRepository({ api: new SheetsApi(async () => 'T'), storage: { get: async () => null, set: async () => {}, remove: async () => {} }, getSpreadsheetId: async () => 'S' })
+  return <AppProvider repo={repo}>{children}</AppProvider>
+}
 
 describe('Clientes', () => {
-  it('renderiza título y botón nuevo', () => {
-    render(<Clientes />)
+  it('renderiza botón nuevo cliente', () => {
+    render(<Clientes />, { wrapper })
     expect(screen.getByText(/nuevo cliente/i)).toBeTruthy()
   })
 })
 ```
-
-(requiere `AppProvider` con repo fake — ver `makeRepo` de Task 9).
 
 - [ ] **Step 2: Implementar Clientes**
 
@@ -2849,13 +2824,27 @@ git add -A && git commit -m "feat(shared): clientes feature"
 
 `packages/shared/tests/facturas.test.tsx`:
 ```tsx
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import React from 'react'
 import { Facturas } from '../src/features/facturas/Facturas'
+import { AppProvider } from '../src/store/queries'
+import { createRepository } from '../src/data/repository'
+import { SheetsApi } from '../src/sheets/api'
+
+beforeAll(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ valueRanges: [] }) })))
+})
+afterAll(() => vi.unstubAllGlobals())
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const repo = createRepository({ api: new SheetsApi(async () => 'T'), storage: { get: async () => null, set: async () => {}, remove: async () => {} }, getSpreadsheetId: async () => 'S' })
+  return <AppProvider repo={repo}>{children}</AppProvider>
+}
 
 describe('Facturas', () => {
-  it('renderiza título y botón nueva factura', () => {
-    render(<Facturas />)
+  it('renderiza botón nueva factura', () => {
+    render(<Facturas />, { wrapper })
     expect(screen.getByText(/nueva factura/i)).toBeTruthy()
   })
 })
@@ -2910,7 +2899,7 @@ export function PagoModal({ origen, onClose }: { origen: { id: string; tipo: 'co
 ```tsx
 import React, { useEffect, useState } from 'react'
 import { Dialog, Button, Input, Select } from '../../ui/components'
-import { useClientes, useFacturas, useConfig, useCategorias } from '../../store/queries'
+import { useClientes, useFacturas, useConfig } from '../../store/queries'
 import { buildFactura } from '../../calc/invoice'
 import { formatMoney } from '../../currency'
 import { uid } from '../../lib/uid'
@@ -2921,7 +2910,6 @@ export function FacturaFormModal({ open, onClose, onSaved }: { open: boolean; on
   const { clientes, saveCliente } = useClientes()
   const { createFactura } = useFacturas()
   const { config } = useConfig()
-  const { data: categorias } = useCategorias('gastos')
   const [id_cliente, setIdCliente] = useState('')
   const [clienteRapido, setClienteRapido] = useState('')
   const [fecha_vencimiento, setVencimiento] = useState('')
@@ -2995,7 +2983,7 @@ export function FacturaFormModal({ open, onClose, onSaved }: { open: boolean; on
 import React, { useEffect, useState } from 'react'
 import { Dialog, Button, Table } from '../../ui/components'
 import { InvoicePrint } from '../../ui/print/InvoicePrint'
-import { useFactura, usePagos, useConfig, useRegisterPago } from '../../store/queries'
+import { useFactura, usePagos, useConfig } from '../../store/queries'
 import { formatMoney } from '../../currency'
 import { PagoModal } from './PagoModal'
 
@@ -3016,7 +3004,6 @@ export function FacturaDetail({ id, onClose }: { id: string; onClose: () => void
   const { data: det, isLoading } = useFactura(id)
   const { data: pagos = [] } = usePagos(id)
   const { config } = useConfig()
-  const registerPago = useRegisterPago()
   const [pagoOpen, setPagoOpen] = useState(false)
   const moneda = config?.moneda ?? 'USD'
   if (isLoading || !det) return null
@@ -3160,14 +3147,28 @@ git add -A && git commit -m "feat(shared): facturas feature (create/list/detail/
 
 `packages/shared/tests/gastos.test.tsx`:
 ```tsx
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import React from 'react'
 import { Gastos } from '../src/features/gastos/Gastos'
+import { AppProvider } from '../src/store/queries'
+import { createRepository } from '../src/data/repository'
+import { SheetsApi } from '../src/sheets/api'
+
+beforeAll(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ valueRanges: [] }) })))
+})
+afterAll(() => vi.unstubAllGlobals())
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const repo = createRepository({ api: new SheetsApi(async () => 'T'), storage: { get: async () => null, set: async () => {}, remove: async () => {} }, getSpreadsheetId: async () => 'S' })
+  return <AppProvider repo={repo}>{children}</AppProvider>
+}
 
 describe('Gastos', () => {
   it('renderiza título', () => {
-    render(<Gastos />)
-    expect(screen.getByText(/gastos/i)).toBeTruthy()
+    render(<Gastos />, { wrapper })
+    expect(screen.getByText(/registrar gasto/i)).toBeTruthy()
   })
 })
 ```
@@ -3311,13 +3312,27 @@ git add -A && git commit -m "feat(shared): gastos feature"
 
 `packages/shared/tests/cuentasPagar.test.tsx`:
 ```tsx
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import React from 'react'
 import { CuentasPagar } from '../src/features/cuentasPagar/CuentasPagar'
+import { AppProvider } from '../src/store/queries'
+import { createRepository } from '../src/data/repository'
+import { SheetsApi } from '../src/sheets/api'
+
+beforeAll(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ valueRanges: [] }) })))
+})
+afterAll(() => vi.unstubAllGlobals())
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const repo = createRepository({ api: new SheetsApi(async () => 'T'), storage: { get: async () => null, set: async () => {}, remove: async () => {} }, getSpreadsheetId: async () => 'S' })
+  return <AppProvider repo={repo}>{children}</AppProvider>
+}
 
 describe('CuentasPagar', () => {
   it('renderiza título', () => {
-    render(<CuentasPagar />)
+    render(<CuentasPagar />, { wrapper })
     expect(screen.getByText(/cuentas por pagar/i)).toBeTruthy()
   })
 })
@@ -3405,12 +3420,12 @@ export function Proveedores() {
 ```tsx
 import React, { useEffect, useState } from 'react'
 import { Dialog, Button, Input, Select } from '../../ui/components'
-import { useProveedores, useCreateCxp, useCategorias } from '../../store/queries'
+import { useProveedores, useCxp, useCategorias } from '../../store/queries'
 
 export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { proveedores } = useProveedores()
   const { data: categorias = [] } = useCategorias('cxp')
-  const createCxp = useCreateCxp()
+  const { createCxp } = useCxp()
   const [form, setForm] = useState({ id_proveedor: '', folio_documento: '', categoria: '', descripcion: '', fecha_vencimiento: '', monto_total: '', notas: '' })
   useEffect(() => { if (open) setForm({ id_proveedor: '', folio_documento: '', categoria: '', descripcion: '', fecha_vencimiento: '', monto_total: '', notas: '' }) }, [open])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
@@ -3448,12 +3463,12 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
 ```tsx
 import React, { useState } from 'react'
 import { Dialog, Button } from '../../ui/components'
-import { useFactura, usePagos, useConfig } from '../../store/queries'
+import { useCxpById, usePagos, useConfig } from '../../store/queries'
 import { formatMoney } from '../../currency'
 import { PagoModal } from '../facturas/PagoModal'
 
 export function CxpDetail({ id, onClose }: { id: string; onClose: () => void }) {
-  const { data: det } = useFactura(id)
+  const { data: det } = useCxpById(id)
   const { data: pagos = [] } = usePagos(id)
   const { config } = useConfig()
   const [abonoOpen, setAbonoOpen] = useState(false)
@@ -3461,27 +3476,27 @@ export function CxpDetail({ id, onClose }: { id: string; onClose: () => void }) 
   if (!det) return null
   const cxp = det.factura
   return (
-    <Dialog open onClose={onClose} title={`CXP ${cxp.folio || cxp.id_factura}`}
+    <Dialog open onClose={onClose} title={`CXP ${cxp.folio_documento || cxp.id_cxp}`}
       footer={<>
         {cxp.saldo > 0 && <Button onClick={() => setAbonoOpen(true)}>Registrar abono</Button>}
         <Button variant="outline" onClick={onClose}>Cerrar</Button>
       </>}>
       <div className="space-y-3 text-sm">
-        <div>Proveedor: <b>{cxp.nombre_cliente}</b></div>
-        <div>Descripción: {cxp.notas}</div>
-        <div className="flex justify-between"><span>Total</span><b>{formatMoney(cxp.total, moneda)}</b></div>
+        <div>Proveedor: <b>{cxp.nombre_proveedor}</b></div>
+        <div>Descripción: {cxp.descripcion}</div>
+        <div className="flex justify-between"><span>Total</span><b>{formatMoney(cxp.monto_total, moneda)}</b></div>
         <div className="flex justify-between"><span>Saldo</span><b>{formatMoney(cxp.saldo, moneda)}</b></div>
         {pagos.map(p => (
           <div key={p.id_pago} className="flex justify-between border-b border-gray-50 py-1"><span>{p.fecha} · {p.metodo_pago}</span><span>{formatMoney(p.monto, moneda)}</span></div>
         ))}
       </div>
-      {abonoOpen && <PagoModal origen={{ id: cxp.id_factura, tipo: 'abono', saldo: cxp.saldo }} onClose={() => { setAbonoOpen(false); onClose() }} />}
+      {abonoOpen && <PagoModal origen={{ id: cxp.id_cxp, tipo: 'abono', saldo: cxp.saldo }} onClose={() => { setAbonoOpen(false); onClose() }} />}
     </Dialog>
   )
 }
 ```
 
-Nota: `CxpDetail` reutiliza `useFactura` (lee Facturas). Para cxp debe leer Cuentas_Pagar. **Ajuste**: en Task 15 se añade `useCxpById` al store. Hasta entonces, `CxpDetail` lee de la lista en memoria (ver Task 15 Step 3 reemplaza esta implementación).
+Nota: `useCxpById` se define en queries.ts dentro de esta misma Task (ver Step 3 abajo); devuelve `{ factura: CuentaPagar; items: never[] } | null`.
 
 `packages/shared/src/features/cuentasPagar/CuentasPagar.tsx`:
 ```tsx
@@ -3491,6 +3506,7 @@ import { Table, Button, Select, ConfirmDialog, Badge } from '../../ui/components
 import { useToast } from '../../ui/components'
 import { formatMoney } from '../../currency'
 import { CxpFormModal } from './CxpFormModal'
+import { CxpDetail } from './CxpDetail'
 
 export function CuentasPagar() {
   const { cxps, deleteCxp } = useCxp()
@@ -3498,6 +3514,7 @@ export function CuentasPagar() {
   const toast = useToast()
   const [estado, setEstado] = useState('')
   const [formOpen, setFormOpen] = useState(false)
+  const [detalleId, setDetalleId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const moneda = config?.moneda ?? 'USD'
   const filtrados = cxps.filter(c => !estado || c.estado === estado)
@@ -3522,7 +3539,7 @@ export function CuentasPagar() {
           { key: 'estado', header: 'Estado', render: r => { const t = tone(r as { saldo: number; estado: string }); return <Badge tone={t}>{String(r.estado)}</Badge> } },
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => { /* CxpDetail por id */ setDeleteId(String(r.id_cxp)) }}>Ver</Button>
+              <Button variant="ghost" onClick={() => setDetalleId(String(r.id_cxp))}>Ver</Button>
               <Button variant="danger" onClick={() => setDeleteId(String(r.id_cxp))}>Eliminar</Button>
             </div>
           ) }
@@ -3530,6 +3547,7 @@ export function CuentasPagar() {
         {filtrados.length === 0 && <p className="p-4 text-sm text-gray-500">Sin cuentas por pagar</p>}
       </div>
       <CxpFormModal open={formOpen} onClose={() => setFormOpen(false)} />
+      {detalleId && <CxpDetail id={detalleId} onClose={() => setDetalleId(null)} />}
       <ConfirmDialog open={deleteId !== null} title="Eliminar CXP" message="Se eliminará la cuenta y sus abonos. ¿Continuar?"
         onConfirm={async () => { if (deleteId) { await deleteCxp.mutateAsync(deleteId); toast('CXP eliminada') } setDeleteId(null) }} onClose={() => setDeleteId(null)} />
     </div>
@@ -3537,69 +3555,9 @@ export function CuentasPagar() {
 }
 ```
 
-- [ ] **Step 4: Correr tests**
+- [ ] **Step 4: Añadir hook useCxpById a queries.ts**
 
-Run: `pnpm -F shared test`
-Expected: PASS.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add -A && git commit -m "feat(shared): proveedores + cuentas por pagar features"
-```
-
----
-
-## Task 15: Cierre features — useCxpById, Reportes, Configuración, índice de features
-
-**Files:**
-- Create: `packages/shared/src/store/cxpQuery.ts` — `useCxpById(id)` + `useCxpCreate/useCxpDelete` hooks dedicados.
-- Modify: `packages/shared/src/store/queries.ts` (añadir `useCxpById`)
-- Create: `packages/shared/src/features/reportes/Reportes.tsx`
-- Create: `packages/shared/src/features/configuracion/Configuracion.tsx`
-- Create: `packages/shared/src/features/index.ts`
-- Create: `packages/shared/tests/reportes.test.tsx`, `packages/shared/tests/configuracion.test.tsx`
-
-**Interfaces:**
-- Consumes: Tasks 8-14.
-- Produces:
-  - `useCxpById(id: string | null)` → `{ data: { factura: CuentaPagar; items: never[] } | null, isLoading }`
-  - `Reportes({ mes, setMes })` — KPIs + gastos por categoría + top 5 clientes.
-  - `Configuracion()` — formulario empresa, facturación (prefijo, contador, iva, moneda), categorías.
-  - `PAGES: Record<NavKey, (props) => JSX>` o export de páginas individuales para los shells.
-
-- [ ] **Step 1: Escribir test fallido**
-
-`packages/shared/tests/reportes.test.tsx`:
-```tsx
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { Reportes } from '../src/features/reportes/Reportes'
-
-describe('Reportes', () => {
-  it('renderiza título', () => {
-    render(<Reportes mes="2026-08" setMes={() => {}} />)
-    expect(screen.getByText(/reportes/i)).toBeTruthy()
-  })
-})
-```
-
-`packages/shared/tests/configuracion.test.tsx`:
-```tsx
-import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
-import { Configuracion } from '../src/features/configuracion/Configuracion'
-
-describe('Configuracion', () => {
-  it('renderiza sección de empresa', () => {
-    render(<Configuracion />)
-    expect(screen.getByText(/empresa/i)).toBeTruthy()
-  })
-})
-```
-
-- [ ] **Step 2: Implementar useCxpById (añadir a queries.ts)**
-
+Append a `packages/shared/src/store/queries.ts`:
 ```ts
 export function useCxpById(id: string | null) {
   const repo = useRepo()
@@ -3616,10 +3574,97 @@ export function useCxpById(id: string | null) {
   })
 }
 ```
+(importar `CuentaPagar` desde `../types/entities` — ya se importa.)
 
-**Fix `CxpDetail`**: reemplazar `useFactura(id)` por `useCxpById(id)` y `det.factura` ya es `CuentaPagar`.
+- [ ] **Step 5: Correr tests**
 
-- [ ] **Step 3: Implementar Reportes**
+Run: `pnpm -F shared test`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add -A && git commit -m "feat(shared): proveedores + cuentas por pagar features"
+```
+
+---
+
+## Task 15: Cierre features — Reportes, Configuración, índice de features
+
+**Files:**
+- Create: `packages/shared/src/features/reportes/Reportes.tsx`
+- Create: `packages/shared/src/features/configuracion/Configuracion.tsx`
+- Create: `packages/shared/src/features/index.ts`
+- Create: `packages/shared/tests/reportes.test.tsx`, `packages/shared/tests/configuracion.test.tsx`
+
+**Interfaces:**
+- Consumes: Tasks 8-14.
+- Produces:
+  - `Reportes({ mes, setMes })` — KPIs + gastos por categoría + top 5 clientes.
+  - `Configuracion()` — formulario empresa, facturación (prefijo, contador, iva, moneda), categorías.
+  - `PAGES: Record<NavKey, (props) => JSX>` o export de páginas individuales para los shells.
+
+- [ ] **Step 1: Escribir test fallido**
+
+`packages/shared/tests/reportes.test.tsx`:
+```tsx
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import React from 'react'
+import { Reportes } from '../src/features/reportes/Reportes'
+import { AppProvider } from '../src/store/queries'
+import { createRepository } from '../src/data/repository'
+import { SheetsApi } from '../src/sheets/api'
+
+beforeAll(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ valueRanges: [] }) })))
+})
+afterAll(() => vi.unstubAllGlobals())
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const repo = createRepository({ api: new SheetsApi(async () => 'T'), storage: { get: async () => null, set: async () => {}, remove: async () => {} }, getSpreadsheetId: async () => 'S' })
+  return <AppProvider repo={repo}>{children}</AppProvider>
+}
+
+describe('Reportes', () => {
+  it('renderiza título', async () => {
+    render(<Reportes mes="2026-08" setMes={() => {}} />, { wrapper })
+    expect(await screen.findByText(/reportes/i)).toBeTruthy()
+  })
+})
+```
+
+`packages/shared/tests/configuracion.test.tsx`:
+```tsx
+import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import React from 'react'
+import { Configuracion } from '../src/features/configuracion/Configuracion'
+import { AppProvider } from '../src/store/queries'
+import { createRepository } from '../src/data/repository'
+import { SheetsApi } from '../src/sheets/api'
+
+beforeAll(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ valueRanges: [] }) })))
+})
+afterAll(() => vi.unstubAllGlobals())
+
+const wrapper = ({ children }: { children: React.ReactNode }) => {
+  const repo = createRepository({ api: new SheetsApi(async () => 'T'), storage: { get: async () => null, set: async () => {}, remove: async () => {} }, getSpreadsheetId: async () => 'S' })
+  return <AppProvider repo={repo}>{children}</AppProvider>
+}
+
+describe('Configuracion', () => {
+  it('renderiza sección de empresa', async () => {
+    render(<Configuracion />, { wrapper })
+    expect(await screen.findByText(/datos de la empresa/i)).toBeTruthy()
+  })
+})
+```
+
+Reportes y Configuración están gated por loading → `findByText`.
+
+- [ ] **Step 2: Implementar Reportes**
 
 `packages/shared/src/features/reportes/Reportes.tsx`:
 ```tsx
@@ -3673,7 +3718,7 @@ export function Reportes({ mes, setMes }: { mes: string; setMes: (m: string) => 
 }
 ```
 
-- [ ] **Step 4: Implementar Configuración**
+- [ ] **Step 3: Implementar Configuración**
 
 `packages/shared/src/features/configuracion/Configuracion.tsx`:
 ```tsx
@@ -3730,7 +3775,7 @@ export function Configuracion() {
 }
 ```
 
-- [ ] **Step 5: Implementar features/index.ts**
+- [ ] **Step 4: Implementar features/index.ts**
 
 `packages/shared/src/features/index.ts`:
 ```ts
@@ -3746,15 +3791,15 @@ export { Reportes } from './reportes/Reportes'
 export { Configuracion } from './configuracion/Configuracion'
 ```
 
-- [ ] **Step 6: Correr tests**
+- [ ] **Step 5: Correr tests**
 
 Run: `pnpm -F shared test`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add -A && git commit -m "feat(shared): reportes, configuracion, cxpById, features index"
+git add -A && git commit -m "feat(shared): reportes, configuracion, features index"
 ```
 
 ---
@@ -3890,7 +3935,6 @@ function Repo() {
   useEffect(() => {
     chromeStorageAdapter.get(KEYS.spreadsheetId).then(async id => {
       if (!id) { setReady(true); return }
-      const token = await new Promise<string>((resolve, reject) => chrome.identity.getAuthToken({ interactive: false }, t => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(t)))
       setSheet({ id })
     }).finally(() => setReady(true))
   }, [])
@@ -4135,7 +4179,7 @@ createRoot(document.getElementById('root')!).render(<App />)
 `apps/web/src/App.tsx`:
 ```tsx
 import React, { useEffect, useState } from 'react'
-import { createRepository, localStorageAdapter, KEYS, SheetsApi, AppProvider, Layout, Dashboard, Facturas, Clientes, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Toaster, useConfig } from '@ft/shared'
+import { createRepository, localStorageAdapter, KEYS, SheetsApi, createInitialSpreadsheet, AppProvider, Layout, Dashboard, Facturas, Clientes, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Toaster } from '@ft/shared'
 import type { NavKey } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
 
@@ -4155,7 +4199,7 @@ function Shell() {
           if (!id) {
             const token = await webAuth.getToken(false)
             const api = new SheetsApi(async () => token)
-            const created = await createInitialSpreadsheetWeb(api)
+            const created = await createInitialSpreadsheet(api)
             await localStorageAdapter.set(KEYS.spreadsheetId, created.spreadsheetId)
             id = created.spreadsheetId
           }
@@ -4185,11 +4229,6 @@ function Shell() {
       </Toaster>
     </AppProvider>
   )
-}
-
-async function createInitialSpreadsheetWeb(api: SheetsApi): Promise<{ spreadsheetId: string; url: string }> {
-  const { createInitialSpreadsheet } = await import('@ft/shared')
-  return createInitialSpreadsheet(api)
 }
 
 export function App() { return <Shell /> }
@@ -4294,4 +4333,4 @@ git add -A && git commit -m "docs: README + setup guide"
 
 **Consistencia de tipos:** `useCxpById` añadido en Task 15 y usado por `CxpDetail` (Task 14) — nota de ajuste en Task 14 Step 3 y resuelto en Task 15 Step 2. `createInitialSpreadsheet` exportado desde shared y usado en Task 16 (onboarding) y Task 17 (web). `RepoContext.getSpreadsheetId` usado en `createRepository` (Task 7). `formatMoney(amount, code)` firma consistente. `NavKey` definido en Task 8 y usado en features + shells.
 
-**Nota de riesgo:** El fake API de los tests de Task 7 simula append de forma simplificada; si `replaceTable`/`clearTable` revelan bugs de rango, ajustar el fake para replicar semántica de Sheets (los ranges son A<row>:<col> absolutos).
+**Nota de riesgo:** El fake API de los tests de Task 7 usa semántica de reemplazo (cada `batchUpdate` sobreescribe el set completo de la hoja); suficiente para las aserciones actuales, pero no replica el append de `appendRows`. Si un test futuro depende de acumulación, ajustar el fake.
