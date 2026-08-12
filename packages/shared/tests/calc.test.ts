@@ -23,6 +23,10 @@ describe('invoice', () => {
 })
 
 describe('kpis', () => {
+  const today = new Date()
+  const iso = (d: Date) => d.toISOString().slice(0, 10)
+  const ayer = new Date(today.getTime() - 86400000)
+  const en30dias = new Date(today.getTime() + 30 * 86400000)
   const fac: Factura[] = [
     { id_factura: 'f1', folio: 'FAC-001', id_cliente: 'c1', nombre_cliente: 'A', fecha_emision: '2026-08-05', fecha_vencimiento: '', subtotal: 100, iva: 0, total: 100, saldo: 0, fecha_pago: '2026-08-06', notas: '' },
     { id_factura: 'f2', folio: 'FAC-002', id_cliente: 'c2', nombre_cliente: 'B', fecha_emision: '2026-08-10', fecha_vencimiento: '', subtotal: 200, iva: 0, total: 200, saldo: 200, fecha_pago: '', notas: '' },
@@ -32,8 +36,8 @@ describe('kpis', () => {
     { id_gasto: 'g1', fecha: '2026-08-03', categoria: 'Renta', descripcion: '', monto: 30, metodo_pago: 'Efectivo', proveedor: '' }
   ]
   const cxp: CuentaPagar[] = [
-    { id_cxp: 'x1', id_proveedor: 'p1', nombre_proveedor: 'P', folio_documento: '', categoria: '', descripcion: '', fecha_emision: '2026-08-01', fecha_vencimiento: '2026-08-01', monto_total: 500, saldo: 500, estado: 'pendiente', notas: '' },
-    { id_cxp: 'x2', id_proveedor: 'p1', nombre_proveedor: 'P', folio_documento: '', categoria: '', descripcion: '', fecha_emision: '2026-08-01', fecha_vencimiento: '2026-09-01', monto_total: 100, saldo: 100, estado: 'pendiente', notas: '' }
+    { id_cxp: 'x1', id_proveedor: 'p1', nombre_proveedor: 'P', folio_documento: '', categoria: '', descripcion: '', fecha_emision: '2026-08-01', fecha_vencimiento: iso(ayer), monto_total: 500, saldo: 500, estado: 'pendiente', notas: '' },
+    { id_cxp: 'x2', id_proveedor: 'p1', nombre_proveedor: 'P', folio_documento: '', categoria: '', descripcion: '', fecha_emision: '2026-08-01', fecha_vencimiento: iso(en30dias), monto_total: 100, saldo: 100, estado: 'pendiente', notas: '' }
   ]
 
   it('kpis del mes', () => {
