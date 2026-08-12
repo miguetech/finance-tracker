@@ -1246,6 +1246,7 @@ git add -A && git commit -m "feat(shared): sheets REST client + serialization + 
 - Create: `packages/shared/src/auth/types.ts`
 - Create: `packages/shared/src/auth/chromeIdentityAuth.ts`
 - Create: `packages/shared/src/auth/popupOAuth.ts`
+- Create: `packages/shared/src/types/chrome.d.ts` (ambient declaration del global `chrome` — ver Step 3b; sin esto `tsc --noEmit` falla con TS2304)
 - Create: `packages/shared/src/data/storage.ts`
 - Create: `packages/shared/tests/storage.test.ts`
 
@@ -1286,7 +1287,32 @@ describe('localStorageAdapter', () => {
 Run: `pnpm -F shared test -- --run tests/storage.test.ts`
 Expected: FAIL.
 
-- [ ] **Step 3: Implementar auth y storage**
+- [ ] **Step 3: Declarar el global chrome (ambient) y verificar compilación**
+
+`packages/shared/src/types/chrome.d.ts`:
+```ts
+declare const chrome: {
+  runtime: {
+    lastError?: { message: string }
+  }
+  identity: {
+    getAuthToken(options: { interactive: boolean }, callback: (token: string) => void): void
+    clearAllCachedAuthTokens(callback: () => void): void
+  }
+  storage: {
+    local: {
+      get(key: string, callback: (items: Record<string, string>) => void): void
+      set(items: Record<string, string>, callback?: () => void): void
+      remove(key: string, callback?: () => void): void
+    }
+  }
+}
+```
+
+Run: `pnpm exec tsc --noEmit -p packages/shared`
+Expected: PASS (0 errores). Sin esta declaración, `tsc --noEmit` falla con TS2304 (`Cannot find name 'chrome'`) en chromeIdentityAuth.ts y storage.ts. Los tests pasan igual (vitest transpila con esbuild sin typecheck) — la compilación es la garantía.
+
+- [ ] **Step 4: Implementar auth y storage**
 
 `packages/shared/src/auth/types.ts`:
 ```ts
