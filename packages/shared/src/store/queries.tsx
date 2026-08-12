@@ -118,3 +118,18 @@ export function useCategorias(kind: 'gastos' | 'cxp') {
   const repo = useRepo()
   return useQuery({ queryKey: ['categorias', kind], queryFn: () => repo.getCategorias(kind) })
 }
+
+export function useCxpById(id: string | null) {
+  const repo = useRepo()
+  return useQuery({
+    queryKey: ['cxpById', id],
+    queryFn: async (): Promise<{ factura: CuentaPagar; items: never[] } | null> => {
+      if (!id) return null
+      const all = await repo.listCxp({})
+      const cxp = all.find(c => c.id_cxp === id)
+      if (!cxp) return null
+      return { factura: cxp, items: [] }
+    },
+    enabled: !!id
+  })
+}
