@@ -47,7 +47,13 @@ export function CuentasPagar() {
       <CxpFormModal open={formOpen} onClose={() => setFormOpen(false)} />
       {detalleId && <CxpDetail id={detalleId} onClose={() => setDetalleId(null)} />}
       <ConfirmDialog open={deleteId !== null} title="Eliminar CXP" message="Se eliminará la cuenta y sus abonos. ¿Continuar?"
-        onConfirm={async () => { if (deleteId) { await deleteCxp.mutateAsync(deleteId); toast('CXP eliminada') } setDeleteId(null) }} onClose={() => setDeleteId(null)} />
+        onConfirm={async () => {
+          if (deleteId) {
+            try { await deleteCxp.mutateAsync(deleteId); toast('CXP eliminada') }
+            catch (e) { toast((e as Error).message, 'error') }
+          }
+          setDeleteId(null)
+        }} onClose={() => setDeleteId(null)} />
     </div>
   )
 }

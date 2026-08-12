@@ -61,13 +61,13 @@ export class SheetsApi {
   async batchUpdate(spreadsheetId: string, valueRanges: ValueRange[]): Promise<void> {
     await this.request(`${BASE}/${spreadsheetId}/values:batchUpdate`, {
       method: 'POST',
-      body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: valueRanges })
+      body: JSON.stringify({ valueInputOption: 'RAW', data: valueRanges })
     })
   }
 
   async appendValues(spreadsheetId: string, range: string, values: (string | number)[][]): Promise<void> {
     const encoded = encodeURIComponent(range)
-    await this.request(`${BASE}/${spreadsheetId}/values/${encoded}:append?valueInputOption=USER_ENTERED`, {
+    await this.request(`${BASE}/${spreadsheetId}/values/${encoded}:append?valueInputOption=RAW`, {
       method: 'POST',
       body: JSON.stringify({ values })
     })

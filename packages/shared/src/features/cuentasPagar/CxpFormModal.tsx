@@ -1,18 +1,25 @@
 import React, { useEffect, useState } from 'react'
 import { Dialog, Button, Input, Select } from '../../ui/components'
 import { useProveedores, useCxp, useCategorias } from '../../store/queries'
+import { useToast } from '../../ui/components'
 
 export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { proveedores } = useProveedores()
   const { data: categorias = [] } = useCategorias('cxp')
   const { createCxp } = useCxp()
+  const toast = useToast()
   const [form, setForm] = useState({ id_proveedor: '', folio_documento: '', categoria: '', descripcion: '', fecha_vencimiento: '', monto_total: '', notas: '' })
   useEffect(() => { if (open) setForm({ id_proveedor: '', folio_documento: '', categoria: '', descripcion: '', fecha_vencimiento: '', monto_total: '', notas: '' }) }, [open])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   const submit = async () => {
     if (!form.id_proveedor || !form.descripcion.trim() || !form.fecha_vencimiento || Number(form.monto_total) <= 0) return
-    await createCxp.mutateAsync({ ...form, fecha_emision: new Date().toISOString().slice(0, 10), monto_total: Number(form.monto_total) })
-    onClose()
+    try {
+      await createCxp.mutateAsync({ ...form, fecha_emision: new Date().toISOString().slice(0, 10), monto_total: Number(form.monto_total) })
+      toast('CXP creada')
+      onClose()
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    }
   }
   return (
     <Dialog open={open} onClose={onClose} title="Nueva cuenta por pagar"

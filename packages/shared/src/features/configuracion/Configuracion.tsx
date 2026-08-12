@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { useConfig } from '../../store/queries'
+import { useConfig, useRepo } from '../../store/queries'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card, Button, Input, Select } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { CURRENCIES } from '../../currency'
@@ -7,14 +8,23 @@ import type { Config } from '../../types/entities'
 
 export function Configuracion() {
   const { config, saveConfig } = useConfig()
+  const repo = useRepo()
+  const qc = useQueryClient()
   const toast = useToast()
   const [form, setForm] = useState<Config | null>(null)
   useEffect(() => { if (config && !form) setForm(config) }, [config, form])
   if (!config || !form) return <div className="p-8 text-gray-500">Cargando…</div>
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => f && ({ ...f, [k]: e.target.value }))
   const submit = async () => {
-    try { await saveConfig.mutateAsync({ ...form, contador_folio: Number(form.contador_folio), iva_porcentaje: Number(form.iva_porcentaje) }); toast('Configuración guardada') }
-    catch (e) { toast((e as Error).message, 'error') }
+    try {
+      const fresh = await qc.fetchQuery({ queryKey: ['config'], queryFn: () => repo.getConfig() })
+      await saveConfig.mutateAsync({
+        ...form,
+        contador_folio: Math.max(fresh.contador_folio, Number(form.contador_folio)),
+        iva_porcentaje: Number(form.iva_porcentaje)
+      })
+      toast('Configuración guardada')
+    } catch (e) { toast((e as Error).message, 'error') }
   }
   return (
     <div className="space-y-6 max-w-2xl">

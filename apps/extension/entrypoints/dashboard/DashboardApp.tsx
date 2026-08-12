@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { ensureSheet } from '../../src/onboarding'
+import { ensureSheet, getChromeToken } from '../../src/onboarding'
 import { createRepository, chromeStorageAdapter, KEYS, SheetsApi, AppProvider, Layout, Dashboard, Facturas, Clientes, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Toaster, useConfig } from '@ft/shared'
 import type { NavKey } from '@ft/shared'
 
@@ -22,7 +22,7 @@ function Boot() {
 
   if (loading) return <div className="p-8">Conectando a Google Sheets…</div>
   if (err || !sheet) return <div className="p-8 text-red-600">{err || 'Error de configuración'}</div>
-  const api = new SheetsApi(async () => await new Promise<string>((resolve, reject) => chrome.identity.getAuthToken({ interactive: false }, t => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(t as string))))
+  const api = new SheetsApi(() => getChromeToken(false))
   const repo = createRepository({ api, storage: chromeStorageAdapter, getSpreadsheetId: async () => sheet.id })
 
   return (

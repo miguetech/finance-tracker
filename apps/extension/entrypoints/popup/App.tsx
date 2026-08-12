@@ -4,6 +4,7 @@ import { AppProvider, useReportes, useConfig } from '@ft/shared'
 import { createRepository } from '@ft/shared'
 import { formatMoney } from '@ft/shared'
 import { StatCard, Button } from '@ft/shared'
+import { getChromeToken } from '../../src/onboarding'
 
 function Repo() {
   const [sheet, setSheet] = useState<{ id: string } | null>(null)
@@ -21,7 +22,7 @@ function Repo() {
       <Button onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('/dashboard.html') })}>Configurar</Button>
     </div>
   )
-  const api = new SheetsApi(async () => (await new Promise<string>((resolve, reject) => chrome.identity.getAuthToken({ interactive: false }, t => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(t as string)))))
+  const api = new SheetsApi(() => getChromeToken(false))
   const repo = createRepository({ api, storage: chromeStorageAdapter, getSpreadsheetId: async () => sheet.id })
   return <AppProvider repo={repo}><PopupInner /></AppProvider>
 }

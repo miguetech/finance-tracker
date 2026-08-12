@@ -57,7 +57,10 @@ function fakeApi() {
     }
     if (u.pathname.includes(':clear')) {
       const range = path.split('/values/')[1].split(':clear')[0]
-      grid.set(sheetOf(range), [])
+      const sheet = sheetOf(range)
+      const a = cellRef(range.split('!')[1].split(':')[0])
+      const rows = grid.get(sheet) ?? []
+      grid.set(sheet, rows.slice(0, a.row - 1))
       return { ok: true, json: async () => ({}) }
     }
     for (const d of body.data ?? []) {

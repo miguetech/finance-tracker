@@ -63,7 +63,7 @@ export function FacturaDetail({ id, onClose }: { id: string; onClose: () => void
             ))}
           </div>
         )}
-        <InvoicePrint factura={factura} items={items} config={config!} />
+        {config && <InvoicePrint factura={factura} items={items} config={config} />}
       </div>
       {pagoOpen && <PagoModal origen={{ id: factura.id_factura, tipo: 'cobro', saldo: factura.saldo }} onClose={() => { setPagoOpen(false); onClose() }} />}
     </Dialog>

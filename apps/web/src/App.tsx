@@ -31,7 +31,13 @@ function Shell() {
 
   if (error) return <div className="p-8 text-red-600">{error}</div>
   if (!sheet) return <div className="p-8">Conectando a Google Sheets…</div>
-  const api = new SheetsApi(async () => webAuth.getToken(false))
+  const api = new SheetsApi(async () => {
+    try {
+      return await webAuth.getToken(false)
+    } catch {
+      return await webAuth.getToken(true)
+    }
+  })
   const repo = createRepository({ api, storage: localStorageAdapter, getSpreadsheetId: async () => sheet.id })
   return (
     <AppProvider repo={repo}>

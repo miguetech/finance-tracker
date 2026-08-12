@@ -49,9 +49,14 @@ export function createRepository(ctx: RepoContext) {
     const spec = TABLES[t]
     const values = rows.map(r => serializeRow(spec, r))
     const last = String.fromCharCode(64 + spec.length)
-    const range = `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`
-    await api.clearRange(id, range)
+    const base = HEADER_ROWS(t) + 1
+    const range = `'${sheetName(t)}'!A${base}:${last}`
+    if (values.length === 0) {
+      await api.clearRange(id, range)
+      return
+    }
     await api.batchUpdate(id, [{ range, values }])
+    await api.clearRange(id, `'${sheetName(t)}'!A${base + values.length}:${last}`)
   }
 
   async function readConfig(): Promise<Config> {

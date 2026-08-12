@@ -1,10 +1,14 @@
 import type { AuthProvider } from './types'
 
-export function popupOAuth(options: { clientId: string; redirectUri: string }): AuthProvider {
-  const { clientId, redirectUri } = options
+export function popupOAuth(options: { clientId: string; redirectUri: string; prompt?: 'consent' | 'none' }): AuthProvider {
+  const { clientId, redirectUri, prompt: defaultPrompt = 'consent' } = options
   const SCOPE = encodeURIComponent('https://www.googleapis.com/auth/spreadsheets')
   const TOKEN_KEY = 'ft_web_access_token'
   const EXPIRES_KEY = 'ft_web_token_expires_at'
+
+  function authUrl(prompt: 'consent' | 'none'): string {
+    return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${SCOPE}&prompt=${prompt}`
+  }
 
   function persistToken(token: string, expiresIn: number): void {
     try {
@@ -34,8 +38,11 @@ export function popupOAuth(options: { clientId: string; redirectUri: string }): 
       const cached = storedToken()
       if (cached) return cached
       if (!interactive) throw new Error('No token')
-      const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${SCOPE}&prompt=consent`
-      window.location.href = url
+      if (hash.get('error') || defaultPrompt === 'consent') {
+        window.location.href = authUrl('consent')
+      } else {
+        window.location.href = authUrl('none')
+      }
       throw new Error('Redirecting a OAuth…')
     },
     async getSignedInUser(): Promise<{ email: string } | null> {
