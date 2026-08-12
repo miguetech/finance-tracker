@@ -26,7 +26,7 @@ export class SheetsApi {
   }
 
   createSpreadsheet(title: string): Promise<{ spreadsheetId: string; url: string }> {
-    return this.request(`${BASE}`, {
+    return this.request<{ spreadsheetId: string; spreadsheetUrl: string }>(`${BASE}`, {
       method: 'POST',
       body: JSON.stringify({
         properties: { title },
