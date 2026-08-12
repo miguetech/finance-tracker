@@ -1136,7 +1136,7 @@ export class SheetsApi {
   async batchUpdate(spreadsheetId: string, valueRanges: ValueRange[]): Promise<void> {
     await this.request(`${BASE}/${spreadsheetId}/values:batchUpdate`, {
       method: 'POST',
-      body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: valueRanges })
+      body: JSON.stringify({ valueInputOption: 'RAW', data: valueRanges })
     })
   }
 }
@@ -1367,11 +1367,15 @@ export function chromeIdentityAuth(clientId: string): AuthProvider {
 ```ts
 import type { AuthProvider } from './types'
 
-export function popupOAuth(options: { clientId: string; redirectUri: string }): AuthProvider {
-  const { clientId, redirectUri } = options
+export function popupOAuth(options: { clientId: string; redirectUri: string; prompt?: 'consent' | 'none' }): AuthProvider {
+  const { clientId, redirectUri, prompt: defaultPrompt = 'consent' } = options
   const SCOPE = encodeURIComponent('https://www.googleapis.com/auth/spreadsheets')
   const TOKEN_KEY = 'ft_web_access_token'
   const EXPIRES_KEY = 'ft_web_token_expires_at'
+
+  function authUrl(prompt: 'consent' | 'none'): string {
+    return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${SCOPE}&prompt=${prompt}`
+  }
 
   function persistToken(token: string, expiresIn: number): void {
     try {
@@ -1401,8 +1405,11 @@ export function popupOAuth(options: { clientId: string; redirectUri: string }): 
       const cached = storedToken()
       if (cached) return cached
       if (!interactive) throw new Error('No token')
-      const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${SCOPE}&prompt=consent`
-      window.location.href = url
+      if (hash.get('error') || defaultPrompt === 'consent') {
+        window.location.href = authUrl('consent')
+      } else {
+        window.location.href = authUrl('none')
+      }
       throw new Error('Redirecting a OAuth…')
     },
     async getSignedInUser(): Promise<{ email: string } | null> {
@@ -1419,7 +1426,7 @@ export function popupOAuth(options: { clientId: string; redirectUri: string }): 
 }
 ```
 
-Nota: el token se persiste en `localStorage` con expiry (30 s de margen) y el hash se limpia tras extraerlo. Esto evita que un visitante que regresa (con `spreadsheetId` ya en storage pero sin token en hash) rompa el dashboard: `getToken(false)` reusa el token cacheado y solo redirige (interactive) si expiró.
+Nota: el token se persiste en `localStorage` con expiry (30 s de margen) y el hash se limpia tras extraerlo. `prompt: 'none'` permite **re-autenticación silenciosa**: cuando el token expira, `getToken(true)` redirige a Google con `prompt=none` (sin UI si el permiso sigue aprobado); si Google devuelve `error=` en el hash (permiso revocado), el flujo auto-escala a `prompt=consent`. Con `prompt: 'consent'` (default) siempre muestra consentimiento. Esto evita que un visitante que regresa rompa el dashboard y resuelve la expiración del token del flujo implícito (~1 h).
 
 `packages/shared/src/data/storage.ts`:
 ```ts
@@ -1529,7 +1536,7 @@ Append a `packages/shared/src/sheets/api.ts` (dentro de la clase `SheetsApi`):
 ```ts
   async appendValues(spreadsheetId: string, range: string, values: (string | number)[][]): Promise<void> {
     const encoded = encodeURIComponent(range)
-    await this.request(`${BASE}/${spreadsheetId}/values/${encoded}:append?valueInputOption=USER_ENTERED`, {
+    await this.request(`${BASE}/${spreadsheetId}/values/${encoded}:append?valueInputOption=RAW`, {
       method: 'POST',
       body: JSON.stringify({ values })
     })
@@ -1609,7 +1616,10 @@ function fakeApi() {
     }
     if (u.pathname.includes(':clear')) {
       const range = path.split('/values/')[1].split(':clear')[0]
-      grid.set(sheetOf(range), [])
+      const sheet = sheetOf(range)
+      const a = cellRef(range.split('!')[1].split(':')[0])
+      const rows = grid.get(sheet) ?? []
+      grid.set(sheet, rows.slice(0, a.row - 1))
       return { ok: true, json: async () => ({}) }
     }
     for (const d of body.data ?? []) {
@@ -1789,9 +1799,14 @@ export function createRepository(ctx: RepoContext) {
     const spec = TABLES[t]
     const values = rows.map(r => serializeRow(spec, r))
     const last = String.fromCharCode(64 + spec.length)
-    const range = `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`
-    await api.clearRange(id, range)
+    const base = HEADER_ROWS(t) + 1
+    const range = `'${sheetName(t)}'!A${base}:${last}`
+    if (values.length === 0) {
+      await api.clearRange(id, range)
+      return
+    }
     await api.batchUpdate(id, [{ range, values }])
+    await api.clearRange(id, `'${sheetName(t)}'!A${base + values.length}:${last}`)
   }
 
   async function readConfig(): Promise<Config> {
@@ -3161,7 +3176,7 @@ export function FacturaDetail({ id, onClose }: { id: string; onClose: () => void
             ))}
           </div>
         )}
-        <InvoicePrint factura={factura} items={items} config={config!} />
+        {config && <InvoicePrint factura={factura} items={items} config={config} />}
       </div>
       {pagoOpen && <PagoModal origen={{ id: factura.id_factura, tipo: 'cobro', saldo: factura.saldo }} onClose={() => { setPagoOpen(false); onClose() }} />}
     </Dialog>
@@ -3544,18 +3559,25 @@ export function Proveedores() {
 import React, { useEffect, useState } from 'react'
 import { Dialog, Button, Input, Select } from '../../ui/components'
 import { useProveedores, useCxp, useCategorias } from '../../store/queries'
+import { useToast } from '../../ui/components'
 
 export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { proveedores } = useProveedores()
   const { data: categorias = [] } = useCategorias('cxp')
   const { createCxp } = useCxp()
+  const toast = useToast()
   const [form, setForm] = useState({ id_proveedor: '', folio_documento: '', categoria: '', descripcion: '', fecha_vencimiento: '', monto_total: '', notas: '' })
   useEffect(() => { if (open) setForm({ id_proveedor: '', folio_documento: '', categoria: '', descripcion: '', fecha_vencimiento: '', monto_total: '', notas: '' }) }, [open])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   const submit = async () => {
     if (!form.id_proveedor || !form.descripcion.trim() || !form.fecha_vencimiento || Number(form.monto_total) <= 0) return
-    await createCxp.mutateAsync({ ...form, fecha_emision: new Date().toISOString().slice(0, 10), monto_total: Number(form.monto_total) })
-    onClose()
+    try {
+      await createCxp.mutateAsync({ ...form, fecha_emision: new Date().toISOString().slice(0, 10), monto_total: Number(form.monto_total) })
+      toast('CXP creada')
+      onClose()
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    }
   }
   return (
     <Dialog open={open} onClose={onClose} title="Nueva cuenta por pagar"
@@ -3672,7 +3694,13 @@ export function CuentasPagar() {
       <CxpFormModal open={formOpen} onClose={() => setFormOpen(false)} />
       {detalleId && <CxpDetail id={detalleId} onClose={() => setDetalleId(null)} />}
       <ConfirmDialog open={deleteId !== null} title="Eliminar CXP" message="Se eliminará la cuenta y sus abonos. ¿Continuar?"
-        onConfirm={async () => { if (deleteId) { await deleteCxp.mutateAsync(deleteId); toast('CXP eliminada') } setDeleteId(null) }} onClose={() => setDeleteId(null)} />
+        onConfirm={async () => {
+          if (deleteId) {
+            try { await deleteCxp.mutateAsync(deleteId); toast('CXP eliminada') }
+            catch (e) { toast((e as Error).message, 'error') }
+          }
+          setDeleteId(null)
+        }} onClose={() => setDeleteId(null)} />
     </div>
   )
 }
@@ -3846,7 +3874,8 @@ export function Reportes({ mes, setMes }: { mes: string; setMes: (m: string) => 
 `packages/shared/src/features/configuracion/Configuracion.tsx`:
 ```tsx
 import React, { useEffect, useState } from 'react'
-import { useConfig } from '../../store/queries'
+import { useConfig, useRepo } from '../../store/queries'
+import { useQueryClient } from '@tanstack/react-query'
 import { Card, Button, Input, Select } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { CURRENCIES } from '../../currency'
@@ -3854,14 +3883,23 @@ import type { Config } from '../../types/entities'
 
 export function Configuracion() {
   const { config, saveConfig } = useConfig()
+  const repo = useRepo()
+  const qc = useQueryClient()
   const toast = useToast()
   const [form, setForm] = useState<Config | null>(null)
   useEffect(() => { if (config && !form) setForm(config) }, [config, form])
   if (!config || !form) return <div className="p-8 text-gray-500">Cargando…</div>
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => f && ({ ...f, [k]: e.target.value }))
   const submit = async () => {
-    try { await saveConfig.mutateAsync({ ...form, contador_folio: Number(form.contador_folio), iva_porcentaje: Number(form.iva_porcentaje) }); toast('Configuración guardada') }
-    catch (e) { toast((e as Error).message, 'error') }
+    try {
+      const fresh = await qc.fetchQuery({ queryKey: ['config'], queryFn: () => repo.getConfig() })
+      await saveConfig.mutateAsync({
+        ...form,
+        contador_folio: Math.max(fresh.contador_folio, Number(form.contador_folio)),
+        iva_porcentaje: Number(form.iva_porcentaje)
+      })
+      toast('Configuración guardada')
+    } catch (e) { toast((e as Error).message, 'error') }
   }
   return (
     <div className="space-y-6 max-w-2xl">
@@ -3999,24 +4037,40 @@ import { SheetsApi } from '@ft/shared'
 import { createInitialSpreadsheet } from '@ft/shared'
 import { chromeStorageAdapter, KEYS } from '@ft/shared'
 
+export function getChromeToken(interactive: boolean): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive }, (token) => {
+      if (chrome.runtime.lastError) {
+        if (!interactive) {
+          chrome.identity.getAuthToken({ interactive: true }, (t2) => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message))
+            else resolve(t2)
+          })
+          return
+        }
+        reject(new Error(chrome.runtime.lastError.message))
+      } else {
+        resolve(token)
+      }
+    })
+  })
+}
+
 export async function ensureSheet(clientId: string): Promise<{ spreadsheetId: string; url: string } | null> {
   const existing = await chromeStorageAdapter.get(KEYS.spreadsheetId)
   if (existing) {
     const url = `https://docs.google.com/spreadsheets/d/${existing}/edit`
     return { spreadsheetId: existing, url }
   }
-  const token = await new Promise<string>((resolve, reject) => {
-    chrome.identity.getAuthToken({ interactive: true }, (t) => {
-      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message))
-      else resolve(t)
-    })
-  })
+  const token = await getChromeToken(true)
   const api = new SheetsApi(async () => token)
   const created = await createInitialSpreadsheet(api)
   await chromeStorageAdapter.set(KEYS.spreadsheetId, created.spreadsheetId)
   return created
 }
 ```
+
+Nota: `getChromeToken(false)` escala automáticamente a `interactive: true` si el token cacheado no está disponible (revocado/expirado) — evita el fallo silencioso del popup/dashboard con `'…'`.
 
 `apps/extension/entrypoints/popup/index.html`:
 ```html
@@ -4051,6 +4105,7 @@ import { AppProvider, useReportes, useConfig } from '@ft/shared'
 import { createRepository } from '@ft/shared'
 import { formatMoney } from '@ft/shared'
 import { StatCard, Button } from '@ft/shared'
+import { getChromeToken } from '../../src/onboarding'
 
 function Repo() {
   const [sheet, setSheet] = useState<{ id: string } | null>(null)
@@ -4065,10 +4120,10 @@ function Repo() {
   if (!sheet) return (
     <div className="p-4 space-y-3">
       <p className="text-sm">Necesitas configurar tu hoja de cálculo.</p>
-      <Button onClick={() => chrome.runtime.openOptionsPage && chrome.tabs.create({ url: chrome.runtime.getURL('/dashboard.html') })}>Configurar</Button>
+      <Button onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('/dashboard.html') })}>Configurar</Button>
     </div>
   )
-  const api = new SheetsApi(async () => (await new Promise<string>((resolve, reject) => chrome.identity.getAuthToken({ interactive: false }, t => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(t)))))
+  const api = new SheetsApi(() => getChromeToken(false))
   const repo = createRepository({ api, storage: chromeStorageAdapter, getSpreadsheetId: async () => sheet.id })
   return <AppProvider repo={repo}><PopupInner /></AppProvider>
 }
@@ -4108,7 +4163,7 @@ createRoot(document.getElementById('root')!).render(<DashboardApp />)
 `apps/extension/entrypoints/dashboard/DashboardApp.tsx`:
 ```tsx
 import React, { useState, useEffect } from 'react'
-import { ensureSheet } from '../../src/onboarding'
+import { ensureSheet, getChromeToken } from '../../src/onboarding'
 import { createRepository, chromeStorageAdapter, KEYS, SheetsApi, AppProvider, Layout, Dashboard, Facturas, Clientes, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Toaster, useConfig } from '@ft/shared'
 import type { NavKey } from '@ft/shared'
 
@@ -4131,7 +4186,7 @@ function Boot() {
 
   if (loading) return <div className="p-8">Conectando a Google Sheets…</div>
   if (err || !sheet) return <div className="p-8 text-red-600">{err || 'Error de configuración'}</div>
-  const api = new SheetsApi(async () => await new Promise<string>((resolve, reject) => chrome.identity.getAuthToken({ interactive: false }, t => chrome.runtime.lastError ? reject(new Error(chrome.runtime.lastError.message)) : resolve(t))))
+  const api = new SheetsApi(() => getChromeToken(false))
   const repo = createRepository({ api, storage: chromeStorageAdapter, getSpreadsheetId: async () => sheet.id })
 
   return (
@@ -4281,7 +4336,7 @@ import { popupOAuth } from '@ft/shared'
 const clientId = import.meta.env.VITE_OAUTH_CLIENT_ID as string
 const redirectUri = import.meta.env.VITE_OAUTH_REDIRECT_URI ?? window.location.origin
 
-export const webAuth = popupOAuth({ clientId, redirectUri })
+export const webAuth = popupOAuth({ clientId, redirectUri, prompt: 'none' })
 ```
 
 `apps/web/src/main.tsx`:
@@ -4334,7 +4389,13 @@ function Shell() {
 
   if (error) return <div className="p-8 text-red-600">{error}</div>
   if (!sheet) return <div className="p-8">Conectando a Google Sheets…</div>
-  const api = new SheetsApi(async () => webAuth.getToken(false))
+  const api = new SheetsApi(async () => {
+    try {
+      return await webAuth.getToken(false)
+    } catch {
+      return await webAuth.getToken(true)
+    }
+  })
   const repo = createRepository({ api, storage: localStorageAdapter, getSpreadsheetId: async () => sheet.id })
   return (
     <AppProvider repo={repo}>
