@@ -64,4 +64,20 @@ export class SheetsApi {
       body: JSON.stringify({ valueInputOption: 'USER_ENTERED', data: valueRanges })
     })
   }
+
+  async appendValues(spreadsheetId: string, range: string, values: (string | number)[][]): Promise<void> {
+    const encoded = encodeURIComponent(range)
+    await this.request(`${BASE}/${spreadsheetId}/values/${encoded}:append?valueInputOption=USER_ENTERED`, {
+      method: 'POST',
+      body: JSON.stringify({ values })
+    })
+  }
+
+  async clearRange(spreadsheetId: string, range: string): Promise<void> {
+    const encoded = encodeURIComponent(range)
+    await this.request(`${BASE}/${spreadsheetId}/values/${encoded}:clear`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    })
+  }
 }

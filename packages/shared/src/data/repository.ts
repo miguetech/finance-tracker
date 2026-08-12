@@ -41,7 +41,7 @@ export function createRepository(ctx: RepoContext) {
     const spec = TABLES[t]
     const values = rows.map(r => serializeRow(spec, r))
     const last = String.fromCharCode(64 + spec.length)
-    await api.batchUpdate(id, [{ range: `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`, values }])
+    await api.appendValues(id, `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`, values)
   }
 
   async function replaceTable(t: keyof typeof TABLES, rows: Record<string, string | number>[]): Promise<void> {
@@ -49,7 +49,9 @@ export function createRepository(ctx: RepoContext) {
     const spec = TABLES[t]
     const values = rows.map(r => serializeRow(spec, r))
     const last = String.fromCharCode(64 + spec.length)
-    await api.batchUpdate(id, [{ range: `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`, values }])
+    const range = `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`
+    await api.clearRange(id, range)
+    await api.batchUpdate(id, [{ range, values }])
   }
 
   async function readConfig(): Promise<Config> {
@@ -104,15 +106,13 @@ export function createRepository(ctx: RepoContext) {
       const id_factura = uid('fac_')
       const folio = await withMutex<string>(
         async clave => {
-          const res = await api.batchGet(await sid(), [`'Config'!A1:B20`])
+          const res = await api.batchGet(await sid(), [`'Config'!A1:B500`])
           const rows = res[Object.keys(res)[0]] ?? []
           for (const [k, v] of rows) if (String(k) === clave) return String(v ?? '')
           return null
         },
         async (clave, valor) => {
-          const all = await readConfig()
-          const base = configToRows(all).map(([k, v]) => [k, k === clave ? valor : v] as (string | number)[])
-          await api.batchUpdate(await sid(), [{ range: `'Config'!A1:B${base.length}`, values: base }])
+          await api.batchUpdate(await sid(), [{ range: `'Config'!A50:B50`, values: [[clave, valor]] }])
         },
         async () => {
           const c = await readConfig()
@@ -263,7 +263,8 @@ export function createRepository(ctx: RepoContext) {
       await appendRows('Pagos', [pagoRow as unknown as Record<string, string | number>])
       const updated = rows.map(r => {
         if (r[table === 'Facturas' ? 'id_factura' : 'id_cxp'] === parsed.id_origen) {
-          return { ...r, saldo: nuevoSaldo, fecha_pago: parsed.fecha }
+          if (table === 'Facturas') return { ...r, saldo: nuevoSaldo, fecha_pago: parsed.fecha }
+          return { ...r, saldo: nuevoSaldo, estado: nuevoSaldo <= 0 ? 'pagada' : 'parcial' }
         }
         return r
       })
