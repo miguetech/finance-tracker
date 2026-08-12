@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { Dialog, Button, Input, Select } from '../../ui/components'
 import { useGastos, useCategorias } from '../../store/queries'
+import { useToast } from '../../ui/components'
 import type { Gasto } from '../../types/entities'
 
 export function GastoFormModal({ open, onClose, initial }: { open: boolean; onClose: () => void; initial: Gasto | null }) {
   const { saveGasto } = useGastos()
   const { data: categorias = [] } = useCategorias('gastos')
+  const toast = useToast()
   const [form, setForm] = useState({ fecha: new Date().toISOString().slice(0, 10), categoria: '', descripcion: '', monto: '', metodo_pago: 'Efectivo', proveedor: '' })
   useEffect(() => {
     if (open) setForm(initial ? { ...initial, monto: String(initial.monto) } : { fecha: new Date().toISOString().slice(0, 10), categoria: '', descripcion: '', monto: '', metodo_pago: 'Efectivo', proveedor: '' })
@@ -13,8 +15,13 @@ export function GastoFormModal({ open, onClose, initial }: { open: boolean; onCl
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   const submit = async () => {
     if (!form.descripcion.trim() || Number(form.monto) <= 0) return
-    await saveGasto.mutateAsync({ ...initial, ...form, monto: Number(form.monto) } as never)
-    onClose()
+    try {
+      await saveGasto.mutateAsync({ ...initial, ...form, monto: Number(form.monto) } as never)
+      toast('Gasto guardado')
+      onClose()
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    }
   }
   return (
     <Dialog open={open} onClose={onClose} title={initial ? 'Editar gasto' : 'Registrar gasto'}
