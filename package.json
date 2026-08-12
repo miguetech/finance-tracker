@@ -10,6 +10,7 @@
     "test:e2e": "pnpm --filter @ft/web test:e2e"
   },
   "devDependencies": {
+    "@types/chrome": "^0.2.5",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   }
