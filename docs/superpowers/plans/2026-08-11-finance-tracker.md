@@ -1473,6 +1473,7 @@ git add -A && git commit -m "feat(shared): auth providers + storage adapters"
 **Files:**
 - Create: `packages/shared/src/sheets/mutex.ts`
 - Create: `packages/shared/src/data/repository.ts`
+- Modify: `packages/shared/src/sheets/api.ts` (añadir `appendValues` + `clearRange`)
 - Create: `packages/shared/tests/repository.test.ts`
 
 **Interfaces:**
@@ -1502,7 +1503,30 @@ git add -A && git commit -m "feat(shared): auth providers + storage adapters"
   - `getReportes(ctx, mes: string): Promise<{ kpis: Kpis; categorias: {categoria,total}[]; top: {nombre,total}[] }>`
   - `getCategorias(ctx, kind: 'gastos' | 'cxp'): Promise<string[]>`
 
-- [ ] **Step 1: Escribir test fallido**
+- [ ] **Step 1: Añadir appendValues y clearRange a SheetsApi**
+
+Append a `packages/shared/src/sheets/api.ts` (dentro de la clase `SheetsApi`):
+```ts
+  async appendValues(spreadsheetId: string, range: string, values: (string | number)[][]): Promise<void> {
+    const encoded = encodeURIComponent(range)
+    await this.request(`${BASE}/${spreadsheetId}/values/${encoded}:append?valueInputOption=USER_ENTERED`, {
+      method: 'POST',
+      body: JSON.stringify({ values })
+    })
+  }
+
+  async clearRange(spreadsheetId: string, range: string): Promise<void> {
+    const encoded = encodeURIComponent(range)
+    await this.request(`${BASE}/${spreadsheetId}/values/${encoded}:clear`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    })
+  }
+```
+
+Nota: `appendValues` usa el endpoint `values:append` que inserta tras la última fila con datos — lo que hace que `appendRows` acumule de verdad en Sheets (un `values:batchUpdate` a rango fijo sobreescribiría filas). `clearRange` vacía un rango para que `replaceTable` no deje filas huérfanas al reemplazar con un set más corto.
+
+- [ ] **Step 2: Escribir test fallido**
 
 `packages/shared/tests/repository.test.ts`:
 ```ts
@@ -1521,34 +1545,75 @@ function memoryStorage(seed: Record<string, string> = {}): StorageAdapter {
 }
 
 function fakeApi() {
-  const tables = new Map<string, (string | number)[][]>()
+  const grid = new Map<string, (string | number)[][]>()
   const requests: { range: string; values: (string | number)[][] }[] = []
+
+  function cellRef(ref: string): { col: number; row: number } {
+    const m = ref.match(/^([A-Z]+)(\d+)$/)!
+    let col = 0
+    for (const ch of m[1]) col = col * 26 + (ch.charCodeAt(0) - 64)
+    return { col, row: Number(m[2]) }
+  }
+  function sheetOf(range: string): string {
+    return range.split('!')[0].replace(/'/g, '')
+  }
+  function writeCells(sheet: string, values: (string | number)[][], startRow: number, startCol: number) {
+    const rows = grid.get(sheet) ?? []
+    values.forEach((rowVals, di) => {
+      const r = startRow - 1 + di
+      while (rows.length <= r) rows.push([])
+      rowVals.forEach((v, ci) => { rows[r][startCol - 1 + ci] = v })
+    })
+    grid.set(sheet, rows)
+  }
+
   const read = async (url: string) => {
     const u = new URL(String(url))
     const ranges = (u.searchParams.get('ranges') ?? '').split(',').filter(Boolean)
-    const valueRanges = ranges.map(r => {
-      const sheet = r.split('!')[0].replace(/'/g, '')
-      return { range: r, values: tables.get(sheet) ?? [] }
-    })
+    const valueRanges = ranges.map(r => ({ range: r, values: grid.get(sheetOf(r)) ?? [] }))
     return { ok: true, json: async () => ({ valueRanges }) }
   }
+
   const write = async (url: string, init: RequestInit) => {
-    const body = JSON.parse(String(init.body)) as { data: { range: string; values: (string | number)[][] }[] }
-    for (const d of body.data) {
-      const sheet = d.range.split('!')[0].replace(/'/g, '')
+    const body = JSON.parse(String(init.body)) as { data?: { range: string; values: (string | number)[][] }[]; values?: (string | number)[][] }
+    const u = new URL(String(url))
+    const path = decodeURIComponent(u.pathname)
+    if (u.pathname.includes(':append')) {
+      const range = path.split('/values/')[1].split(':append')[0]
+      const a = cellRef(range.split('!')[1].split(':')[0])
+      const rows = grid.get(sheetOf(range)) ?? []
+      let r = a.row - 1
+      while (r < rows.length && (rows[r] ?? []).some(v => v !== undefined && v !== '')) r++
+      writeCells(sheetOf(range), body.values!, r + 1, a.col)
+      return { ok: true, json: async () => ({}) }
+    }
+    if (u.pathname.includes(':clear')) {
+      const range = path.split('/values/')[1].split(':clear')[0]
+      grid.set(sheetOf(range), [])
+      return { ok: true, json: async () => ({}) }
+    }
+    for (const d of body.data ?? []) {
+      const [a, b] = d.range.split('!')[1].split(':')
+      const start = cellRef(a)
+      const end = cellRef(b ?? a)
       requests.push(d)
-      tables.set(sheet, d.values)
+      if (start.row === 1) {
+        grid.set(sheetOf(d.range), d.values.map(row => row.slice(0, end.col)))
+      } else {
+        writeCells(sheetOf(d.range), d.values, start.row, start.col)
+      }
     }
     return { ok: true, json: async () => ({ responses: [] }) }
   }
+
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     const u = String(url)
-    if (u.includes('values:batchUpdate')) return write(u, init!)
+    if (u.includes('values:batchUpdate') || u.includes(':append') || u.includes(':clear')) return write(u, init!)
     if (u.includes('values:batchGet')) return read(u)
     return { ok: true, json: async () => ({}) }
   })
   vi.stubGlobal('fetch', fetchMock)
-  return { tables, requests, fetchMock }
+  return { grid, requests, fetchMock }
 }
 
 function setup() {
@@ -1613,12 +1678,12 @@ describe('repository', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [ ] **Step 3: Correr y verificar que falla**
 
 Run: `pnpm -F shared test -- --run tests/repository.test.ts`
 Expected: FAIL.
 
-- [ ] **Step 3: Implementar mutex y repository**
+- [ ] **Step 4: Implementar mutex y repository**
 
 `packages/shared/src/sheets/mutex.ts`:
 ```ts
@@ -1696,7 +1761,7 @@ export function createRepository(ctx: RepoContext) {
     const spec = TABLES[t]
     const values = rows.map(r => serializeRow(spec, r))
     const last = String.fromCharCode(64 + spec.length)
-    await api.batchUpdate(id, [{ range: `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`, values }])
+    await api.appendValues(id, `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`, values)
   }
 
   async function replaceTable(t: keyof typeof TABLES, rows: Record<string, string | number>[]): Promise<void> {
@@ -1704,7 +1769,9 @@ export function createRepository(ctx: RepoContext) {
     const spec = TABLES[t]
     const values = rows.map(r => serializeRow(spec, r))
     const last = String.fromCharCode(64 + spec.length)
-    await api.batchUpdate(id, [{ range: `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`, values }])
+    const range = `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`
+    await api.clearRange(id, range)
+    await api.batchUpdate(id, [{ range, values }])
   }
 
   async function readConfig(): Promise<Config> {
@@ -1759,15 +1826,13 @@ export function createRepository(ctx: RepoContext) {
       const id_factura = uid('fac_')
       const folio = await withMutex<string>(
         async clave => {
-          const res = await api.batchGet(await sid(), [`'Config'!A1:B20`])
+          const res = await api.batchGet(await sid(), [`'Config'!A1:B500`])
           const rows = res[Object.keys(res)[0]] ?? []
           for (const [k, v] of rows) if (String(k) === clave) return String(v ?? '')
           return null
         },
         async (clave, valor) => {
-          const all = await readConfig()
-          const base = configToRows(all).map(([k, v]) => [k, k === clave ? valor : v] as (string | number)[])
-          await api.batchUpdate(await sid(), [{ range: `'Config'!A1:B${base.length}`, values: base }])
+          await api.batchUpdate(await sid(), [{ range: `'Config'!A50:B50`, values: [[clave, valor]] }])
         },
         async () => {
           const c = await readConfig()
@@ -1918,7 +1983,8 @@ export function createRepository(ctx: RepoContext) {
       await appendRows('Pagos', [pagoRow as unknown as Record<string, string | number>])
       const updated = rows.map(r => {
         if (r[table === 'Facturas' ? 'id_factura' : 'id_cxp'] === parsed.id_origen) {
-          return { ...r, saldo: nuevoSaldo, fecha_pago: parsed.fecha }
+          if (table === 'Facturas') return { ...r, saldo: nuevoSaldo, fecha_pago: parsed.fecha }
+          return { ...r, saldo: nuevoSaldo, estado: nuevoSaldo <= 0 ? 'pagada' : 'parcial' }
         }
         return r
       })
@@ -1951,12 +2017,12 @@ export function createRepository(ctx: RepoContext) {
 export type Repository = ReturnType<typeof createRepository>
 ```
 
-- [ ] **Step 4: Correr tests y arreglar**
+- [ ] **Step 5: Correr tests y arreglar**
 
 Run: `pnpm -F shared test`
-Expected: PASS. El `fakeApi` usa semántica de reemplazo (cada `batchUpdate` escribe el set completo sobre la hoja), suficiente para las aserciones de folio, saldo y config.
+Expected: PASS. El `fakeApi` es grid-based: simula rangos con coordenadas de fila (batchUpdate a fila 1 = reemplazo completo; fila >1 = escritura dirigida), el endpoint `:append` acumula filas y `:clear` vacía la tabla. Ajusta el fake solo si las aserciones revelan discrepancias de coordenadas.
 
-- [ ] **Step 5: Exportar y commit**
+- [ ] **Step 6: Exportar y commit**
 
 Add to `packages/shared/src/index.ts`:
 ```ts
@@ -4363,4 +4429,4 @@ git add -A && git commit -m "docs: README + setup guide"
 
 **Consistencia de tipos:** `useCxpById` añadido en Task 15 y usado por `CxpDetail` (Task 14) — nota de ajuste en Task 14 Step 3 y resuelto en Task 15 Step 2. `createInitialSpreadsheet` exportado desde shared y usado en Task 16 (onboarding) y Task 17 (web). `RepoContext.getSpreadsheetId` usado en `createRepository` (Task 7). `formatMoney(amount, code)` firma consistente. `NavKey` definido en Task 8 y usado en features + shells.
 
-**Nota de riesgo:** El fake API de los tests de Task 7 usa semántica de reemplazo (cada `batchUpdate` sobreescribe el set completo de la hoja); suficiente para las aserciones actuales, pero no replica el append de `appendRows`. Si un test futuro depende de acumulación, ajustar el fake.
+**Nota de riesgo:** El fake API de los tests de Task 7 es grid-based y simula: batchUpdate a fila 1 = reemplazo completo; fila >1 = escritura dirigida por coordenadas; endpoint `:append` acumula tras la última fila con datos; `:clear` vacía. La fila del mutex (Config!A50) queda fuera del bloque A1:Bn de configToRows para que `writeConfig` no la borre; en el fake, `writeConfig` (fila 1) sí la elimina — inofensivo para las aserciones, distinto del comportamiento real de Sheets (donde A50 persiste).
