@@ -1,0 +1,9 @@
+@theme {
+  --color-primary: oklch(0.546 0.245 262.881);
+  --color-primary-hover: oklch(0.488 0.243 264.376);
+  --color-primary-soft: oklch(0.97 0.014 254.604);
+  --color-danger: oklch(0.577 0.245 27.325);
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 0.08);
+  --shadow-card-hover: 0 4px 12px rgb(0 0 0 / 0.1);
+  --shadow-btn: 0 1px 2px rgb(0 0 0 / 0.1);
+}
