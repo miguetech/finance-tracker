@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { useClientes } from '../../store/queries'
+import { useClientes, useConfig } from '../../store/queries'
 import { Table, Button, Input, Dialog, ConfirmDialog } from '../../ui/components'
 import { useToast } from '../../ui/components'
+import { getDocLabel } from '../../taxid'
 import { ClienteFormModal } from './ClienteFormModal'
 import type { Cliente } from '../../types/entities'
 
@@ -12,6 +13,8 @@ export function Clientes() {
   const [formOpen, setFormOpen] = useState(false)
   const [editando, setEditando] = useState<Cliente | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const { config } = useConfig()
+  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.tipo_doc_etiqueta ?? '')
 
   const filtrados = clientes.filter(c => !busqueda || c.nombre.toLowerCase().includes(busqueda.toLowerCase()) || c.rfc.toLowerCase().includes(busqueda.toLowerCase()))
 
@@ -20,7 +23,7 @@ export function Clientes() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-xl font-bold">Clientes</h1>
         <div className="flex gap-2">
-          <Input placeholder="Buscar nombre o RFC…" value={busqueda} onChange={e => setBusqueda(e.target.value)} className="sm:w-64" />
+          <Input placeholder={`Buscar nombre o ${docLabel}…`} value={busqueda} onChange={e => setBusqueda(e.target.value)} className="sm:w-64" />
           <Button onClick={() => { setEditando(null); setFormOpen(true) }}>+ Nuevo cliente</Button>
         </div>
       </div>
@@ -28,7 +31,7 @@ export function Clientes() {
         <Table
           columns={[
             { key: 'nombre', header: 'Nombre', render: c => String(c.nombre) },
-            { key: 'rfc', header: 'RFC', render: c => String(c.rfc) },
+            { key: 'rfc', header: docLabel, render: c => String(c.rfc) },
             { key: 'email', header: 'Email', render: c => String(c.email) },
             { key: 'telefono', header: 'Teléfono', render: c => String(c.telefono) },
             { key: 'acciones', header: '', render: c => (

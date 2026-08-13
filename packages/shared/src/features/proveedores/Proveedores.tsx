@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
-import { useProveedores } from '../../store/queries'
+import { useProveedores, useConfig } from '../../store/queries'
 import { Table, Button, ConfirmDialog } from '../../ui/components'
 import { useToast } from '../../ui/components'
+import { getDocLabel } from '../../taxid'
 import { ProveedorFormModal } from './ProveedorFormModal'
 import type { Proveedor } from '../../types/entities'
 
@@ -11,6 +12,8 @@ export function Proveedores() {
   const [formOpen, setFormOpen] = useState(false)
   const [editando, setEditando] = useState<Proveedor | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const { config } = useConfig()
+  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.tipo_doc_etiqueta ?? '')
 
   return (
     <div className="space-y-4">
@@ -21,7 +24,7 @@ export function Proveedores() {
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <Table columns={[
           { key: 'nombre', header: 'Nombre', render: r => String(r.nombre) },
-          { key: 'rfc', header: 'RFC', render: r => String(r.rfc) },
+          { key: 'rfc', header: docLabel, render: r => String(r.rfc) },
           { key: 'email', header: 'Email', render: r => String(r.email) },
           { key: 'telefono', header: 'Teléfono', render: r => String(r.telefono) },
           { key: 'acciones', header: '', render: r => (
