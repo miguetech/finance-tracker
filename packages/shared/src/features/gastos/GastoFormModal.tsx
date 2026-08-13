@@ -27,14 +27,14 @@ export function GastoFormModal({ open, onClose, initial }: { open: boolean; onCl
     <Dialog open={open} onClose={onClose} title={initial ? 'Editar gasto' : 'Registrar gasto'}
       footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={submit}>Guardar</Button></>}>
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">Fecha</label><Input type="date" value={form.fecha} onChange={set('fecha')} /></div>
           <div><label className="text-xs text-gray-500">Categoría</label>
             <Select value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} options={categorias.map(c => ({ value: c, label: c }))} />
           </div>
         </div>
         <div><label className="text-xs text-gray-500">Descripción *</label><Input value={form.descripcion} onChange={set('descripcion')} /></div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">Monto *</label><Input type="number" value={form.monto} onChange={set('monto')} /></div>
           <div><label className="text-xs text-gray-500">Método</label>
             <Select value={form.metodo_pago} onChange={v => setForm(f => ({ ...f, metodo_pago: v }))} options={['Efectivo', 'Transferencia', 'Tarjeta'].map(v => ({ value: v, label: v }))} />

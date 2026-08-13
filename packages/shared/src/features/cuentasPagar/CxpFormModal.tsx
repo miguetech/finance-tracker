@@ -28,14 +28,14 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
         <div><label className="text-xs text-gray-500">Proveedor *</label>
           <Select value={form.id_proveedor} onChange={v => setForm(f => ({ ...f, id_proveedor: v }))} options={proveedores.map(p => ({ value: p.id_proveedor, label: p.nombre }))} placeholder="Seleccionar…" />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">Folio documento</label><Input value={form.folio_documento} onChange={set('folio_documento')} /></div>
           <div><label className="text-xs text-gray-500">Categoría</label>
             <Select value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} options={categorias.map(c => ({ value: c, label: c }))} />
           </div>
         </div>
         <div><label className="text-xs text-gray-500">Descripción *</label><Input value={form.descripcion} onChange={set('descripcion')} /></div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">Fecha vencimiento *</label><Input type="date" value={form.fecha_vencimiento} onChange={set('fecha_vencimiento')} /></div>
           <div><label className="text-xs text-gray-500">Monto total *</label><Input type="number" value={form.monto_total} onChange={set('monto_total')} /></div>
         </div>

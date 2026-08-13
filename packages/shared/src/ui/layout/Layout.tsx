@@ -21,7 +21,7 @@ export function Layout({ current, onNavigate, children, headerExtra }: { current
     <nav className="flex-1 overflow-y-auto">
       {NAV.map(n => (
         <button key={n.key} onClick={() => { onNavigate(n.key); setMobileOpen(false) }}
-          className={cx('w-full flex items-center gap-3 px-4 py-3 text-sm', current === n.key ? 'bg-blue-50 text-blue-700 font-medium border-l-4 border-blue-600' : 'text-gray-700 hover:bg-gray-100')}>
+          className={cx('w-full flex items-center gap-3 px-4 py-3 text-sm', current === n.key ? 'bg-primary-soft text-primary font-medium border-l-4 border-primary' : 'text-gray-700 hover:bg-gray-100')}>
           <span>{n.icon}</span>{n.label}
         </button>
       ))}

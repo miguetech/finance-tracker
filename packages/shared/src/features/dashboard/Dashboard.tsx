@@ -25,7 +25,7 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
         <Button variant="outline" onClick={() => onNavigate('gastos')}>+ Registrar gasto</Button>
         <Button variant="outline" onClick={() => onNavigate('cuentas')}>+ Registrar pago</Button>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Facturado" value={k ? formatMoney(k.facturado, moneda) : '—'} />
         <StatCard label="Cobrado" value={k ? formatMoney(k.cobrado, moneda) : '—'} tone="positive" />
         <StatCard label="Pendiente de cobro" value={k ? formatMoney(k.pendiente, moneda) : '—'} tone="negative" />
