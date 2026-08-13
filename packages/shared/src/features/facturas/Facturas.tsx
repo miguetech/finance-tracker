@@ -35,7 +35,7 @@ export function Facturas() {
           <Button onClick={() => setFormOpen(true)}>+ Nueva factura</Button>
         </div>
       </div>
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table columns={[
           { key: 'folio', header: 'Folio', render: r => String(r.folio) },
           { key: 'cliente', header: 'Cliente', render: r => String(r.nombre_cliente) },

@@ -30,7 +30,7 @@ export function Gastos() {
           <Button onClick={() => { setEditando(null); setFormOpen(true) }}>+ Registrar gasto</Button>
         </div>
       </div>
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table columns={[
           { key: 'fecha', header: 'Fecha', render: r => String(r.fecha) },
           { key: 'categoria', header: 'Categoría', render: r => String(r.categoria) },

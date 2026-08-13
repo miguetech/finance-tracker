@@ -37,12 +37,12 @@ export function Button({ variant = 'primary', size = 'md', icon, iconAfter, icon
 }
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={cx('w-full px-3 py-2 border border-gray-300 rounded-md text-sm', props.className)} />
+  return <input {...props} className={cx('w-full h-9 sm:h-10 px-3.5 border border-gray-300 rounded-lg text-sm transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30', props.className)} />
 }
 
 export function Select({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; placeholder?: string }) {
   return (
-    <select value={value} onChange={e => onChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+    <select value={value} onChange={e => onChange(e.target.value)} className="w-full h-9 sm:h-10 px-3.5 border border-gray-300 rounded-lg text-sm transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30">
       {placeholder !== undefined && <option value="">{placeholder}</option>}
       {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
@@ -51,7 +51,7 @@ export function Select({ value, onChange, options, placeholder }: { value: strin
 
 export function Card({ title, children, footer }: { title?: ReactNode; children: ReactNode; footer?: ReactNode }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+    <div className="bg-white border border-gray-200 rounded-xl shadow-card">
       {title && <div className="px-4 py-3 border-b border-gray-200 font-semibold">{title}</div>}
       <div className="p-4">{children}</div>
       {footer && <div className="px-4 py-3 border-t border-gray-200">{footer}</div>}
@@ -62,7 +62,7 @@ export function Card({ title, children, footer }: { title?: ReactNode; children:
 export function StatCard({ label, value, tone }: { label: string; value: string; tone?: 'default' | 'positive' | 'negative' }) {
   const color = tone === 'positive' ? 'text-green-600' : tone === 'negative' ? 'text-red-600' : 'text-gray-900'
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
+    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-card hover:shadow-card-hover transition-shadow">
       <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
       <div className={cx('text-2xl font-bold mt-1', color)}>{value}</div>
     </div>
@@ -75,7 +75,7 @@ export function Badge({ children, tone = 'gray' }: { children: ReactNode; tone?:
     green: 'bg-green-100 text-green-700',
     yellow: 'bg-yellow-100 text-yellow-700',
     red: 'bg-red-100 text-red-700',
-    blue: 'bg-blue-100 text-blue-700',
+    blue: 'bg-primary-soft text-primary',
     success: 'bg-green-100 text-green-700'
   }
   return <span className={cx('inline-block px-2 py-0.5 rounded text-xs font-medium', styles[tone])}>{children}</span>
@@ -83,15 +83,15 @@ export function Badge({ children, tone = 'gray' }: { children: ReactNode; tone?:
 
 export function Table<T extends Record<string, unknown>>({ columns, rows }: { columns: { key: string; header: string; render?: (row: T) => ReactNode }[]; rows: T[] }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-xl border border-gray-200">
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
-          <tr>{columns.map(c => <th key={c.key} className="px-4 py-2">{c.header}</th>)}</tr>
+          <tr>{columns.map(c => <th key={c.key} className="px-4 py-2 whitespace-nowrap">{c.header}</th>)}</tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
-              {columns.map(c => <td key={c.key} className="px-4 py-2">{c.render ? c.render(r) : String(r[c.key] ?? '')}</td>)}
+              {columns.map(c => <td key={c.key} className="px-4 py-2 whitespace-nowrap">{c.render ? c.render(r) : String(r[c.key] ?? '')}</td>)}
             </tr>
           ))}
         </tbody>
@@ -103,8 +103,8 @@ export function Table<T extends Record<string, unknown>>({ columns, rows }: { co
 export function Dialog({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode }) {
   if (!open) return null
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-lg w-full max-w-lg max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-white w-full sm:max-w-lg max-h-[90vh] overflow-auto rounded-t-2xl sm:rounded-xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <div className="font-semibold">{title}</div>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-800">✕</button>

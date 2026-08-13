@@ -27,7 +27,7 @@ export function Clientes() {
           <Button onClick={() => { setEditando(null); setFormOpen(true) }}>+ Nuevo cliente</Button>
         </div>
       </div>
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table
           columns={[
             { key: 'nombre', header: 'Nombre', render: c => String(c.nombre) },

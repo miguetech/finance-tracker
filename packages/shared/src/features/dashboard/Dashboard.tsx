@@ -36,7 +36,7 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
         <StatCard label="CXP por vencer" value={k ? formatMoney(k.porVencer, moneda) : '—'} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-card p-4">
           <div className="font-semibold mb-3">Pendientes de cobro</div>
           {pendientes.length === 0 && <p className="text-sm text-gray-500">Sin facturas pendientes</p>}
           {pendientes.map(f => (
@@ -45,7 +45,7 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
             </div>
           ))}
         </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="bg-white border border-gray-200 rounded-xl shadow-card p-4">
           <div className="font-semibold mb-3">CXP vencidas</div>
           {vencidas.length === 0 && <p className="text-sm text-gray-500">Sin cuentas vencidas</p>}
           {vencidas.map(c => (

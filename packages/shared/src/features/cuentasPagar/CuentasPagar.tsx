@@ -27,7 +27,7 @@ export function CuentasPagar() {
           <Button onClick={() => setFormOpen(true)}>+ Nueva CXP</Button>
         </div>
       </div>
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table columns={[
           { key: 'prov', header: 'Proveedor', render: r => String(r.nombre_proveedor) },
           { key: 'desc', header: 'Descripción', render: r => String(r.descripcion) },

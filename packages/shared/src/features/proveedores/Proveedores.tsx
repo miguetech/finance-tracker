@@ -21,7 +21,7 @@ export function Proveedores() {
         <h1 className="text-xl font-bold">Proveedores</h1>
         <Button onClick={() => { setEditando(null); setFormOpen(true) }}>+ Nuevo proveedor</Button>
       </div>
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table columns={[
           { key: 'nombre', header: 'Nombre', render: r => String(r.nombre) },
           { key: 'rfc', header: docLabel, render: r => String(r.rfc) },
