@@ -132,7 +132,7 @@ export function Tabs({ tabs }: { tabs: { id: string; label: string; content: Rea
       <div className="flex gap-1 border-b border-gray-200">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setActive(t.id)}
-            className={cx('px-3 py-2 text-sm border-b-2', active === t.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500')}>
+            className={cx('px-3 py-2 text-sm border-b-2', active === t.id ? 'border-primary text-primary' : 'border-transparent text-gray-500')}>
             {t.label}
           </button>
         ))}
