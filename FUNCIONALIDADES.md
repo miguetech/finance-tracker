@@ -95,6 +95,8 @@ Aplicación de **facturación personal de un solo usuario** para:
 | `prefijo_folio` | string | `FAC-` |
 | `contador_folio` | number | `1` |
 | `iva_porcentaje` | number | `16` |
+| `tipo_doc` | string | `RFC` | (RFC / NIF / Cédula / Otro) |
+| `tipo_doc_etiqueta` | string | `''` | Etiqueta personalizada si `tipo_doc = Otro` |
 | `categorias_gastos` | string (CSV) | `Renta,Internet,Papelería,Servicios` |
 
 **Clientes**:
