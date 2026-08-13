@@ -21,4 +21,9 @@ describe('Configuracion', () => {
     render(<Configuracion />, { wrapper })
     expect(await screen.findByText(/datos de la empresa/i)).toBeTruthy()
   })
+  it('muestra el select de tipo de documento', async () => {
+    render(<Configuracion />, { wrapper })
+    expect(await screen.findByText(/tipo de documento/i)).toBeTruthy()
+    expect(screen.getAllByText('RFC').length).toBeGreaterThan(0)
+  })
 })

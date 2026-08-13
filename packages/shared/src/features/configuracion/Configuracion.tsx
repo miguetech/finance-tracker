@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Card, Button, Input, Select } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { CURRENCIES } from '../../currency'
+import { TIPO_DOC_OPTIONS, getDocLabel } from '../../taxid'
 import type { Config } from '../../types/entities'
 
 export function Configuracion() {
@@ -14,6 +15,7 @@ export function Configuracion() {
   const [form, setForm] = useState<Config | null>(null)
   useEffect(() => { if (config && !form) setForm(config) }, [config, form])
   if (!config || !form) return <div className="p-8 text-gray-500">Cargando…</div>
+  const docLabel = getDocLabel(form.tipo_doc, form.tipo_doc_etiqueta)
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => f && ({ ...f, [k]: e.target.value }))
   const submit = async () => {
     try {
@@ -32,8 +34,21 @@ export function Configuracion() {
       <Card title="Datos de la empresa">
         <div className="space-y-3">
           <div><label className="text-xs text-gray-500">Nombre *</label><Input value={form.empresa_nombre} onChange={set('empresa_nombre')} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="text-xs text-gray-500">RFC</label><Input value={form.empresa_rfc} onChange={set('empresa_rfc')} /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-500">Tipo de documento</label>
+              <Select value={form.tipo_doc} onChange={v => setForm(f => f && ({ ...f, tipo_doc: v as Config['tipo_doc'] }))} options={TIPO_DOC_OPTIONS} />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">{docLabel}</label>
+              <Input value={form.empresa_rfc} onChange={set('empresa_rfc')} />
+            </div>
+            {form.tipo_doc === 'Otro' && (
+              <div className="sm:col-span-2">
+                <label className="text-xs text-gray-500">Etiqueta personalizada del documento</label>
+                <Input value={form.tipo_doc_etiqueta} onChange={set('tipo_doc_etiqueta')} placeholder="Ej. RUT, DNI, CUIT…" />
+              </div>
+            )}
             <div><label className="text-xs text-gray-500">Teléfono</label><Input value={form.empresa_telefono} onChange={set('empresa_telefono')} /></div>
           </div>
           <div><label className="text-xs text-gray-500">Email</label><Input value={form.empresa_email} onChange={set('empresa_email')} /></div>
@@ -42,7 +57,7 @@ export function Configuracion() {
         </div>
       </Card>
       <Card title="Facturación">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">Prefijo folio *</label><Input value={form.prefijo_folio} onChange={set('prefijo_folio')} /></div>
           <div><label className="text-xs text-gray-500">Contador actual</label><Input type="number" value={form.contador_folio} onChange={set('contador_folio')} /></div>
           <div><label className="text-xs text-gray-500">IVA %</label><Input type="number" value={form.iva_porcentaje} onChange={set('iva_porcentaje')} /></div>
