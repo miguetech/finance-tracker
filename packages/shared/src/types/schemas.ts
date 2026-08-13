@@ -80,7 +80,9 @@ export const ConfigSchema = z.object({
   moneda: z.string().min(1).default('USD'),
   iva_porcentaje: z.number().default(16),
   categorias_gastos: z.string().default('Renta,Internet,Papelería,Servicios'),
-  categorias_cxp: z.string().default('Materiales,Servicios,Impuestos,Otros')
+  categorias_cxp: z.string().default('Materiales,Servicios,Impuestos,Otros'),
+  tipo_doc: z.enum(['RFC', 'NIF', 'Cedula', 'Otro']).default('RFC'),
+  tipo_doc_etiqueta: z.string().default('')
 })
 
 export type MetodoPagoValue = z.infer<typeof MetodoPagoSchema>

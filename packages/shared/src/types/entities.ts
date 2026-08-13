@@ -1,3 +1,5 @@
+import type { TipoDoc } from '../taxid'
+
 export type MetodoPago = 'Efectivo' | 'Transferencia' | 'Tarjeta'
 export type TipoPago = 'cobro' | 'abono'
 export type EstadoFactura = 'pendiente' | 'parcial' | 'pagada'
@@ -92,6 +94,8 @@ export interface Config {
   iva_porcentaje: number
   categorias_gastos: string
   categorias_cxp: string
+  tipo_doc: TipoDoc
+  tipo_doc_etiqueta: string
 }
 
 export interface InvoiceTotals {

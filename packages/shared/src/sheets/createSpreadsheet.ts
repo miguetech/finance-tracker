@@ -18,7 +18,9 @@ const DEFAULT_CONFIG: Config = {
   moneda: DEFAULT_CURRENCY,
   iva_porcentaje: 16,
   categorias_gastos: 'Renta,Internet,Papelería,Servicios',
-  categorias_cxp: 'Materiales,Servicios,Impuestos,Otros'
+  categorias_cxp: 'Materiales,Servicios,Impuestos,Otros',
+  tipo_doc: 'RFC' as const,
+  tipo_doc_etiqueta: ''
 }
 
 export async function createInitialSpreadsheet(api: SheetsApi): Promise<{ spreadsheetId: string; url: string }> {
@@ -62,7 +64,9 @@ export function configFromRows(rows: (string | number)[][]): Config {
     moneda: map.get('moneda') || DEFAULT_CURRENCY,
     iva_porcentaje: num('iva_porcentaje') || DEFAULT_CONFIG.iva_porcentaje,
     categorias_gastos: map.get('categorias_gastos') ?? DEFAULT_CONFIG.categorias_gastos,
-    categorias_cxp: map.get('categorias_cxp') ?? DEFAULT_CONFIG.categorias_cxp
+    categorias_cxp: map.get('categorias_cxp') ?? DEFAULT_CONFIG.categorias_cxp,
+    tipo_doc: (map.get('tipo_doc') as Config['tipo_doc']) || DEFAULT_CONFIG.tipo_doc,
+    tipo_doc_etiqueta: map.get('tipo_doc_etiqueta') ?? DEFAULT_CONFIG.tipo_doc_etiqueta
   }
 }
 
