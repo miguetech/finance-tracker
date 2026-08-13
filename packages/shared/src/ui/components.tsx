@@ -3,14 +3,37 @@ import type { ReactNode } from 'react'
 
 const cx = (...a: (string | false | undefined)[]) => a.filter(Boolean).join(' ')
 
-export function Button({ variant = 'primary', className, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'outline' | 'danger' | 'ghost' }) {
-  const styles = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700',
-    outline: 'border border-gray-300 hover:bg-gray-100',
-    danger: 'bg-red-600 text-white hover:bg-red-700',
-    ghost: 'hover:bg-gray-100'
+export type ButtonVariant = 'primary' | 'outline' | 'danger' | 'ghost' | 'success'
+export type ButtonSize = 'sm' | 'md' | 'lg'
+
+export function Button({ variant = 'primary', size = 'md', icon, iconAfter, iconOnly, className, children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: ButtonSize; icon?: ReactNode; iconAfter?: ReactNode; iconOnly?: boolean }) {
+  const styles: Record<ButtonVariant, string> = {
+    primary: 'bg-primary text-white shadow-btn hover:bg-primary-hover',
+    outline: 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50',
+    danger: 'bg-danger text-white hover:opacity-90',
+    ghost: 'text-gray-700 hover:bg-gray-100',
+    success: 'bg-green-600 text-white hover:bg-green-700'
   }
-  return <button {...props} className={cx('px-3 py-2 rounded-md text-sm font-medium disabled:opacity-50', styles[variant], className)} />
+  const sizes: Record<ButtonSize, string> = {
+    sm: iconOnly ? 'p-2' : 'px-2.5 py-1.5 text-xs',
+    md: iconOnly ? 'p-2.5' : 'px-3.5 py-2 text-sm',
+    lg: iconOnly ? 'p-3' : 'px-5 py-2.5 text-base'
+  }
+  return (
+    <button
+      {...props}
+      className={cx(
+        'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-150',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-1',
+        'active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none',
+        styles[variant], sizes[size], className
+      )}
+    >
+      {icon && <span className="inline-flex">{icon}</span>}
+      {!iconOnly && children}
+      {iconAfter && <span className="inline-flex">{iconAfter}</span>}
+    </button>
+  )
 }
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
