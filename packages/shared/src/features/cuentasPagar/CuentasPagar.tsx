@@ -22,7 +22,10 @@ export function CuentasPagar() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-xl font-bold">Cuentas por Pagar</h1>
+        <div>
+          <h1 className="text-xl font-bold">Cuentas por Pagar</h1>
+          <p className="text-sm text-muted-foreground">Obligaciones pendientes con proveedores — dinero que aún debes y aún no sale de tu cuenta.</p>
+        </div>
         <div className="flex gap-2">
           <Select value={estado} onChange={setEstado} options={[{ value: 'pendiente', label: 'Pendiente' }, { value: 'parcial', label: 'Parcial' }, { value: 'pagada', label: 'Pagada' }]} placeholder="Estado" />
           <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setFormOpen(true)}>Nueva CXP</Button>

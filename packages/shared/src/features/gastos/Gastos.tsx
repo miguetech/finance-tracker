@@ -24,7 +24,10 @@ export function Gastos() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-xl font-bold">Gastos</h1>
+        <div>
+          <h1 className="text-xl font-bold">Gastos</h1>
+          <p className="text-sm text-muted-foreground">Salidas de dinero ya realizadas (renta, internet, papelería, servicios).</p>
+        </div>
         <div className="flex gap-2">
           <Input type="month" value={mes} onChange={e => setMes(e.target.value)} />
           <Select value={categoria} onChange={setCategoria} options={categorias.map(c => ({ value: c, label: c }))} placeholder="Categoría" />
