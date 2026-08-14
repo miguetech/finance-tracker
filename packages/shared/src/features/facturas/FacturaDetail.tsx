@@ -5,12 +5,12 @@ import { useFactura, usePagos, useConfig } from '../../store/queries'
 import { formatMoney } from '../../currency'
 import { PagoModal } from './PagoModal'
 
-export function printInvoice(det: { factura: { folio: string } }) {
+export function printInvoice(title: string) {
   const w = window.open('', '_blank', 'width=900,height=700')
   if (!w) return
   const node = document.getElementById('invoice-print')
   if (!node) return
-  w.document.write('<html><head><title>Factura ' + det.factura.folio + '</title><style>body{font-family:system-ui,sans-serif;padding:2rem;color:#111}table{width:100%;border-collapse:collapse}th,td{padding:.5rem;text-align:left;border-bottom:1px solid #ddd}@media print{body{padding:0}}</style></head><body>')
+  w.document.write('<html><head><title>' + title + '</title><style>body{font-family:system-ui,sans-serif;padding:2rem;color:#111}table{width:100%;border-collapse:collapse}th,td{padding:.5rem;text-align:left;border-bottom:1px solid #ddd}@media print{body{padding:0}}</style></head><body>')
   w.document.write(node.innerHTML)
   w.document.write('</body></html>')
   w.document.close()
@@ -30,7 +30,7 @@ export function FacturaDetail({ id, onClose }: { id: string; onClose: () => void
   return (
     <Dialog open onClose={onClose} title={`Factura ${factura.folio}`}
       footer={<>
-        <Button variant="outline" onClick={() => printInvoice(det)}>Descargar PDF</Button>
+        <Button variant="outline" onClick={() => printInvoice('Factura ' + factura.folio)}>Descargar PDF</Button>
         {factura.saldo > 0 && <Button onClick={() => setPagoOpen(true)}>Registrar cobro</Button>}
         <Button variant="outline" onClick={onClose}>Cerrar</Button>
       </>}>
