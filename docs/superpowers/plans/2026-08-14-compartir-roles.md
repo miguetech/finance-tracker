@@ -327,15 +327,12 @@ git commit -m "feat: tabla Usuarios y schema de acceso"
 describe('usuarios', () => {
   it('guarda, lista y elimina usuarios por email', async () => {
     const api = new SheetsApi(async () => 'token')
-    const calls: { url: string; body: unknown }[] = []
     const mockValues: Record<string, (string | number)[][]> = {
-      'Usuarios': [['email', 'rol', 'modulos_ver', 'modulos_editar'], ['a@b.c', 'asistente', 'facturas', 'gastos']]
+      'Usuarios': [['a@b.c', 'asistente', 'facturas', 'gastos']]
     }
-    global.fetch = vi.fn(async (url: string, init?: RequestInit) => {
-      calls.push({ url, body: init?.body })
+    global.fetch = vi.fn(async (url: string) => {
       const u = String(url)
       if (u.includes('values:batchGet')) {
-        const ranges = (init as { headers?: never } & { url?: string }) // noop, ranges in url
         return { ok: true, json: async () => ({ valueRanges: [{ values: mockValues['Usuarios'] }] }) } as unknown as Response
       }
       if (u.includes('values:append')) return { ok: true, json: async () => ({}) } as unknown as Response
@@ -860,8 +857,8 @@ function doGet() {
   return respond({ ok: true, service: 'ft-backend' })
 }
 
-function doPost(e: any) {
-  return respond(handle(e))
+async function doPost(e: any) {
+  return respond(await handle(e))
 }
 
 g.doGet = doGet
