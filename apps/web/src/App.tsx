@@ -1,9 +1,15 @@
-import React, { useEffect, useState } from 'react'
-import { createRepository, localStorageAdapter, KEYS, SheetsApi, createInitialSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Toaster } from '@ft/shared'
-import type { NavKey } from '@ft/shared'
+import React, { useEffect, useMemo, useState } from 'react'
+import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, createInitialSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare } from '@ft/shared'
+import type { NavKey, NavItem, ModuleKey } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
+import { loadShareParams, saveShareParams, clearShareParams } from './mode'
 
-function Shell() {
+const NAV_MODULE: Partial<Record<NavKey, ModuleKey>> = {
+  dashboard: 'dashboard', facturas: 'facturas', clientes: 'clientes', empleados: 'empleados',
+  cuentas: 'cuentas', proveedores: 'proveedores', gastos: 'gastos', reportes: 'reportes'
+}
+
+function OwnerShell() {
   const [sheet, setSheet] = useState<{ id: string } | null>(null)
   const [nav, setNav] = useState<NavKey>(() => (sessionStorage.getItem('ft_nav') as NavKey) || 'dashboard')
   const [mes, setMes] = useState(() => sessionStorage.getItem('ft_mes') || new Date().toISOString().slice(0, 7))
@@ -11,22 +17,16 @@ function Shell() {
 
   const navigate = (k: NavKey) => { sessionStorage.setItem('ft_nav', k); setNav(k) }
   const cambiarMes = (m: string) => { sessionStorage.setItem('ft_mes', m); setMes(m) }
-
-  const makeApi = () => new SheetsApi(async () => {
-    try {
-      return await webAuth.getToken(false)
-    } catch {
-      return await webAuth.getToken(true)
-    }
-  })
+  const makeApi = () => new SheetsApi(async () => { try { return await webAuth.getToken(false) } catch { return await webAuth.getToken(true) } })
 
   useEffect(() => {
     if (window.self !== window.top) return
     (async () => {
       try {
+        clearShareParams()
         let id = await localStorageAdapter.get(KEYS.spreadsheetId)
         if (!id) {
-          await webAuth.getToken(true) // redirige y vuelve con access_token
+          await webAuth.getToken(true)
           id = await localStorageAdapter.get(KEYS.spreadsheetId)
           if (!id) {
             const token = await webAuth.getToken(false)
@@ -45,10 +45,44 @@ function Shell() {
   if (error) return <div className="p-8 text-red-600">{error}</div>
   if (!sheet) return <div className="p-8">Conectando a Google Sheets…</div>
   const repo = createRepository({ api: makeApi(), storage: localStorageAdapter, getSpreadsheetId: async () => sheet.id })
+  const extraItems: NavItem[] = [{ key: 'compartir', label: 'Compartir', Icon: IconShare }]
+  return (
+    <AppProvider repo={repo}>
+      <PermsProvider perms={adminPerms()}>
+        <Toaster>
+          <Layout current={nav} onNavigate={navigate} extraItems={extraItems}>
+            {nav === 'dashboard' && <Dashboard mes={mes} onNavigate={navigate} />}
+            {nav === 'facturas' && <Facturas />}
+            {nav === 'clientes' && <Clientes />}
+            {nav === 'empleados' && <Empleados />}
+            {nav === 'gastos' && <Gastos />}
+            {nav === 'proveedores' && <Proveedores />}
+            {nav === 'cuentas' && <CuentasPagar />}
+            {nav === 'reportes' && <Reportes mes={mes} setMes={cambiarMes} />}
+            {nav === 'configuracion' && <Configuracion />}
+            {nav === 'compartir' && <Compartir />}
+          </Layout>
+        </Toaster>
+      </PermsProvider>
+    </AppProvider>
+  )
+}
+
+function VisitorInner({ apiUrl }: { apiUrl: string }) {
+  const { canView } = usePerms()
+  const [nav, setNav] = useState<NavKey>(() => {
+    const first = (Object.keys(NAV_MODULE) as NavKey[]).find(k => NAV_MODULE[k] && canView(NAV_MODULE[k]!))
+    return first ?? 'dashboard'
+  })
+  const [mes, setMes] = useState(() => new Date().toISOString().slice(0, 7))
+  const navigate = (k: NavKey) => setNav(k)
+  const cambiarMes = (m: string) => setMes(m)
+  const repo = useMemo(() => createRemoteRepository({ apiUrl, getIdToken: async () => { try { return await webAuth.getIdToken(false) } catch { return await webAuth.getIdToken(true) } } }), [apiUrl])
+  const filterNav = (k: NavKey) => k === 'configuracion' ? false : (NAV_MODULE[k] ? canView(NAV_MODULE[k]!) : true)
   return (
     <AppProvider repo={repo}>
       <Toaster>
-        <Layout current={nav} onNavigate={navigate}>
+        <Layout current={nav} onNavigate={navigate} filterNav={filterNav}>
           {nav === 'dashboard' && <Dashboard mes={mes} onNavigate={navigate} />}
           {nav === 'facturas' && <Facturas />}
           {nav === 'clientes' && <Clientes />}
@@ -57,11 +91,40 @@ function Shell() {
           {nav === 'proveedores' && <Proveedores />}
           {nav === 'cuentas' && <CuentasPagar />}
           {nav === 'reportes' && <Reportes mes={mes} setMes={cambiarMes} />}
-          {nav === 'configuracion' && <Configuracion />}
         </Layout>
       </Toaster>
     </AppProvider>
   )
 }
 
-export function App() { return <Shell /> }
+function VisitorShell({ apiUrl }: { apiUrl: string }) {
+  const [state, setState] = useState<'boot' | 'ready' | 'denied' | 'error'>('boot')
+  const [perms, setPerms] = useState<ReturnType<typeof permsFromInfo> | null>(null)
+  useEffect(() => {
+    if (window.self !== window.top) return
+    (async () => {
+      try {
+        let token = ''
+        try { token = await webAuth.getIdToken(false) } catch { saveShareParams(apiUrl); await webAuth.getIdToken(true); return }
+        const repo = createRemoteRepository({ apiUrl, getIdToken: async () => token })
+        const info = await repo.getPerms()
+        const p = permsFromInfo(info)
+        if (!p.isAdmin && info.view.length === 0) { setState('denied'); return }
+        setPerms(p)
+        setState('ready')
+      } catch (e) { setState('error') }
+    })()
+  }, [apiUrl])
+  if (state === 'boot') return <div className="p-8">Conectando…</div>
+  if (state === 'denied') return <div className="p-8 text-center text-gray-600">No tienes acceso a este panel. Pide acceso al administrador.</div>
+  if (state === 'error') return <div className="p-8 text-red-600">Error de conexión</div>
+  return <PermsProvider perms={perms!}><VisitorInner apiUrl={apiUrl} /></PermsProvider>
+}
+
+export function App() {
+  const share = loadShareParams()
+  const [ownerId, setOwnerId] = useState<string | null>(null)
+  useEffect(() => { localStorageAdapter.get(KEYS.spreadsheetId).then(setOwnerId) }, [])
+  if (share && !ownerId) return <VisitorShell apiUrl={share.apiUrl} />
+  return <OwnerShell />
+}
