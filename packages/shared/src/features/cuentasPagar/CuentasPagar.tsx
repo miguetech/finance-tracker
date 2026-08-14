@@ -3,6 +3,7 @@ import { useCxp, useConfig } from '../../store/queries'
 import { Table, Button, Select, ConfirmDialog, Badge } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { formatMoney } from '../../currency'
+import { IconPlus, IconTrash } from '../../ui/icons'
 import { CxpFormModal } from './CxpFormModal'
 import { CxpDetail } from './CxpDetail'
 
@@ -24,7 +25,7 @@ export function CuentasPagar() {
         <h1 className="text-xl font-bold">Cuentas por Pagar</h1>
         <div className="flex gap-2">
           <Select value={estado} onChange={setEstado} options={[{ value: 'pendiente', label: 'Pendiente' }, { value: 'parcial', label: 'Parcial' }, { value: 'pagada', label: 'Pagada' }]} placeholder="Estado" />
-          <Button onClick={() => setFormOpen(true)}>+ Nueva CXP</Button>
+          <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setFormOpen(true)}>Nueva CXP</Button>
         </div>
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
@@ -38,7 +39,7 @@ export function CuentasPagar() {
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
               <Button variant="ghost" onClick={() => setDetalleId(String(r.id_cxp))}>Ver</Button>
-              <Button variant="danger" onClick={() => setDeleteId(String(r.id_cxp))}>Eliminar</Button>
+              <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_cxp))}>Eliminar</Button>
             </div>
           ) }
         ]} rows={filtrados as unknown as Record<string, unknown>[]} />

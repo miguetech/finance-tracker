@@ -1,4 +1,4 @@
 @import 'tailwindcss';
 @import '../../../../packages/shared/src/ui/theme.css';
 @source '../../../../packages/shared/src';
-body { width: 320px; }
+body { width: 320px; background-color: var(--color-muted); }

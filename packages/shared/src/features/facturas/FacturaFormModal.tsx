@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Dialog, Button, Input, Select } from '../../ui/components'
+import { IconX } from '../../ui/icons'
 import { useClientes, useFacturas, useConfig } from '../../store/queries'
 import { buildFactura } from '../../calc/invoice'
 import { formatMoney } from '../../currency'
@@ -61,7 +62,7 @@ export function FacturaFormModal({ open, onClose, onSaved }: { open: boolean; on
               <Input className="col-span-6" placeholder="Descripción" value={it.descripcion} onChange={e => setItem(i, 'descripcion', e.target.value)} />
               <Input className="col-span-2" type="number" placeholder="Cant" value={it.cantidad} onChange={e => setItem(i, 'cantidad', e.target.value)} />
               <Input className="col-span-3" type="number" placeholder="Precio" value={it.precio_unitario} onChange={e => setItem(i, 'precio_unitario', e.target.value)} />
-              <button className="col-span-1 text-red-500" onClick={() => setItems(l => l.filter((_, idx) => idx !== i))}>✕</button>
+              <button className="col-span-1 inline-flex items-center justify-center text-red-500 hover:text-red-700" aria-label="Eliminar concepto" onClick={() => setItems(l => l.filter((_, idx) => idx !== i))}><IconX /></button>
             </div>
           ))}
           <Button variant="outline" onClick={() => setItems(l => [...l, { descripcion: '', cantidad: '1', precio_unitario: '' }])}>+ Agregar concepto</Button>

@@ -3,7 +3,7 @@ import { chromeStorageAdapter, KEYS, SheetsApi } from '@ft/shared'
 import { AppProvider, useReportes, useConfig } from '@ft/shared'
 import { createRepository } from '@ft/shared'
 import { formatMoney } from '@ft/shared'
-import { StatCard, Button } from '@ft/shared'
+import { StatCard, Button, IconDashboard } from '@ft/shared'
 import { getChromeToken } from '../../src/onboarding'
 
 function Repo() {
@@ -41,7 +41,7 @@ function PopupInner() {
         <StatCard label="Por pagar" value={k ? formatMoney(k.porPagar, moneda) : '…'} />
         <StatCard label="Vencidas" value={k ? formatMoney(k.vencidas, moneda) : '…'} />
       </div>
-      <Button className="w-full" onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('/dashboard.html') })}>Abrir dashboard</Button>
+      <Button className="w-full" icon={<IconDashboard className="w-4 h-4" />} onClick={() => chrome.tabs.create({ url: chrome.runtime.getURL('/dashboard.html') })}>Abrir dashboard</Button>
     </div>
   )
 }

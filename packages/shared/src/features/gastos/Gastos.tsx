@@ -3,6 +3,7 @@ import { useGastos, useConfig, useCategorias } from '../../store/queries'
 import { Table, Button, Select, Input, ConfirmDialog } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { formatMoney } from '../../currency'
+import { IconPlus, IconEdit, IconTrash } from '../../ui/icons'
 import { GastoFormModal } from './GastoFormModal'
 import type { Gasto } from '../../types/entities'
 
@@ -27,7 +28,7 @@ export function Gastos() {
         <div className="flex gap-2">
           <Input type="month" value={mes} onChange={e => setMes(e.target.value)} />
           <Select value={categoria} onChange={setCategoria} options={categorias.map(c => ({ value: c, label: c }))} placeholder="Categoría" />
-          <Button onClick={() => { setEditando(null); setFormOpen(true) }}>+ Registrar gasto</Button>
+          <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>Registrar gasto</Button>
         </div>
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
@@ -39,8 +40,8 @@ export function Gastos() {
           { key: 'metodo_pago', header: 'Método', render: r => String(r.metodo_pago) },
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => { setEditando(r as unknown as Gasto); setFormOpen(true) }}>Editar</Button>
-              <Button variant="danger" onClick={() => setDeleteId(String(r.id_gasto))}>Eliminar</Button>
+              <Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(r as unknown as Gasto); setFormOpen(true) }}>Editar</Button>
+              <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_gasto))}>Eliminar</Button>
             </div>
           ) }
         ]} rows={filtrados as unknown as Record<string, unknown>[]} />
