@@ -52,7 +52,7 @@ export function Layout({ current, onNavigate, children, headerExtra }: { current
           <div className="font-semibold">FinanceTracker</div>
           <div className="w-6">{headerExtra}</div>
         </header>
-        <main className="flex-1 p-4 md:p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-8"><div className="max-w-6xl mx-auto">{children}</div></main>
       </div>
     </div>
   )
