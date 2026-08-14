@@ -2,7 +2,7 @@ import React, { createContext, useContext } from 'react'
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Repository } from '../data/repository'
 import { useAppStore } from './appStore'
-import type { Config, Cliente, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago } from '../types/entities'
+import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago } from '../types/entities'
 import { getCurrency, type Currency } from '../currency'
 
 const RepoCtx = createContext<Repository | null>(null)
@@ -74,6 +74,25 @@ export function useGastos(filtro?: { mes?: string; categoria?: string }) {
   const save = useMutation({ mutationFn: (g: Gasto) => repo.saveGasto(g), onSuccess: () => qc.invalidateQueries({ queryKey: ['gastos'] }) })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteGasto(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['gastos'] }) })
   return { gastos: q.data ?? [], isLoading: q.isLoading, saveGasto: save, deleteGasto: del }
+}
+
+export function useEmpleados() {
+  const repo = useRepo()
+  const qc = useQueryClient()
+  const q = useQuery({ queryKey: ['empleados'], queryFn: () => repo.listEmpleados() })
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['empleados'] })
+  const save = useMutation({ mutationFn: (e: Empleado) => repo.saveEmpleado(e), onSuccess: invalidate })
+  const del = useMutation({ mutationFn: (id: string) => repo.deleteEmpleado(id), onSuccess: invalidate })
+  return { empleados: q.data ?? [], isLoading: q.isLoading, saveEmpleado: save, deleteEmpleado: del }
+}
+
+export function useRegisterNomina() {
+  const repo = useRepo()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (i: { id_empleado: string; mes: string; monto: number; metodo_pago: MetodoPago; fecha: string; notas: string }) => repo.registerNomina(i),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['gastos'] }); qc.invalidateQueries({ queryKey: ['reportes'] }) }
+  })
 }
 
 export function useProveedores() {

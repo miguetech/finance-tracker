@@ -8,8 +8,8 @@ import { uid } from '../lib/uid'
 import { buildFactura, estadoDesdeSaldo, round2 } from '../calc/invoice'
 import { kpisForMonth, topClientes, gastosPorCategoria, type Kpis } from '../calc/kpis'
 import { expandFolioTemplate } from '../calc/folio'
-import type { Config, Cliente, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago } from '../types/entities'
-import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema } from '../types/schemas'
+import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago } from '../types/entities'
+import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema, EmpleadoSchema, NominaInputSchema } from '../types/schemas'
 
 export interface RepoContext {
   api: SheetsApi
@@ -220,6 +220,47 @@ export function createRepository(ctx: RepoContext) {
       const cxps = await readTable('Cuentas_Pagar')
       if (cxps.some(c => c.id_proveedor === id)) throw new Error('Proveedor tiene cuentas por pagar asociadas')
       await replaceTable('Proveedores', (await readTable('Proveedores')).filter(r => r.id_proveedor !== id))
+    },
+
+    async listEmpleados(): Promise<Empleado[]> { return readTable('Empleados') as unknown as Empleado[] },
+
+    async saveEmpleado(emp: Empleado): Promise<Empleado> {
+      const parsed = EmpleadoSchema.parse(emp)
+      if (!parsed.id_empleado) {
+        const saved = { ...parsed, id_empleado: uid('emp_'), fecha_ingreso: parsed.fecha_ingreso || new Date().toISOString().slice(0, 10) } as unknown as Empleado
+        await appendRows('Empleados', [saved as unknown as Record<string, string | number>])
+        return saved
+      }
+      const all = await readTable('Empleados')
+      await replaceTable('Empleados', all.map(r => (r.id_empleado === parsed.id_empleado ? { ...parsed } : r)))
+      return parsed as unknown as Empleado
+    },
+
+    async deleteEmpleado(id: string): Promise<void> {
+      const gastos = await readTable('Gastos')
+      const emp = (await readTable('Empleados')).find(r => r.id_empleado === id)
+      const nombre = String(emp?.nombre ?? '')
+      if (gastos.some(g => g.categoria === 'Nómina' && String(g.proveedor) === nombre)) {
+        throw new Error('Empleado tiene nómina registrada')
+      }
+      await replaceTable('Empleados', (await readTable('Empleados')).filter(r => r.id_empleado !== id))
+    },
+
+    async registerNomina(input: { id_empleado: string; mes: string; monto: number; metodo_pago: MetodoPago; fecha: string; notas: string }): Promise<Gasto> {
+      const parsed = NominaInputSchema.parse(input)
+      const emp = (await readTable('Empleados')).find(r => r.id_empleado === parsed.id_empleado)
+      if (!emp) throw new Error('Empleado no existe')
+      const gasto: Gasto = {
+        id_gasto: uid('gas_'),
+        fecha: parsed.fecha,
+        categoria: 'Nómina',
+        descripcion: `Nómina ${parsed.mes} — ${String(emp.nombre)}`,
+        monto: round2(parsed.monto),
+        metodo_pago: parsed.metodo_pago,
+        proveedor: String(emp.nombre)
+      }
+      await appendRows('Gastos', [gasto as unknown as Record<string, string | number>])
+      return gasto
     },
 
     async createCxp(input: { id_proveedor: string; folio_documento: string; categoria: string; descripcion: string; fecha_emision: string; fecha_vencimiento: string; monto_total: number; notas: string }): Promise<CuentaPagar> {
