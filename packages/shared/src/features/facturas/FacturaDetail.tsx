@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Dialog, Button, Table } from '../../ui/components'
 import { InvoicePrint } from '../../ui/print/InvoicePrint'
 import { useFactura, usePagos, useConfig, useClientes } from '../../store/queries'
+import { usePerms } from '../../store/perms'
 import { formatMoney } from '../../currency'
 import { PagoModal } from './PagoModal'
 
@@ -23,6 +24,7 @@ export function FacturaDetail({ id, onClose }: { id: string; onClose: () => void
   const { data: pagos = [] } = usePagos(id)
   const { config } = useConfig()
   const { clientes } = useClientes()
+  const { isAdmin } = usePerms()
   const [pagoOpen, setPagoOpen] = useState(false)
   const moneda = config?.moneda ?? 'USD'
   if (isLoading || !det) return null
@@ -33,7 +35,7 @@ export function FacturaDetail({ id, onClose }: { id: string; onClose: () => void
     <Dialog open onClose={onClose} title={`Factura ${factura.folio}`}
       footer={<>
         <Button variant="outline" onClick={() => printInvoice('Factura ' + factura.folio)}>Descargar PDF</Button>
-        {factura.saldo > 0 && <Button onClick={() => setPagoOpen(true)}>Registrar cobro</Button>}
+        {factura.saldo > 0 && isAdmin && <Button onClick={() => setPagoOpen(true)}>Registrar cobro</Button>}
         <Button variant="outline" onClick={onClose}>Cerrar</Button>
       </>}>
       <div className="space-y-4">

@@ -84,13 +84,13 @@ function VisitorInner({ apiUrl }: { apiUrl: string }) {
       <Toaster>
         <Layout current={nav} onNavigate={navigate} filterNav={filterNav}>
           {nav === 'dashboard' && <Dashboard mes={mes} onNavigate={navigate} />}
-          {nav === 'facturas' && <Facturas />}
-          {nav === 'clientes' && <Clientes />}
-          {nav === 'empleados' && <Empleados />}
-          {nav === 'gastos' && <Gastos />}
-          {nav === 'proveedores' && <Proveedores />}
-          {nav === 'cuentas' && <CuentasPagar />}
-          {nav === 'reportes' && <Reportes mes={mes} setMes={cambiarMes} />}
+          {nav === 'facturas' && canView('facturas') && <Facturas />}
+          {nav === 'clientes' && canView('clientes') && <Clientes />}
+          {nav === 'empleados' && canView('empleados') && <Empleados />}
+          {nav === 'gastos' && canView('gastos') && <Gastos />}
+          {nav === 'proveedores' && canView('proveedores') && <Proveedores />}
+          {nav === 'cuentas' && canView('cuentas') && <CuentasPagar />}
+          {nav === 'reportes' && canView('reportes') && <Reportes mes={mes} setMes={cambiarMes} />}
         </Layout>
       </Toaster>
     </AppProvider>

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useCxp, useConfig } from '../../store/queries'
 import { Table, Button, Select, ConfirmDialog, Badge } from '../../ui/components'
 import { useToast } from '../../ui/components'
+import { usePerms } from '../../store/perms'
 import { formatMoney } from '../../currency'
 import { IconPlus, IconTrash } from '../../ui/icons'
 import { CxpFormModal } from './CxpFormModal'
@@ -10,6 +11,7 @@ import { CxpDetail } from './CxpDetail'
 export function CuentasPagar() {
   const { cxps, deleteCxp } = useCxp()
   const { config } = useConfig()
+  const { canEdit, isAdmin } = usePerms()
   const toast = useToast()
   const [estado, setEstado] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -28,7 +30,7 @@ export function CuentasPagar() {
         </div>
         <div className="flex gap-2">
           <Select value={estado} onChange={setEstado} options={[{ value: 'pendiente', label: 'Pendiente' }, { value: 'parcial', label: 'Parcial' }, { value: 'pagada', label: 'Pagada' }]} placeholder="Estado" />
-          <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setFormOpen(true)}>Nueva CXP</Button>
+          {canEdit('cuentas') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setFormOpen(true)}>Nueva CXP</Button>)}
         </div>
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
@@ -42,7 +44,7 @@ export function CuentasPagar() {
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
               <Button variant="ghost" onClick={() => setDetalleId(String(r.id_cxp))}>Ver</Button>
-              <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_cxp))}>Eliminar</Button>
+              {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_cxp))}>Eliminar</Button>)}
             </div>
           ) }
         ]} rows={filtrados as unknown as Record<string, unknown>[]} />
