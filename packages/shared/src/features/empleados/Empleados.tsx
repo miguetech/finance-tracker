@@ -59,7 +59,7 @@ export function Empleados() {
         <NominaModal empleado={nominaDe} onClose={() => setNominaDe(null)}
           onSave={async i => {
             try {
-              await registerNomina.mutateAsync({ id_empleado: nominaDe.id_empleado, ...i } as never)
+              await registerNomina.mutateAsync({ id_empleado: nominaDe.id_empleado, ...i })
               toast('Nómina registrada como gasto')
             } catch (err) { toast((err as Error).message, 'error') }
           }} />

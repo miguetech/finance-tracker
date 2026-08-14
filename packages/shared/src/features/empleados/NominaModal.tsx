@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react'
 import { Dialog, Button, Input, Select } from '../../ui/components'
-import type { Empleado } from '../../types/entities'
+import type { Empleado, MetodoPago } from '../../types/entities'
 
-export function NominaModal({ empleado, onClose, onSave }: { empleado: Empleado; onClose: () => void; onSave: (i: { mes: string; monto: number; metodo_pago: string; fecha: string; notas: string }) => void }) {
+export function NominaModal({ empleado, onClose, onSave }: { empleado: Empleado; onClose: () => void; onSave: (i: { mes: string; monto: number; metodo_pago: MetodoPago; fecha: string; notas: string }) => void }) {
   const hoy = new Date().toISOString().slice(0, 10)
   const [form, setForm] = useState({ mes: hoy.slice(0, 7), monto: String(empleado.salario), metodo_pago: 'Transferencia', fecha: hoy, notas: '' })
   useEffect(() => { setForm({ mes: hoy.slice(0, 7), monto: String(empleado.salario), metodo_pago: 'Transferencia', fecha: hoy, notas: '' }) }, [empleado])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   const submit = () => {
     if (!form.mes || Number(form.monto) <= 0) return
-    onSave({ mes: form.mes, monto: Number(form.monto), metodo_pago: form.metodo_pago, fecha: form.fecha, notas: form.notas })
+    onSave({ mes: form.mes, monto: Number(form.monto), metodo_pago: form.metodo_pago as MetodoPago, fecha: form.fecha, notas: form.notas })
     onClose()
   }
   return (
