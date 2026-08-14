@@ -73,6 +73,10 @@ Aplicación de **facturación personal de un solo usuario** para:
 - **Facturación**: moneda (ej. `USD`), símbolo (ej. `$`), prefijo de folio, contador actual, IVA %.
 - **Categorías de gastos** (separadas por coma).
 - Validación: empresa_nombre y prefijo_folio obligatorios; contador entero; IVA numérico.
+- **Prefijo de folio con plantilla de fecha**: tokens `{YYYY}` (2026), `{YY}` (26), `{MM}` (08), `{DD}` (13) expandidos con la fecha de emisión (ej. `FAC-{YYYY}-{MM}-` → `FAC-2026-08-001`). Ayuda desplegable con ejemplos y preview de la próxima factura.
+- **Categorías** editables como chips con botón para quitar y modal para agregar (sin duplicados).
+- **Campos del emisor**: código postal, ciudad y país (mostrados en el PDF).
+- **Vista previa de PDF** con una factura de ejemplo usando los datos actuales.
 
 ---
 
