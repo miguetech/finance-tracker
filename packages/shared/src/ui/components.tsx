@@ -37,16 +37,24 @@ export function Button({ variant = 'primary', size = 'md', icon, iconAfter, icon
   )
 }
 
-export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={cx('w-full h-10 px-3.5 border border-gray-200 rounded-xl text-sm bg-surface transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25', props.className)} />
+export function Input({ error, className, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { error?: string }) {
+  return (
+    <div>
+      <input {...props} className={cx('w-full h-10 px-3.5 border rounded-xl text-sm bg-surface transition-colors placeholder:text-muted-foreground focus:outline-none focus:ring-2', error ? 'border-danger focus:ring-danger/25' : 'border-gray-200 focus:border-primary focus:ring-primary/25', className)} />
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+    </div>
+  )
 }
 
-export function Select({ value, onChange, options, placeholder }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; placeholder?: string }) {
+export function Select({ value, onChange, options, placeholder, error }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; placeholder?: string; error?: string }) {
   return (
-    <select value={value} onChange={e => onChange(e.target.value)} className="w-full h-10 px-3.5 border border-gray-200 rounded-xl text-sm bg-surface transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/25">
-      {placeholder !== undefined && <option value="">{placeholder}</option>}
-      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
+    <div>
+      <select value={value} onChange={e => onChange(e.target.value)} className={cx('w-full h-10 px-3.5 border rounded-xl text-sm bg-surface transition-colors focus:outline-none focus:ring-2', error ? 'border-danger focus:ring-danger/25' : 'border-gray-200 focus:border-primary focus:ring-primary/25')}>
+        {placeholder !== undefined && <option value="">{placeholder}</option>}
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+    </div>
   )
 }
 
@@ -123,6 +131,18 @@ export function ConfirmDialog({ open, title, message, onConfirm, onClose }: { op
       footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button variant="danger" onClick={onConfirm}>Eliminar</Button></>}>
       <p>{message}</p>
     </Dialog>
+  )
+}
+
+export function Tooltip({ text, children, side = 'top' }: { text: string; children: ReactNode; side?: 'top' | 'bottom' }) {
+  return (
+    <span className="relative inline-flex group">
+      {children}
+      <span className={cx(
+        'pointer-events-none absolute z-50 w-max max-w-56 rounded-lg bg-gray-900 text-white text-xs px-2.5 py-1.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150',
+        side === 'top' ? 'bottom-full left-1/2 -translate-x-1/2 mb-1.5' : 'top-full left-1/2 -translate-x-1/2 mt-1.5'
+      )}>{text}</span>
+    </span>
   )
 }
 
