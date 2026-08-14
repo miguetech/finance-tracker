@@ -17,7 +17,22 @@ export function deserializeRow(spec: ColumnSpec[], row: (string | number)[]): Re
       out[c.key] = ''
       return
     }
-    out[c.key] = c.type === 'number' ? Number(raw) : String(raw)
+    if (c.type === 'number') {
+      const n = Number(raw)
+      out[c.key] = Number.isFinite(n) ? n : 0
+      return
+    }
+    out[c.key] = String(raw)
   })
   return out
+}
+
+export function migrateFacturaLegacyRow(row: (string | number)[]): (string | number)[] {
+  const raw = [...row]
+  const cell = raw[9]
+  if (typeof cell === 'string' && cell !== '' && Number.isNaN(Number(cell))) {
+    const total = Number(raw[8] ?? 0)
+    raw[9] = cell === 'pagada' ? 0 : total
+  }
+  return raw
 }

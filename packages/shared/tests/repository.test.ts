@@ -161,4 +161,61 @@ describe('repository', () => {
     const f = await repo.createFactura({ id_cliente: cli.id_cliente, items: [{ descripcion: 'a', cantidad: 1, precio_unitario: 100 }], fecha_emision: '2026-08-11', fecha_vencimiento: '', notas: '' })
     await expect(repo.registerPago({ tipo: 'cobro', id_origen: f.id_factura, fecha: '2026-08-12', monto: 999, metodo_pago: 'Efectivo', notas: '' })).rejects.toThrow(/saldo/i)
   })
+
+  it('saveCliente con id pre-generado crea cliente (cliente rápido)', async () => {
+    const { repo } = setup()
+    const c = await repo.saveCliente({ id_cliente: 'cli_pre', nombre: 'Rápido', rfc: '', email: '', telefono: '', direccion: '', fecha_registro: '2026-08-11' })
+    expect(c.id_cliente).toBe('cli_pre')
+    const list = await repo.listClientes()
+    expect(list.some(x => x.id_cliente === 'cli_pre')).toBe(true)
+  })
+
+  it('saveCliente actualiza en vez de duplicar cuando el id existe', async () => {
+    const { repo } = setup()
+    await repo.saveCliente({ id_cliente: 'cli_x', nombre: 'Antes', rfc: '', email: '', telefono: '', direccion: '', fecha_registro: '2026-08-11' })
+    await repo.saveCliente({ id_cliente: 'cli_x', nombre: 'Después', rfc: '', email: '', telefono: '', direccion: '', fecha_registro: '2026-08-11' })
+    const list = await repo.listClientes()
+    expect(list.filter(x => x.id_cliente === 'cli_x')).toHaveLength(1)
+    expect(list[0].nombre).toBe('Después')
+  })
+
+  it('registerPago escribe pago y saldo en un solo batchUpdate', async () => {
+    const { repo, fetchMock } = setup()
+    const cli = await repo.saveCliente({ nombre: 'A' } as never)
+    const f = await repo.createFactura({ id_cliente: cli.id_cliente, items: [{ descripcion: 'a', cantidad: 1, precio_unitario: 100 }], fecha_emision: '2026-08-11', fecha_vencimiento: '', notas: '' })
+    fetchMock.mockClear()
+    await repo.registerPago({ tipo: 'cobro', id_origen: f.id_factura, fecha: '2026-08-12', monto: 116, metodo_pago: 'Transferencia', notas: '' })
+    const batchUpdates = fetchMock.mock.calls
+      .filter(c => String(c[0]).includes('values:batchUpdate'))
+      .map(c => JSON.parse(String(c[1]?.body)).data as { range: string }[])
+    const atomic = batchUpdates.find(d => d.length === 2 && d.some(x => x.range.includes('Facturas')) && d.some(x => x.range.includes('Pagos')))
+    expect(atomic).toBeTruthy()
+    const [fx] = await repo.listFacturas({})
+    expect(fx.saldo).toBe(0)
+  })
+
+  it('registerPago parcial no sobreescribe fecha_pago original', async () => {
+    const { repo } = setup()
+    const cli = await repo.saveCliente({ nombre: 'A' } as never)
+    const f = await repo.createFactura({ id_cliente: cli.id_cliente, items: [{ descripcion: 'a', cantidad: 1, precio_unitario: 100 }], fecha_emision: '2026-08-11', fecha_vencimiento: '', notas: '' })
+    await repo.registerPago({ tipo: 'cobro', id_origen: f.id_factura, fecha: '2026-08-12', monto: 50, metodo_pago: 'Efectivo', notas: '' })
+    const det = await repo.getFactura(f.id_factura)
+    expect(det.factura.fecha_pago).toBe('')
+  })
+
+  it('lee factura legacy: estado en vez de saldo (pagada)', async () => {
+    const { repo, grid } = setup()
+    grid.set('Facturas', [['f_legacy', 'FAC-99', 'c1', 'Cliente Viejo', '2026-06-01', '2026-07-01', 100, 16, 116, 'pagada', '2026-06-20', '']])
+    const [fx] = await repo.listFacturas({})
+    expect(fx.saldo).toBe(0)
+    expect(fx.fecha_pago).toBe('2026-06-20')
+    expect(fx.total).toBe(116)
+  })
+
+  it('lee factura legacy pendiente: saldo = total', async () => {
+    const { repo, grid } = setup()
+    grid.set('Facturas', [['f_legacy2', 'FAC-98', 'c2', 'Deudor', '2026-06-01', '2026-07-01', 50, 8, 58, 'pendiente', '', '']])
+    const [fx] = await repo.listFacturas({})
+    expect(fx.saldo).toBe(58)
+  })
 })

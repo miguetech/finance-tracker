@@ -31,8 +31,15 @@ export async function createInitialSpreadsheet(api: SheetsApi): Promise<{ spread
   const extra = ALL_TABLES.filter(t => t !== 'Config')
   await api.addSheets(spreadsheetId, extra.map(sheetName))
 
+  await writeAllHeaders(api, spreadsheetId, ALL_TABLES)
+  const configRows = (Object.entries(DEFAULT_CONFIG) as [string, unknown][]).map(([clave, valor]) => serializeRow(TABLES.Config, { clave, valor: String(valor) }))
+  await api.batchUpdate(spreadsheetId, [{ range: `'Config'!A1:B${configRows.length}`, values: configRows }])
+  return { spreadsheetId, url }
+}
+
+function writeAllHeaders(api: SheetsApi, spreadsheetId: string, tables: (keyof typeof TABLES)[]): Promise<void> {
   const valueRanges: { range: string; values: (string | number)[][] }[] = []
-  for (const t of ALL_TABLES) {
+  for (const t of tables) {
     const spec = TABLES[t]
     const headers = spec.map(c => c.header)
     if (HEADER_ROWS(t) === 1) {
@@ -40,11 +47,17 @@ export async function createInitialSpreadsheet(api: SheetsApi): Promise<{ spread
       valueRanges.push({ range: `'${sheetName(t)}'!A1:${letters[letters.length - 1]}1`, values: [headers] })
     }
   }
-  const configRows = (Object.entries(DEFAULT_CONFIG) as [string, unknown][]).map(([clave, valor]) => serializeRow(TABLES.Config, { clave, valor: String(valor) }))
-  valueRanges.push({ range: `'Config'!A1:B${configRows.length}`, values: configRows })
+  if (valueRanges.length === 0) return Promise.resolve()
+  return api.batchUpdate(spreadsheetId, valueRanges).then(() => undefined)
+}
 
-  await api.batchUpdate(spreadsheetId, valueRanges)
-  return { spreadsheetId, url }
+export async function ensureTables(api: SheetsApi, spreadsheetId: string): Promise<void> {
+  const res = await api.getSpreadsheet(spreadsheetId)
+  const existing = new Set(res.sheets.map(s => s.properties.title))
+  const missing = ALL_TABLES.filter(t => !existing.has(sheetName(t)))
+  if (missing.length === 0) return
+  await api.addSheets(spreadsheetId, missing.map(sheetName))
+  await writeAllHeaders(api, spreadsheetId, missing)
 }
 
 export function configFromRows(rows: (string | number)[][]): Config {

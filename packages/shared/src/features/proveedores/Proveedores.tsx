@@ -38,7 +38,7 @@ export function Proveedores() {
         {proveedores.length === 0 && <p className="p-4 text-sm text-gray-500">Sin proveedores</p>}
       </div>
       <ProveedorFormModal open={formOpen} onClose={() => setFormOpen(false)} initial={editando}
-        onSave={async p => { try { await saveProveedor.mutateAsync(p); toast('Proveedor guardado') } catch (e) { toast((e as Error).message, 'error') } }} />
+        onSave={async p => { try { await saveProveedor.mutateAsync(p); toast('Proveedor guardado') } catch (e) { toast((e as Error).message, 'error'); throw e } }} />
       <ConfirmDialog open={deleteId !== null} title="Eliminar proveedor" message="Bloqueado si tiene cuentas por pagar. ¿Continuar?"
         onConfirm={async () => { if (deleteId) { try { await deleteProveedor.mutateAsync(deleteId); toast('Proveedor eliminado') } catch (e) { toast((e as Error).message, 'error') } } setDeleteId(null) }} onClose={() => setDeleteId(null)} />
     </div>

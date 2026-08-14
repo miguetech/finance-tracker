@@ -2,7 +2,7 @@ import React from 'react'
 import type { Factura, FacturaItem, Config } from '../../types/entities'
 import { formatMoney } from '../../currency'
 
-export function InvoicePrint({ factura, items, config }: { factura: Factura; items: FacturaItem[]; config: Config }) {
+export function InvoicePrint({ factura, items, config, cliente }: { factura: Factura; items: FacturaItem[]; config: Config; cliente?: { rfc?: string; email?: string; telefono?: string; direccion?: string } }) {
   return (
     <div id="invoice-print">
       <div className="print-header flex justify-between items-start mb-6">
@@ -23,6 +23,9 @@ export function InvoicePrint({ factura, items, config }: { factura: Factura; ite
       <div className="mb-6">
         <div className="font-semibold">Cliente</div>
         <p>{factura.nombre_cliente}</p>
+        {cliente?.rfc && <p>{cliente.rfc}</p>}
+        {cliente?.direccion && <p>{cliente.direccion}</p>}
+        {(cliente?.telefono || cliente?.email) && <p>{[cliente?.telefono, cliente?.email].filter(Boolean).join(' · ')}</p>}
       </div>
       <table className="w-full text-sm mb-6">
         <thead className="border-b border-gray-300"><tr><th className="text-left py-2">Descripción</th><th>Cant</th><th>Precio</th><th className="text-right">Importe</th></tr></thead>

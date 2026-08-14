@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { calcInvoiceTotals, buildFactura, estadoDesdeSaldo } from '../src/calc/invoice'
 import { kpisForMonth, topClientes, gastosPorCategoria } from '../src/calc/kpis'
-import type { Factura, Gasto, CuentaPagar } from '../src/types/entities'
+import type { Factura, Gasto, CuentaPagar, Pago } from '../src/types/entities'
 
 describe('invoice', () => {
   it('calcula subtotal, iva y total con redondeo', () => {
@@ -14,6 +14,11 @@ describe('invoice', () => {
     const b = buildFactura([{ descripcion: 'a', cantidad: 3, precio_unitario: 10 }], 16)
     expect(b.items[0].importe).toBe(30)
     expect(b.totals.total).toBe(34.8)
+  })
+  it('buildFactura redondea a enteros para monedas sin decimales (CLP/COP)', () => {
+    const b = buildFactura([{ descripcion: 'a', cantidad: 1, precio_unitario: 1.5 }], 0, 0)
+    expect(b.items[0].importe).toBe(2)
+    expect(b.totals.total).toBe(2)
   })
   it('estadoDesdeSaldo', () => {
     expect(estadoDesdeSaldo(0, 100, false)).toBe('pagada')
@@ -39,9 +44,12 @@ describe('kpis', () => {
     { id_cxp: 'x1', id_proveedor: 'p1', nombre_proveedor: 'P', folio_documento: '', categoria: '', descripcion: '', fecha_emision: '2026-08-01', fecha_vencimiento: iso(ayer), monto_total: 500, saldo: 500, estado: 'pendiente', notas: '' },
     { id_cxp: 'x2', id_proveedor: 'p1', nombre_proveedor: 'P', folio_documento: '', categoria: '', descripcion: '', fecha_emision: '2026-08-01', fecha_vencimiento: iso(en30dias), monto_total: 100, saldo: 100, estado: 'pendiente', notas: '' }
   ]
+  const pag: Pago[] = [
+    { id_pago: 'p1', tipo: 'cobro', id_origen: 'f1', fecha: '2026-08-06', monto: 100, metodo_pago: 'Efectivo', notas: '' }
+  ]
 
   it('kpis del mes', () => {
-    const k = kpisForMonth(fac, gas, cxp, '2026-08')
+    const k = kpisForMonth(fac, gas, cxp, pag, '2026-08')
     expect(k.facturado).toBe(300)
     expect(k.cobrado).toBe(100)
     expect(k.pendiente).toBe(200)
@@ -50,6 +58,16 @@ describe('kpis', () => {
     expect(k.porPagar).toBe(600)
     expect(k.vencidas).toBe(500)
     expect(k.porVencer).toBe(100)
+  })
+  it('cobrado cuenta por fecha de pago, no por emisión', () => {
+    const facJun = [{ ...fac[0], id_factura: 'fJ', fecha_emision: '2026-06-20', saldo: 0, fecha_pago: '2026-07-02' }]
+    const pagJul: Pago[] = [{ id_pago: 'pJ', tipo: 'cobro', id_origen: 'fJ', fecha: '2026-07-02', monto: 100, metodo_pago: 'Efectivo', notas: '' }]
+    const kJun = kpisForMonth(facJun, [], [], [], '2026-06')
+    expect(kJun.facturado).toBe(100)
+    expect(kJun.cobrado).toBe(0)
+    const kJul = kpisForMonth(facJun, [], [], pagJul, '2026-07')
+    expect(kJul.facturado).toBe(0)
+    expect(kJul.cobrado).toBe(100)
   })
   it('topClientes ordena desc', () => {
     const top = topClientes(fac)

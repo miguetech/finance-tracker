@@ -2,7 +2,7 @@ import type { AuthProvider } from './types'
 
 export function popupOAuth(options: { clientId: string; redirectUri: string; prompt?: 'consent' | 'none' }): AuthProvider {
   const { clientId, redirectUri, prompt: defaultPrompt = 'consent' } = options
-  const SCOPE = encodeURIComponent('https://www.googleapis.com/auth/spreadsheets')
+  const SCOPE = encodeURIComponent('https://www.googleapis.com/auth/drive.file')
   const TOKEN_KEY = 'ft_web_access_token'
   const EXPIRES_KEY = 'ft_web_token_expires_at'
 
@@ -13,7 +13,7 @@ export function popupOAuth(options: { clientId: string; redirectUri: string; pro
   function persistToken(token: string, expiresIn: number): void {
     try {
       window.localStorage.setItem(TOKEN_KEY, token)
-      window.localStorage.setItem(EXPIRES_KEY, String(Date.now() + expiresIn * 1000 - 30000))
+      window.localStorage.setItem(EXPIRES_KEY, String(Date.now() + expiresIn * 1000 - 60000))
     } catch { /* storage no disponible */ }
   }
 
@@ -26,8 +26,35 @@ export function popupOAuth(options: { clientId: string; redirectUri: string; pro
     return null
   }
 
+  function silentRefresh(): Promise<string | null> {
+    return new Promise(resolve => {
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      iframe.src = authUrl('none')
+      const cleanup = () => { iframe.remove() }
+      const timer = window.setTimeout(() => { cleanup(); resolve(null) }, 15000)
+      iframe.onload = () => {
+        try {
+          const hash = iframe.contentWindow?.location.hash ?? ''
+          const params = new URLSearchParams(hash.replace(/^#/, ''))
+          const token = params.get('access_token')
+          if (token) {
+            persistToken(token, Number(params.get('expires_in') ?? '3600'))
+            cleanup(); clearTimeout(timer)
+            resolve(token)
+            return
+          }
+        } catch { /* cross-origin o página sin hash */ }
+        cleanup(); clearTimeout(timer)
+        resolve(null)
+      }
+      document.body.appendChild(iframe)
+    })
+  }
+
   return {
     async getToken(interactive: boolean): Promise<string> {
+      if (window.self !== window.top) throw new Error('Nested OAuth')
       const hash = new URLSearchParams(window.location.hash.slice(1))
       const at = hash.get('access_token')
       if (at) {
@@ -37,12 +64,10 @@ export function popupOAuth(options: { clientId: string; redirectUri: string; pro
       }
       const cached = storedToken()
       if (cached) return cached
+      const refreshed = await silentRefresh()
+      if (refreshed) return refreshed
       if (!interactive) throw new Error('No token')
-      if (hash.get('error') || defaultPrompt === 'consent') {
-        window.location.href = authUrl('consent')
-      } else {
-        window.location.href = authUrl('none')
-      }
+      window.location.href = authUrl(defaultPrompt)
       throw new Error('Redirecting a OAuth…')
     },
     async getSignedInUser(): Promise<{ email: string } | null> {

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Dialog, Button, Table } from '../../ui/components'
 import { InvoicePrint } from '../../ui/print/InvoicePrint'
-import { useFactura, usePagos, useConfig } from '../../store/queries'
+import { useFactura, usePagos, useConfig, useClientes } from '../../store/queries'
 import { formatMoney } from '../../currency'
 import { PagoModal } from './PagoModal'
 
@@ -22,10 +22,12 @@ export function FacturaDetail({ id, onClose }: { id: string; onClose: () => void
   const { data: det, isLoading } = useFactura(id)
   const { data: pagos = [] } = usePagos(id)
   const { config } = useConfig()
+  const { clientes } = useClientes()
   const [pagoOpen, setPagoOpen] = useState(false)
   const moneda = config?.moneda ?? 'USD'
   if (isLoading || !det) return null
   const { factura, items } = det
+  const cliente = clientes.find(c => c.id_cliente === factura.id_cliente)
 
   return (
     <Dialog open onClose={onClose} title={`Factura ${factura.folio}`}
@@ -63,7 +65,7 @@ export function FacturaDetail({ id, onClose }: { id: string; onClose: () => void
             ))}
           </div>
         )}
-        {config && <InvoicePrint factura={factura} items={items} config={config} />}
+        {config && <InvoicePrint factura={factura} items={items} config={config} cliente={cliente} />}
       </div>
       {pagoOpen && <PagoModal origen={{ id: factura.id_factura, tipo: 'cobro', saldo: factura.saldo }} onClose={() => { setPagoOpen(false); onClose() }} />}
     </Dialog>

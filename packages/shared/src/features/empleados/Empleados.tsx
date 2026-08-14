@@ -54,7 +54,7 @@ export function Empleados() {
         {empleados.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin empleados</p>}
       </div>
       <EmpleadoFormModal open={formOpen} onClose={() => setFormOpen(false)} initial={editando}
-        onSave={async e => { try { await saveEmpleado.mutateAsync(e); toast('Empleado guardado') } catch (err) { toast((err as Error).message, 'error') } }} />
+        onSave={async e => { try { await saveEmpleado.mutateAsync(e); toast('Empleado guardado') } catch (err) { toast((err as Error).message, 'error'); throw err } }} />
       {nominaDe && (
         <NominaModal empleado={nominaDe} onClose={() => setNominaDe(null)}
           onSave={async i => {

@@ -13,11 +13,15 @@ export async function withMutex<T>(
     const current = await readRow(MUTEX_KEY)
     const fresh = current !== null && (Date.now() - Number(current) < STALE_MS)
     if (current === null || !fresh) {
-      await writeRow(MUTEX_KEY, String(Date.now()))
-      try {
-        return await fn()
-      } finally {
-        await writeRow(MUTEX_KEY, '')
+      const mine = String(Date.now())
+      await writeRow(MUTEX_KEY, mine)
+      const verify = await readRow(MUTEX_KEY)
+      if (verify === mine) {
+        try {
+          return await fn()
+        } finally {
+          await writeRow(MUTEX_KEY, '')
+        }
       }
     }
     attempts++

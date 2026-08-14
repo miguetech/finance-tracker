@@ -35,6 +35,10 @@ export class SheetsApi {
     }).then(r => ({ spreadsheetId: r.spreadsheetId, url: r.spreadsheetUrl }))
   }
 
+  getSpreadsheet(spreadsheetId: string): Promise<{ sheets: { properties: { title: string } }[] }> {
+    return this.request<{ sheets: { properties: { title: string } }[] }>(`${BASE}/${spreadsheetId}`)
+  }
+
   addSheets(spreadsheetId: string, titles: string[]): Promise<void> {
     return this.request(`${BASE}/${spreadsheetId}:batchUpdate`, {
       method: 'POST',

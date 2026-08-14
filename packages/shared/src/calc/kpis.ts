@@ -1,4 +1,4 @@
-import type { Factura, Gasto, CuentaPagar } from '../types/entities'
+import type { Factura, Gasto, CuentaPagar, Pago } from '../types/entities'
 import { round2 } from './invoice'
 
 export interface Kpis {
@@ -16,10 +16,10 @@ function inMonth(dateISO: string, mes: string): boolean {
   return dateISO.slice(0, 7) === mes
 }
 
-export function kpisForMonth(facturas: Factura[], gastos: Gasto[], cxps: CuentaPagar[], mes: string): Kpis {
+export function kpisForMonth(facturas: Factura[], gastos: Gasto[], cxps: CuentaPagar[], pagos: Pago[], mes: string): Kpis {
   const f = facturas.filter(x => inMonth(x.fecha_emision, mes))
   const facturado = round2(f.reduce((s, x) => s + x.total, 0))
-  const cobrado = round2(f.filter(x => x.saldo <= 0).reduce((s, x) => s + x.total, 0))
+  const cobrado = round2(pagos.filter(p => p.tipo === 'cobro' && inMonth(p.fecha, mes)).reduce((s, p) => s + p.monto, 0))
   const pendiente = round2(f.filter(x => x.saldo > 0).reduce((s, x) => s + x.saldo, 0))
   const gastosMes = round2(gastos.filter(g => inMonth(g.fecha, mes)).reduce((s, g) => s + g.monto, 0))
   const today = new Date().toISOString().slice(0, 10)

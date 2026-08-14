@@ -9,13 +9,13 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
   const config = useAppStore(s => s.config)
   const moneda = config?.moneda ?? 'USD'
   const { data: reportes, isLoading } = useReportes(mes)
-  const { facturas } = useFacturas({ mes })
+  const { facturas } = useFacturas()
   const { gastos } = useGastos({ mes })
   const { cxps } = useCxp()
 
   if (isLoading && !reportes) return <div className="p-8 text-gray-500">Cargando…</div>
   const k = reportes?.kpis
-  const pendientes = facturas.filter(f => f.saldo > 0)
+  const pendientes = facturas.filter(f => f.saldo > 0).sort((a, b) => (a.fecha_vencimiento || '9999').localeCompare(b.fecha_vencimiento || '9999'))
   const vencidas = cxps.filter(c => c.saldo > 0 && c.fecha_vencimiento < new Date().toISOString().slice(0, 10))
 
   return (

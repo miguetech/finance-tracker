@@ -4,7 +4,7 @@ import { useConfig } from '../../store/queries'
 import { getDocLabel } from '../../taxid'
 import type { Cliente } from '../../types/entities'
 
-export function ClienteFormModal({ open, onClose, initial, onSave }: { open: boolean; onClose: () => void; initial: Cliente | null; onSave: (c: Cliente) => void }) {
+export function ClienteFormModal({ open, onClose, initial, onSave }: { open: boolean; onClose: () => void; initial: Cliente | null; onSave: (c: Cliente) => Promise<void> | void }) {
   const [form, setForm] = useState({ nombre: '', rfc: '', email: '', telefono: '', direccion: '' })
   useEffect(() => {
     if (open) setForm(initial ? { nombre: initial.nombre, rfc: initial.rfc, email: initial.email, telefono: initial.telefono, direccion: initial.direccion } : { nombre: '', rfc: '', email: '', telefono: '', direccion: '' })
@@ -12,10 +12,14 @@ export function ClienteFormModal({ open, onClose, initial, onSave }: { open: boo
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   const { config } = useConfig()
   const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.tipo_doc_etiqueta ?? '')
-  const submit = () => {
+  const submit = async () => {
     if (!form.nombre.trim()) return
-    onSave({ ...initial, ...form } as Cliente)
-    onClose()
+    try {
+      await onSave({ ...initial, ...form } as Cliente)
+      onClose()
+    } catch {
+      /* el padre muestra el error; se mantiene abierto */
+    }
   }
   return (
     <Dialog open={open} onClose={onClose} title={initial ? 'Editar cliente' : 'Nuevo cliente'}

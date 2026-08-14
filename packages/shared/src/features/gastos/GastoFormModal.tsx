@@ -14,7 +14,10 @@ export function GastoFormModal({ open, onClose, initial }: { open: boolean; onCl
   }, [open, initial])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   const submit = async () => {
-    if (!form.descripcion.trim() || Number(form.monto) <= 0) return
+    if (!form.descripcion.trim() || Number(form.monto) <= 0) {
+      toast('Llena descripción y monto mayor a 0', 'error')
+      return
+    }
     try {
       await saveGasto.mutateAsync({ ...initial, ...form, monto: Number(form.monto) } as never)
       toast('Gasto guardado')

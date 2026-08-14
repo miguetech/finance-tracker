@@ -48,7 +48,7 @@ export function Clientes() {
       </div>
       <ClienteFormModal open={formOpen} onClose={() => setFormOpen(false)} initial={editando}
         onSave={async c => {
-          try { await saveCliente.mutateAsync(c); toast('Cliente guardado') } catch (e) { toast((e as Error).message, 'error') }
+          try { await saveCliente.mutateAsync(c); toast('Cliente guardado') } catch (e) { toast((e as Error).message, 'error'); throw e }
         }} />
       <ConfirmDialog open={deleteId !== null} title="Eliminar cliente" message="¿Eliminar este cliente? Bloqueado si tiene facturas."
         onConfirm={async () => {

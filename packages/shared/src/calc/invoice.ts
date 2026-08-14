@@ -1,22 +1,27 @@
 import type { FacturaItem, InvoiceTotals, EstadoFactura } from '../types/entities'
 
+export function roundTo(n: number, decimals: number): number {
+  const f = Math.pow(10, decimals)
+  return Math.round((n + Number.EPSILON) * f) / f
+}
+
 export function round2(n: number): number {
-  return Math.round((n + Number.EPSILON) * 100) / 100
+  return roundTo(n, 2)
 }
 
-export function calcImporte(cantidad: number, precio: number): number {
-  return round2(cantidad * precio)
+export function calcImporte(cantidad: number, precio: number, decimals = 2): number {
+  return roundTo(cantidad * precio, decimals)
 }
 
-export function calcInvoiceTotals(items: { cantidad: number; precio_unitario: number }[], ivaPct: number): InvoiceTotals {
-  const subtotal = round2(items.reduce((s, i) => s + calcImporte(i.cantidad, i.precio_unitario), 0))
-  const iva = round2((subtotal * ivaPct) / 100)
-  return { subtotal, iva, total: round2(subtotal + iva) }
+export function calcInvoiceTotals(items: { cantidad: number; precio_unitario: number }[], ivaPct: number, decimals = 2): InvoiceTotals {
+  const subtotal = roundTo(items.reduce((s, i) => s + calcImporte(i.cantidad, i.precio_unitario, decimals), 0), decimals)
+  const iva = roundTo((subtotal * ivaPct) / 100, decimals)
+  return { subtotal, iva, total: roundTo(subtotal + iva, decimals) }
 }
 
-export function buildFactura(items: { descripcion: string; cantidad: number; precio_unitario: number }[], ivaPct: number): { items: FacturaItem[]; totals: InvoiceTotals } {
-  const withImporte = items.map(i => ({ ...i, importe: calcImporte(i.cantidad, i.precio_unitario) }))
-  const totals = calcInvoiceTotals(withImporte, ivaPct)
+export function buildFactura(items: { descripcion: string; cantidad: number; precio_unitario: number }[], ivaPct: number, decimals = 2): { items: FacturaItem[]; totals: InvoiceTotals } {
+  const withImporte = items.map(i => ({ ...i, importe: calcImporte(i.cantidad, i.precio_unitario, decimals) }))
+  const totals = calcInvoiceTotals(withImporte, ivaPct, decimals)
   return { items: withImporte, totals }
 }
 

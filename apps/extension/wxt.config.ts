@@ -10,8 +10,8 @@ export default defineConfig({
     permissions: ['identity', 'storage', 'tabs'],
     host_permissions: ['https://sheets.googleapis.com/*', 'https://www.googleapis.com/*'],
     oauth2: {
-      client_id: 'YOUR_EXTENSION_CLIENT_ID',
-      scopes: ['https://www.googleapis.com/auth/spreadsheets']
+      client_id: '464340901772-r2jnia93ppf2k631jh0ugvqm8au09r3l.apps.googleusercontent.com',
+      scopes: ['https://www.googleapis.com/auth/drive.file']
     },
     action: { default_popup: 'popup.html' }
   }

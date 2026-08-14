@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { Dialog, Button, Input, Select } from '../../ui/components'
 import { IconX } from '../../ui/icons'
-import { useClientes, useFacturas, useConfig } from '../../store/queries'
+import { useClientes, useFacturas, useConfig, useRegisterPago } from '../../store/queries'
 import { buildFactura } from '../../calc/invoice'
-import { formatMoney } from '../../currency'
+import { formatMoney, getCurrency } from '../../currency'
 import { uid } from '../../lib/uid'
 
 interface ItemForm { descripcion: string; cantidad: string; precio_unitario: string }
@@ -11,20 +11,23 @@ interface ItemForm { descripcion: string; cantidad: string; precio_unitario: str
 export function FacturaFormModal({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
   const { clientes, saveCliente } = useClientes()
   const { createFactura } = useFacturas()
+  const registerPago = useRegisterPago()
   const { config } = useConfig()
   const [id_cliente, setIdCliente] = useState('')
   const [clienteRapido, setClienteRapido] = useState('')
   const [fecha_vencimiento, setVencimiento] = useState('')
+  const [pagado, setPagado] = useState(false)
   const [notas, setNotas] = useState('')
   const [items, setItems] = useState<ItemForm[]>([{ descripcion: '', cantidad: '1', precio_unitario: '' }])
   const [error, setError] = useState('')
   const moneda = config?.moneda ?? 'USD'
 
-  useEffect(() => { if (open) { setIdCliente(''); setItems([{ descripcion: '', cantidad: '1', precio_unitario: '' }]); setError('') } }, [open])
+  useEffect(() => { if (open) { setIdCliente(''); setItems([{ descripcion: '', cantidad: '1', precio_unitario: '' }]); setError(''); setPagado(false) } }, [open])
 
   const setItem = (i: number, k: keyof ItemForm, v: string) => setItems(list => list.map((it, idx) => idx === i ? { ...it, [k]: v } : it))
   const parsedItems = items.map(it => ({ descripcion: it.descripcion, cantidad: Number(it.cantidad) || 0, precio_unitario: Number(it.precio_unitario) || 0 }))
-  const { totals } = buildFactura(parsedItems, config?.iva_porcentaje ?? 16)
+  const validos = parsedItems.filter(it => it.descripcion && it.cantidad > 0 && it.precio_unitario >= 0)
+  const { totals } = buildFactura(validos, config?.iva_porcentaje ?? 16, getCurrency(moneda).decimals)
 
   const submit = async () => {
     try {
@@ -33,10 +36,12 @@ export function FacturaFormModal({ open, onClose, onSaved }: { open: boolean; on
         const nuevo = await saveCliente.mutateAsync({ id_cliente: uid('cli_'), nombre: clienteRapido.trim(), rfc: '', email: '', telefono: '', direccion: '', fecha_registro: new Date().toISOString().slice(0, 10) })
         clienteId = nuevo.id_cliente
       }
-      const validos = parsedItems.filter(it => it.descripcion && it.cantidad > 0 && it.precio_unitario >= 0)
       if (!clienteId) return setError('Selecciona o crea un cliente')
       if (validos.length === 0) return setError('Agrega al menos 1 concepto completo')
-      await createFactura.mutateAsync({ id_cliente: clienteId, items: validos, fecha_emision: new Date().toISOString().slice(0, 10), fecha_vencimiento, notas })
+      const factura = await createFactura.mutateAsync({ id_cliente: clienteId, items: validos, fecha_emision: new Date().toISOString().slice(0, 10), fecha_vencimiento, notas })
+      if (pagado) {
+        await registerPago.mutateAsync({ tipo: 'cobro', id_origen: factura.id_factura, fecha: new Date().toISOString().slice(0, 10), monto: factura.total, metodo_pago: 'Efectivo', notas: 'Pago al contado' })
+      }
       onSaved()
       onClose()
     } catch (e) {
@@ -55,6 +60,10 @@ export function FacturaFormModal({ open, onClose, onSaved }: { open: boolean; on
           <div><label className="text-xs text-gray-500">Cliente rápido (nuevo)</label><Input value={clienteRapido} onChange={e => setClienteRapido(e.target.value)} placeholder="Nombre…" /></div>
         </div>
         <div><label className="text-xs text-gray-500">Fecha vencimiento</label><Input type="date" value={fecha_vencimiento} onChange={e => setVencimiento(e.target.value)} /></div>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" className="h-4 w-4" checked={pagado} onChange={e => setPagado(e.target.checked)} />
+          Ya me pagó (registrar cobro total)
+        </label>
         <div className="space-y-2">
           <div className="text-xs text-gray-500">Conceptos</div>
           {items.map((it, i) => (
