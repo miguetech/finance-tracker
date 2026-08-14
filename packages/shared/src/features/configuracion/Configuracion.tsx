@@ -60,7 +60,7 @@ export function Configuracion() {
     } catch (e) { toast((e as Error).message, 'error') }
   }
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <h1 className="text-xl font-bold">Configuración</h1>
       <Card title="Datos de la empresa">
         <div className="space-y-3">
