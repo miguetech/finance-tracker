@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { ensureSheet, getChromeToken } from '../../src/onboarding'
-import { createRepository, chromeStorageAdapter, KEYS, SheetsApi, AppProvider, Layout, Dashboard, Facturas, Clientes, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Toaster, useConfig } from '@ft/shared'
+import { createRepository, chromeStorageAdapter, KEYS, SheetsApi, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Toaster, useConfig } from '@ft/shared'
 import type { NavKey } from '@ft/shared'
 
 function Boot() {
@@ -33,6 +33,7 @@ function Boot() {
           {nav === 'dashboard' && <Dashboard mes={mes} onNavigate={setNav} />}
           {nav === 'facturas' && <Facturas />}
           {nav === 'clientes' && <Clientes />}
+          {nav === 'empleados' && <Empleados />}
           {nav === 'gastos' && <Gastos />}
           {nav === 'proveedores' && <Proveedores />}
           {nav === 'cuentas' && <CuentasPagar />}

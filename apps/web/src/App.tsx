@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { createRepository, localStorageAdapter, KEYS, SheetsApi, createInitialSpreadsheet, AppProvider, Layout, Dashboard, Facturas, Clientes, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Toaster } from '@ft/shared'
+import { createRepository, localStorageAdapter, KEYS, SheetsApi, createInitialSpreadsheet, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Toaster } from '@ft/shared'
 import type { NavKey } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
 
@@ -46,6 +46,7 @@ function Shell() {
           {nav === 'dashboard' && <Dashboard mes={mes} onNavigate={setNav} />}
           {nav === 'facturas' && <Facturas />}
           {nav === 'clientes' && <Clientes />}
+          {nav === 'empleados' && <Empleados />}
           {nav === 'gastos' && <Gastos />}
           {nav === 'proveedores' && <Proveedores />}
           {nav === 'cuentas' && <CuentasPagar />}
