@@ -201,6 +201,7 @@ Aplicación de **facturación personal de un solo usuario** para:
 - Formularios en **modales** (innerHTML dinámico).
 - Notificaciones tipo **toast** (éxito/error) y **diálogos de confirmación** para borrados.
 - Formato de moneda: `$ 1,234.56` (`toLocaleString('en-US')`).
+- Interfaz con identidad fintech: paleta índigo/violeta, tipografía Inter, botones con gradiente, sidebar con iconos SVG y wordmark.
 - Escape HTML en toda interpolación de datos de usuario (anti-XSS).
 - Caché en memoria del lado cliente: `STATE.config`, `FACTURAS`, `CLIENTES`, `window.__GASTOS`.
 
