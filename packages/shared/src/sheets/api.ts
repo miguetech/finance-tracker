@@ -9,20 +9,28 @@ export class SheetsApi {
   constructor(private getToken: () => Promise<string>) {}
 
   private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
-    const token = await this.getToken()
-    const res = await fetch(url, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        ...(init.headers ?? {})
+    const maxAttempts = 4
+    for (let attempt = 0; ; attempt++) {
+      const token = await this.getToken()
+      const res = await fetch(url, {
+        ...init,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          ...(init.headers ?? {})
+        }
+      })
+      if (!res.ok) {
+        if (attempt < maxAttempts - 1 && (res.status === 429 || res.status === 500 || res.status === 503)) {
+          const delay = 500 * 2 ** attempt + Math.random() * 250
+          await new Promise(r => setTimeout(r, delay))
+          continue
+        }
+        const text = await res.text()
+        throw new Error(`Sheets API ${res.status}: ${text.slice(0, 300)}`)
       }
-    })
-    if (!res.ok) {
-      const text = await res.text()
-      throw new Error(`Sheets API ${res.status}: ${text.slice(0, 300)}`)
+      return res.json() as Promise<T>
     }
-    return res.json() as Promise<T>
   }
 
   createSpreadsheet(title: string): Promise<{ spreadsheetId: string; url: string }> {
