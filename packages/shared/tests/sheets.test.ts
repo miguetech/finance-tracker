@@ -5,9 +5,9 @@ import { SheetsApi } from '../src/sheets/api'
 import { createInitialSpreadsheet, ensureTables } from '../src/sheets/createSpreadsheet'
 
 describe('tables', () => {
-  it('define esquema de 10 tablas', () => {
+  it('define esquema de 11 tablas', () => {
     const names = Object.keys(TABLES)
-    expect(names).toHaveLength(10)
+    expect(names).toHaveLength(11)
     expect(sheetName('Facturas')).toBe('Facturas')
   })
   it('Factura incluye saldo', () => {
@@ -94,7 +94,7 @@ describe('ensureTables', () => {
       const u = String(url)
       if (u.includes('values:batchUpdate')) return { ok: true, json: async () => ({ responses: [] }) } as Response
       if (u.includes(':batchUpdate')) return { ok: true, json: async () => ({ replies: [] }) } as Response
-      const existing = ['Config', 'Clientes', 'Facturas', 'Factura_Items', 'Gastos', 'Proveedores', 'Cuentas_Pagar', 'Pagos', 'Metas']
+      const existing = ['Config', 'Clientes', 'Facturas', 'Factura_Items', 'Gastos', 'Proveedores', 'Cuentas_Pagar', 'Pagos', 'Metas', 'Usuarios']
       return { ok: true, json: async () => ({ sheets: existing.map(title => ({ properties: { title } })) }) } as Response
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -122,5 +122,15 @@ describe('ensureTables', () => {
     await ensureTables(api, 'SID')
     expect(fetchMock.mock.calls.some(c => String(c[0]).includes('values:batchUpdate'))).toBe(false)
     vi.unstubAllGlobals()
+  })
+})
+
+describe('Usuarios', () => {
+  it('serializa y deserializa una fila de Usuarios', () => {
+    const spec = TABLES.Usuarios
+    const row = serializeRow(spec, { email: 'a@b.c', rol: 'asistente', modulos_ver: 'facturas', modulos_editar: 'gastos' })
+    expect(row).toEqual(['a@b.c', 'asistente', 'facturas', 'gastos'])
+    const obj = deserializeRow(spec, row)
+    expect(obj).toMatchObject({ email: 'a@b.c', rol: 'asistente', modulos_ver: 'facturas', modulos_editar: 'gastos' })
   })
 })

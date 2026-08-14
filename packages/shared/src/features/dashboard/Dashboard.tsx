@@ -2,11 +2,13 @@ import React from 'react'
 import { useFacturas, useGastos, useCxp, useReportes } from '../../store/queries'
 import { formatMoney } from '../../currency'
 import { useAppStore } from '../../store/appStore'
+import { usePerms } from '../../store/perms'
 import { StatCard, Button } from '../../ui/components'
 import type { NavKey } from '../../ui/layout/Layout'
 
 export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: NavKey) => void }) {
   const config = useAppStore(s => s.config)
+  const { canView } = usePerms()
   const moneda = config?.moneda ?? 'USD'
   const { data: reportes, isLoading } = useReportes(mes)
   const { facturas } = useFacturas()
@@ -21,9 +23,9 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-3">
-        <Button onClick={() => onNavigate('facturas')}>+ Nueva factura</Button>
-        <Button variant="outline" onClick={() => onNavigate('gastos')}>+ Registrar gasto</Button>
-        <Button variant="outline" onClick={() => onNavigate('cuentas')}>+ Registrar pago</Button>
+        {canView('facturas') && <Button onClick={() => onNavigate('facturas')}>+ Nueva factura</Button>}
+        {canView('gastos') && <Button variant="outline" onClick={() => onNavigate('gastos')}>+ Registrar gasto</Button>}
+        {canView('cuentas') && <Button variant="outline" onClick={() => onNavigate('cuentas')}>+ Registrar pago</Button>}
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Facturado" value={k ? formatMoney(k.facturado, moneda) : '—'} />

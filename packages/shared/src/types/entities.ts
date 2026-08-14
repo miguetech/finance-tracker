@@ -109,6 +109,7 @@ export interface Config {
   categorias_cxp: string
   tipo_doc: TipoDoc
   tipo_doc_etiqueta: string
+  share_backend_url: string
 }
 
 export interface InvoiceTotals {

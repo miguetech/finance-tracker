@@ -23,7 +23,8 @@ const DEFAULT_CONFIG: Config = {
   categorias_gastos: 'Renta,Internet,Papelería,Servicios',
   categorias_cxp: 'Materiales,Servicios,Impuestos,Otros',
   tipo_doc: 'RFC' as const,
-  tipo_doc_etiqueta: ''
+  tipo_doc_etiqueta: '',
+  share_backend_url: ''
 }
 
 export async function createInitialSpreadsheet(api: SheetsApi): Promise<{ spreadsheetId: string; url: string }> {
@@ -85,7 +86,8 @@ export function configFromRows(rows: (string | number)[][]): Config {
     categorias_gastos: map.get('categorias_gastos') ?? DEFAULT_CONFIG.categorias_gastos,
     categorias_cxp: map.get('categorias_cxp') ?? DEFAULT_CONFIG.categorias_cxp,
     tipo_doc: (map.get('tipo_doc') as Config['tipo_doc']) || DEFAULT_CONFIG.tipo_doc,
-    tipo_doc_etiqueta: map.get('tipo_doc_etiqueta') ?? DEFAULT_CONFIG.tipo_doc_etiqueta
+    tipo_doc_etiqueta: map.get('tipo_doc_etiqueta') ?? DEFAULT_CONFIG.tipo_doc_etiqueta,
+    share_backend_url: map.get('share_backend_url') ?? ''
   }
 }
 

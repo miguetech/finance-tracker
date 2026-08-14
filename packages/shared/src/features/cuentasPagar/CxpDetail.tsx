@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Dialog, Button } from '../../ui/components'
 import { useCxpById, usePagos, useConfig } from '../../store/queries'
+import { usePerms } from '../../store/perms'
 import { formatMoney } from '../../currency'
 import { PagoModal } from '../facturas/PagoModal'
 
@@ -8,6 +9,7 @@ export function CxpDetail({ id, onClose }: { id: string; onClose: () => void }) 
   const { data: det } = useCxpById(id)
   const { data: pagos = [] } = usePagos(id)
   const { config } = useConfig()
+  const { isAdmin } = usePerms()
   const [abonoOpen, setAbonoOpen] = useState(false)
   const moneda = config?.moneda ?? 'USD'
   if (!det) return null
@@ -15,7 +17,7 @@ export function CxpDetail({ id, onClose }: { id: string; onClose: () => void }) 
   return (
     <Dialog open onClose={onClose} title={`CXP ${cxp.folio_documento || cxp.id_cxp}`}
       footer={<>
-        {cxp.saldo > 0 && <Button onClick={() => setAbonoOpen(true)}>Registrar abono</Button>}
+        {cxp.saldo > 0 && isAdmin && <Button onClick={() => setAbonoOpen(true)}>Registrar abono</Button>}
         <Button variant="outline" onClick={onClose}>Cerrar</Button>
       </>}>
       <div className="space-y-3 text-sm">

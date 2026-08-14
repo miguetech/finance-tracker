@@ -1,4 +1,4 @@
-export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Metas'
+export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Metas' | 'Usuarios'
 
 export interface ColumnSpec {
   key: string
@@ -95,7 +95,13 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'metodo_pago', header: 'metodo_pago', type: S },
     { key: 'notas', header: 'notas', type: S }
   ],
-  Metas: [{ key: 'placeholder', header: 'placeholder', type: S }]
+  Metas: [{ key: 'placeholder', header: 'placeholder', type: S }],
+  Usuarios: [
+    { key: 'email', header: 'email', type: S },
+    { key: 'rol', header: 'rol', type: S },
+    { key: 'modulos_ver', header: 'modulos_ver', type: S },
+    { key: 'modulos_editar', header: 'modulos_editar', type: S }
+  ]
 }
 
 export function sheetName(t: TableName): string {

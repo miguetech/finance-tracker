@@ -3,9 +3,11 @@ import type { ReactNode } from 'react'
 import { cx } from '../components'
 import { IconDashboard, IconInvoice, IconClient, IconUsers, IconPayables, IconProvider, IconExpense, IconReport, IconSettings, IconMenu, IconLogo } from '../icons'
 
-export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuentas' | 'proveedores' | 'gastos' | 'reportes' | 'configuracion'
+export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuentas' | 'proveedores' | 'gastos' | 'reportes' | 'configuracion' | 'compartir'
 
-const NAV: { key: NavKey; label: string; Icon: (p: { className?: string }) => ReactNode }[] = [
+export interface NavItem { key: NavKey; label: string; Icon: (p: { className?: string }) => ReactNode }
+
+const NAV: NavItem[] = [
   { key: 'dashboard', label: 'Dashboard', Icon: IconDashboard },
   { key: 'facturas', label: 'Facturas', Icon: IconInvoice },
   { key: 'clientes', label: 'Clientes', Icon: IconClient },
@@ -17,8 +19,17 @@ const NAV: { key: NavKey; label: string; Icon: (p: { className?: string }) => Re
   { key: 'configuracion', label: 'Configuración', Icon: IconSettings }
 ]
 
-export function Layout({ current, onNavigate, children, headerExtra }: { current: NavKey; onNavigate: (k: NavKey) => void; children: ReactNode; headerExtra?: ReactNode }) {
+export function Layout({ current, onNavigate, children, headerExtra, filterNav, extraItems }: {
+  current: NavKey
+  onNavigate: (k: NavKey) => void
+  children: ReactNode
+  headerExtra?: ReactNode
+  filterNav?: (key: NavKey) => boolean
+  extraItems?: NavItem[]
+}) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const visible = NAV.filter(n => !filterNav || filterNav(n.key))
+  const items = extraItems?.length ? [...visible, ...extraItems] : visible
   const nav = (
     <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
       <div className="flex items-center gap-2.5 px-3 pb-5">
@@ -28,7 +39,7 @@ export function Layout({ current, onNavigate, children, headerExtra }: { current
           <div className="text-xs text-muted-foreground mt-0.5">Facturación personal</div>
         </div>
       </div>
-      {NAV.map(n => (
+      {items.map(n => (
         <button key={n.key} onClick={() => { onNavigate(n.key); setMobileOpen(false) }}
           className={cx(
             'w-full flex items-center gap-3 px-3 py-2.5 text-sm rounded-lg transition-colors',

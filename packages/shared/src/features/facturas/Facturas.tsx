@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useFacturas, useConfig } from '../../store/queries'
 import { Table, Button, Select, ConfirmDialog, Badge, Input } from '../../ui/components'
 import { useToast } from '../../ui/components'
+import { usePerms } from '../../store/perms'
 import { formatMoney } from '../../currency'
 import { IconPlus, IconTrash } from '../../ui/icons'
 import { FacturaFormModal } from './FacturaFormModal'
@@ -16,6 +17,7 @@ function estadoDe(f: { saldo: number; fecha_pago: string }): { label: string; to
 export function Facturas() {
   const { facturas, createFactura, deleteFactura } = useFacturas({})
   const { config } = useConfig()
+  const { canEdit, isAdmin } = usePerms()
   const toast = useToast()
   const [estado, setEstado] = useState('')
   const [mes, setMes] = useState('')
@@ -33,7 +35,7 @@ export function Facturas() {
         <div className="flex gap-2">
           <Select value={estado} onChange={setEstado} options={[{ value: 'Pendiente', label: 'Pendiente' }, { value: 'Parcial', label: 'Parcial' }, { value: 'Pagada', label: 'Pagada' }]} placeholder="Estado" />
           <Input type="month" value={mes} onChange={e => setMes(e.target.value)} />
-          <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setFormOpen(true)}>Nueva factura</Button>
+          {canEdit('facturas') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setFormOpen(true)}>Nueva factura</Button>)}
         </div>
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
@@ -47,7 +49,7 @@ export function Facturas() {
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
               <Button variant="ghost" onClick={() => setDetalleId(String(r.id_factura))}>Ver</Button>
-              <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_factura))}>Eliminar</Button>
+              {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_factura))}>Eliminar</Button>)}
             </div>
           ) }
         ]} rows={filtradas as unknown as Record<string, unknown>[]} />

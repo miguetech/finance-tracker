@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useClientes, useConfig } from '../../store/queries'
 import { Table, Button, Input, Dialog, ConfirmDialog } from '../../ui/components'
 import { useToast } from '../../ui/components'
+import { usePerms } from '../../store/perms'
 import { getDocLabel } from '../../taxid'
 import { IconPlus, IconEdit, IconTrash } from '../../ui/icons'
 import { ClienteFormModal } from './ClienteFormModal'
@@ -9,6 +10,7 @@ import type { Cliente } from '../../types/entities'
 
 export function Clientes() {
   const { clientes, saveCliente, deleteCliente } = useClientes()
+  const { canEdit, isAdmin } = usePerms()
   const toast = useToast()
   const [busqueda, setBusqueda] = useState('')
   const [formOpen, setFormOpen] = useState(false)
@@ -25,7 +27,7 @@ export function Clientes() {
         <h1 className="text-xl font-bold">Clientes</h1>
         <div className="flex gap-2">
           <Input placeholder={`Buscar nombre o ${docLabel}…`} value={busqueda} onChange={e => setBusqueda(e.target.value)} className="sm:w-64" />
-          <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>Nuevo cliente</Button>
+          {canEdit('clientes') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>Nuevo cliente</Button>)}
         </div>
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
@@ -37,8 +39,8 @@ export function Clientes() {
             { key: 'telefono', header: 'Teléfono', render: c => String(c.telefono) },
             { key: 'acciones', header: '', render: c => (
               <div className="flex gap-2">
-                <Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(c as unknown as Cliente); setFormOpen(true) }}>Editar</Button>
-                <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId((c as unknown as Cliente).id_cliente)}>Eliminar</Button>
+                {canEdit('clientes') && (<Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(c as unknown as Cliente); setFormOpen(true) }}>Editar</Button>)}
+                {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId((c as unknown as Cliente).id_cliente)}>Eliminar</Button>)}
               </div>
             ) }
           ]}

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useProveedores, useConfig } from '../../store/queries'
 import { Table, Button, ConfirmDialog } from '../../ui/components'
 import { useToast } from '../../ui/components'
+import { usePerms } from '../../store/perms'
 import { getDocLabel } from '../../taxid'
 import { IconPlus, IconEdit, IconTrash } from '../../ui/icons'
 import { ProveedorFormModal } from './ProveedorFormModal'
@@ -9,6 +10,7 @@ import type { Proveedor } from '../../types/entities'
 
 export function Proveedores() {
   const { proveedores, saveProveedor, deleteProveedor } = useProveedores()
+  const { canEdit, isAdmin } = usePerms()
   const toast = useToast()
   const [formOpen, setFormOpen] = useState(false)
   const [editando, setEditando] = useState<Proveedor | null>(null)
@@ -20,7 +22,7 @@ export function Proveedores() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Proveedores</h1>
-        <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>Nuevo proveedor</Button>
+        {canEdit('proveedores') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>Nuevo proveedor</Button>)}
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table columns={[
@@ -30,8 +32,8 @@ export function Proveedores() {
           { key: 'telefono', header: 'Teléfono', render: r => String(r.telefono) },
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
-              <Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(r as unknown as Proveedor); setFormOpen(true) }}>Editar</Button>
-              <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_proveedor))}>Eliminar</Button>
+              {canEdit('proveedores') && (<Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(r as unknown as Proveedor); setFormOpen(true) }}>Editar</Button>)}
+              {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_proveedor))}>Eliminar</Button>)}
             </div>
           ) }
         ]} rows={proveedores as unknown as Record<string, unknown>[]} />

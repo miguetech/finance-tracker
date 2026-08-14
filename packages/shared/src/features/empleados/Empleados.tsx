@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useEmpleados, useRegisterNomina, useGastos, useConfig } from '../../store/queries'
 import { Table, Button, Badge, ConfirmDialog } from '../../ui/components'
 import { useToast } from '../../ui/components'
+import { usePerms } from '../../store/perms'
 import { formatMoney } from '../../currency'
 import { getDocLabel } from '../../taxid'
 import { IconPlus, IconEdit, IconTrash } from '../../ui/icons'
@@ -14,6 +15,7 @@ export function Empleados() {
   const registerNomina = useRegisterNomina()
   const { gastos } = useGastos({})
   const { config } = useConfig()
+  const { isAdmin } = usePerms()
   const toast = useToast()
   const [formOpen, setFormOpen] = useState(false)
   const [editando, setEditando] = useState<Empleado | null>(null)
@@ -32,7 +34,7 @@ export function Empleados() {
           <h1 className="text-xl font-bold">Empleados</h1>
           <p className="text-sm text-muted-foreground">Personas que trabajan contigo. Su salario se registra como gasto de nómina.</p>
         </div>
-        <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>Nuevo empleado</Button>
+        {isAdmin && <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>Nuevo empleado</Button>}
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table columns={[
@@ -45,9 +47,9 @@ export function Empleados() {
           { key: 'total', header: 'Total pagado', render: r => formatMoney(totalPagado(String(r.nombre)), moneda) },
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
-              <Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(r as unknown as Empleado); setFormOpen(true) }}>Editar</Button>
-              <Button variant="outline" onClick={() => setNominaDe(r as unknown as Empleado)}>Nómina</Button>
-              <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_empleado))}>Eliminar</Button>
+              {isAdmin && <Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(r as unknown as Empleado); setFormOpen(true) }}>Editar</Button>}
+              {isAdmin && <Button variant="outline" onClick={() => setNominaDe(r as unknown as Empleado)}>Nómina</Button>}
+              {isAdmin && <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_empleado))}>Eliminar</Button>}
             </div>
           ) }
         ]} rows={empleados as unknown as Record<string, unknown>[]} />
