@@ -10,7 +10,8 @@ import { buildFactura, estadoDesdeSaldo, round2 } from '../calc/invoice'
 import { kpisForMonth, topClientes, gastosPorCategoria, type Kpis } from '../calc/kpis'
 import { expandFolioTemplate } from '../calc/folio'
 import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago } from '../types/entities'
-import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema, EmpleadoSchema, NominaInputSchema } from '../types/schemas'
+import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema, EmpleadoSchema, NominaInputSchema, UsuarioSchema } from '../types/schemas'
+import type { Usuario } from '../roles/roles'
 
 export interface RepoContext {
   api: SheetsApi
@@ -126,6 +127,20 @@ export function createRepository(ctx: RepoContext) {
       if (facturas.some(f => f.id_cliente === id)) throw new Error('Cliente tiene facturas asociadas')
       const all = (await readTable('Clientes')).filter(r => r.id_cliente !== id)
       await replaceTable('Clientes', all)
+    },
+
+    async listUsuarios(): Promise<Usuario[]> { return readTable('Usuarios') as unknown as Usuario[] },
+
+    async saveUsuario(usuario: Usuario): Promise<Usuario> {
+      const parsed = UsuarioSchema.parse(usuario)
+      const saved = { ...parsed, email: parsed.email.trim().toLowerCase() } as Usuario
+      await insertOrReplace('Usuarios', 'email', saved as unknown as Record<string, string | number>)
+      return saved
+    },
+
+    async deleteUsuario(email: string): Promise<void> {
+      const all = (await readTable('Usuarios')).filter(r => String(r.email).toLowerCase() !== email.toLowerCase())
+      await replaceTable('Usuarios', all)
     },
 
     async createFactura(input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string }): Promise<Factura> {

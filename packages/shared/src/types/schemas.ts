@@ -104,7 +104,8 @@ export const ConfigSchema = z.object({
   categorias_gastos: z.string().default('Renta,Internet,Papelería,Servicios'),
   categorias_cxp: z.string().default('Materiales,Servicios,Impuestos,Otros'),
   tipo_doc: z.enum(['RFC', 'NIF', 'Cedula', 'Otro']).default('RFC'),
-  tipo_doc_etiqueta: z.string().default('')
+  tipo_doc_etiqueta: z.string().default(''),
+  share_backend_url: z.string().default('')
 })
 
 export type MetodoPagoValue = z.infer<typeof MetodoPagoSchema>

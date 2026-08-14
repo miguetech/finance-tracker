@@ -219,3 +219,16 @@ describe('repository', () => {
     expect(fx.saldo).toBe(58)
   })
 })
+
+describe('usuarios', () => {
+  it('guarda, lista y elimina usuarios por email', async () => {
+    const { repo, grid } = setup()
+    grid.set('Usuarios', [['a@b.c', 'asistente', 'facturas', 'gastos']])
+    const list = await repo.listUsuarios()
+    expect(list).toHaveLength(1)
+    expect(list[0].email).toBe('a@b.c')
+    const saved = await repo.saveUsuario({ email: 'x@y.z', rol: 'ver_gastos', modulos_ver: 'gastos', modulos_editar: '' })
+    expect(saved.email).toBe('x@y.z')
+    await repo.deleteUsuario('a@b.c')
+  })
+})
