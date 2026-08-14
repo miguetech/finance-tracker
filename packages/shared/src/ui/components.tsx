@@ -39,16 +39,16 @@ export function Button({ variant = 'primary', size = 'md', icon, iconAfter, icon
 
 export function Input({ error, className, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { error?: string }) {
   return (
-    <div>
-      <input {...props} className={cx('w-full h-10 px-3.5 border rounded-xl text-sm bg-surface transition-colors placeholder:text-muted-foreground focus:outline-none focus:ring-2', error ? 'border-danger focus:ring-danger/25' : 'border-gray-200 focus:border-primary focus:ring-primary/25', className)} />
+    <div className={className}>
+      <input {...props} className={cx('w-full h-10 px-3.5 border rounded-xl text-sm bg-surface transition-colors placeholder:text-muted-foreground focus:outline-none focus:ring-2', error ? 'border-danger focus:ring-danger/25' : 'border-gray-200 focus:border-primary focus:ring-primary/25')} />
       {error && <p className="mt-1 text-xs text-danger">{error}</p>}
     </div>
   )
 }
 
-export function Select({ value, onChange, options, placeholder, error }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; placeholder?: string; error?: string }) {
+export function Select({ value, onChange, options, placeholder, error, className }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; placeholder?: string; error?: string; className?: string }) {
   return (
-    <div>
+    <div className={className}>
       <select value={value} onChange={e => onChange(e.target.value)} className={cx('w-full h-10 px-3.5 border rounded-xl text-sm bg-surface transition-colors focus:outline-none focus:ring-2', error ? 'border-danger focus:ring-danger/25' : 'border-gray-200 focus:border-primary focus:ring-primary/25')}>
         {placeholder !== undefined && <option value="">{placeholder}</option>}
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
