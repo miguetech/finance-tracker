@@ -63,12 +63,20 @@ Aplicación de **facturación personal de un solo usuario** para:
 - **Filtrar** por mes y categoría.
 - Categorías definidas en configuración.
 
-### 2.5 Reportes (por mes)
+### 2.5 Empleados y nómina
+- **CRUD de empleados**: nombre (obligatorio), documento fiscal, puesto, salario mensual, fecha de ingreso y estado activo/inactivo.
+- **Nómina**: registrar el pago de salario por mes → se genera automáticamente un **gasto** con categoría `Nómina` (descripción `Nómina {mes} — {nombre}`).
+- La nómina se suma a los gastos del mes y aparece en Reportes dentro de "Gastos por categoría".
+- Total pagado por empleado visible en la tabla de Empleados.
+- **Borrado**: bloqueado si el empleado tiene nómina registrada.
+- **Limitación**: la hoja `Empleados` solo se crea en spreadsheets nuevos; para hojas existentes hay que crear la hoja manualmente.
+
+### 2.6 Reportes (por mes)
 - KPIs: facturado, cobrado, pendiente, gastos, utilidad.
 - **Gastos por categoría** (desglose).
 - **Top 5 clientes** por total facturado.
 
-### 2.6 Configuración
+### 2.7 Configuración
 - **Datos de la empresa** (emisor): nombre, RFC, dirección, teléfono, email, logo (URL).
 - **Facturación**: moneda (ej. `USD`), símbolo (ej. `$`), prefijo de folio, contador actual, IVA %.
 - **Categorías de gastos** (separadas por coma).
