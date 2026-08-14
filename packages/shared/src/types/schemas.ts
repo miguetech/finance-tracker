@@ -108,3 +108,10 @@ export const ConfigSchema = z.object({
 })
 
 export type MetodoPagoValue = z.infer<typeof MetodoPagoSchema>
+
+export const UsuarioSchema = z.object({
+  email: z.string().min(1, 'Email obligatorio'),
+  rol: z.enum(['asistente', 'solo_lectura', 'ver_facturas', 'ver_reportes', 'ver_gastos', 'ver_empleados', 'ver_cuentas', 'personalizado']),
+  modulos_ver: z.string().default(''),
+  modulos_editar: z.string().default('')
+})
