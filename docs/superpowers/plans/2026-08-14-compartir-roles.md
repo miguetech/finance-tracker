@@ -903,9 +903,10 @@ git commit -m "feat: backend Apps Script con auth y endpoints de lectura"
   - `expandFolioTemplate` desde `.../calc/folio`
   - `uid` desde `.../lib/uid`
   - `withMutex` desde `.../sheets/mutex`
-  - `ClienteSchema`, `GastoSchema`, `FacturaInputSchema` desde `.../types/schemas`
   - `getCurrency` desde `.../currency`
 - Produces: acciones `saveCliente`, `saveGasto`, `createFactura` en el router, cada una exigiendo `canEdit('clientes' | 'gastos' | 'facturas')`.
+
+**IMPORTANTE — NO importar schemas de zod en el backend.** `schemas.ts` importa zod (~570KB) y el límite de archivo de Apps Script es 500KB; el bundle pasaría de ~17KB a ~590KB y el deploy fallaría. La validación de escritura se hace con helpers manuales ligeros (ver Step 3).
 
 - [ ] **Step 1: Write the failing test (compile-time contract)**
 
@@ -916,9 +917,10 @@ import { buildFactura, round2 } from '../../../packages/shared/src/calc/invoice'
 import { expandFolioTemplate } from '../../../packages/shared/src/calc/folio'
 import { uid } from '../../../packages/shared/src/lib/uid'
 import { withMutex } from '../../../packages/shared/src/sheets/mutex'
-import { ClienteSchema, GastoSchema, FacturaInputSchema } from '../../../packages/shared/src/types/schemas'
 import { getCurrency } from '../../../packages/shared/src/currency'
 ```
+
+NO importar `ClienteSchema`/`GastoSchema`/`FacturaInputSchema` ni ningún módulo que arrastre zod.
 
 - [ ] **Step 2: Run typecheck to verify the contract still compiles**
 
@@ -927,30 +929,55 @@ Expected: PASS (aún no se usan; se usan en Step 3)
 
 - [ ] **Step 3: Implement las funciones de escritura**
 
+Validación manual ligera (sin zod) para mantener el bundle por debajo del límite de Apps Script:
+
 ```ts
 function todayISO(): string { return new Date().toISOString().slice(0, 10) }
 
 function backendSaveCliente(c: Cliente): Cliente {
-  const parsed = ClienteSchema.parse(c)
-  const saved = { ...parsed, id_cliente: parsed.id_cliente || uid('cli_'), fecha_registro: parsed.fecha_registro || todayISO() } as unknown as Cliente
-  insertOrReplace('Clientes', 'id_cliente', saved as unknown as Record<string, string | number>)
-  return saved
+  if (!c?.nombre || !String(c.nombre).trim()) throw new Error('Nombre obligatorio')
+  const parsed: Cliente = {
+    id_cliente: c.id_cliente || uid('cli_'),
+    nombre: String(c.nombre),
+    rfc: c.rfc || '',
+    email: c.email || '',
+    telefono: c.telefono || '',
+    direccion: c.direccion || '',
+    fecha_registro: c.fecha_registro || todayISO()
+  }
+  insertOrReplace('Clientes', 'id_cliente', parsed as unknown as Record<string, string | number>)
+  return parsed
 }
 
 function backendSaveGasto(ga: Gasto): Gasto {
-  const parsed = GastoSchema.parse(ga)
-  const saved = { ...parsed, id_gasto: parsed.id_gasto || uid('gas_'), monto: round2(parsed.monto) } as unknown as Gasto
-  insertOrReplace('Gastos', 'id_gasto', saved as unknown as Record<string, string | number>)
-  return saved
+  if (!ga?.descripcion || !String(ga.descripcion).trim()) throw new Error('Descripción obligatoria')
+  const monto = Number(ga.monto)
+  if (!Number.isFinite(monto) || monto < 0) throw new Error('Monto inválido')
+  const parsed: Gasto = {
+    id_gasto: ga.id_gasto || uid('gas_'),
+    fecha: ga.fecha || todayISO(),
+    categoria: ga.categoria || '',
+    descripcion: String(ga.descripcion),
+    monto: round2(monto),
+    metodo_pago: ['Efectivo', 'Transferencia', 'Tarjeta'].includes(ga.metodo_pago) ? ga.metodo_pago : 'Efectivo',
+    proveedor: ga.proveedor || ''
+  }
+  insertOrReplace('Gastos', 'id_gasto', parsed as unknown as Record<string, string | number>)
+  return parsed
 }
 
 async function backendCreateFactura(input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string }): Promise<Factura> {
-  const parsed = FacturaInputSchema.parse(input)
+  if (!input?.id_cliente) throw new Error('Cliente obligatorio')
+  const items = Array.isArray(input.items)
+    ? input.items.filter(i => i && i.descripcion && Number(i.cantidad) > 0 && Number(i.precio_unitario) >= 0)
+    : []
+  if (items.length === 0) throw new Error('Mínimo 1 concepto')
   const clientes = readTable('Clientes') as unknown as Cliente[]
-  const cliente = clientes.find(c => c.id_cliente === parsed.id_cliente)
+  const cliente = clientes.find(c => c.id_cliente === input.id_cliente)
   if (!cliente) throw new Error('Cliente no existe')
   const cfg = readConfig()
-  const { items, totals } = buildFactura(parsed.items, cfg.iva_porcentaje, getCurrency(cfg.moneda).decimals)
+  const parsed = { id_cliente: String(input.id_cliente), fecha_emision: input.fecha_emision || todayISO(), fecha_vencimiento: input.fecha_vencimiento || '', notas: input.notas || '', items }
+  const { items: builtItems, totals } = buildFactura(parsed.items, cfg.iva_porcentaje, getCurrency(cfg.moneda).decimals)
   const id_factura = uid('fac_')
   const folio = await withMutex(mutexReadRow, mutexWriteRow, async () => {
     const c = readConfig()
@@ -973,9 +1000,22 @@ async function backendCreateFactura(input: { id_cliente: string; items: { descri
     notas: parsed.notas
   }
   appendRow('Facturas', factura as unknown as Record<string, string | number>)
-  for (const it of items) appendRow('Factura_Items', { id_factura, ...it } as unknown as Record<string, string | number>)
+  for (const it of builtItems) appendRow('Factura_Items', { id_factura, ...it } as unknown as Record<string, string | number>)
   return factura
 }
+```
+
+- [ ] **Step 3b: Verificar tamaño del bundle**
+
+```bash
+pnpm build:script
+ls -la apps/script/dist/Code.js
+```
+
+Expected: el bundle debe quedar **por debajo de ~100KB** (sin zod). Si supera 300KB, hay una importación no deseada arrastrando código — buscar y eliminar. Confirmar también que no aparezca `"zod"` en el bundle:
+
+```bash
+grep -c zod apps/script/dist/Code.js   # esperado: 0
 ```
 
 - [ ] **Step 4: Registrar acciones en el router**
