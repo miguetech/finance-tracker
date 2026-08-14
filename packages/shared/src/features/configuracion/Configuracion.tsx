@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useConfig, useRepo } from '../../store/queries'
 import { useQueryClient } from '@tanstack/react-query'
-import { Card, Button, Input, Select, Dialog, Tooltip } from '../../ui/components'
-import { useToast } from '../../ui/components'
+import { Card, Button, Input, Select, Dialog, Tooltip, useToast } from '../../ui/components'
 import { IconPlus, IconX, IconAlert } from '../../ui/icons'
 import { CURRENCIES } from '../../currency'
 import { TIPO_DOC_OPTIONS, getDocLabel } from '../../taxid'
@@ -31,8 +30,8 @@ export function Configuracion() {
   const errors: Record<string, string> = {}
   if (!form.empresa_nombre.trim()) errors.nombre = 'Nombre obligatorio'
   if (!String(form.prefijo_folio).trim()) errors.prefijo = 'Prefijo obligatorio'
-  if (isNaN(numIva) || numIva < 0 || numIva > 100) errors.iva = 'IVA debe ser un número entre 0 y 100'
-  if (!Number.isInteger(numContador) || numContador < 0) errors.contador = 'Contador debe ser un entero ≥ 0'
+  if (String(form.iva_porcentaje).trim() === '' || isNaN(numIva) || numIva < 0 || numIva > 100) errors.iva = 'IVA debe ser un número entre 0 y 100'
+  if (String(form.contador_folio).trim() === '' || !Number.isInteger(numContador) || numContador < 0) errors.contador = 'Contador debe ser un entero ≥ 0'
 
   const sampleFactura = (): { factura: Factura; items: FacturaItem[] } => {
     const items = [{ descripcion: 'Concepto de ejemplo', cantidad: 1, precio_unitario: 100, importe: 100 }]
