@@ -36,6 +36,16 @@ export interface Factura {
   notas: string
 }
 
+export interface Empleado {
+  id_empleado: string
+  nombre: string
+  rfc: string
+  puesto: string
+  salario: number
+  fecha_ingreso: string
+  activo: string
+}
+
 export interface Gasto {
   id_gasto: string
   fecha: string

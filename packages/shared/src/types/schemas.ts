@@ -48,6 +48,25 @@ export const ProveedorSchema = z.object({
   fecha_registro: z.string().default('')
 })
 
+export const EmpleadoSchema = z.object({
+  id_empleado: z.string().optional(),
+  nombre: z.string().min(1, 'Nombre obligatorio'),
+  rfc: z.string().default(''),
+  puesto: z.string().default(''),
+  salario: z.number().nonnegative('Salario >= 0').default(0),
+  fecha_ingreso: z.string().default(''),
+  activo: z.string().default('true')
+})
+
+export const NominaInputSchema = z.object({
+  id_empleado: z.string().min(1, 'Empleado obligatorio'),
+  mes: z.string().regex(/^\d{4}-\d{2}$/, 'Mes con formato YYYY-MM'),
+  monto: z.number().positive('Monto > 0'),
+  metodo_pago: MetodoPagoSchema.default('Transferencia'),
+  fecha: z.string().default(() => new Date().toISOString().slice(0, 10)),
+  notas: z.string().default('')
+})
+
 export const CxpInputSchema = z.object({
   id_proveedor: z.string().min(1, 'Proveedor obligatorio'),
   folio_documento: z.string().default(''),

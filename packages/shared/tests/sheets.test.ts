@@ -5,9 +5,9 @@ import { SheetsApi } from '../src/sheets/api'
 import { createInitialSpreadsheet } from '../src/sheets/createSpreadsheet'
 
 describe('tables', () => {
-  it('define esquema de 9 tablas', () => {
+  it('define esquema de 10 tablas', () => {
     const names = Object.keys(TABLES)
-    expect(names).toHaveLength(9)
+    expect(names).toHaveLength(10)
     expect(sheetName('Facturas')).toBe('Facturas')
   })
   it('Factura incluye saldo', () => {

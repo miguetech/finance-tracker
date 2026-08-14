@@ -1,4 +1,4 @@
-export type TableName = 'Config' | 'Clientes' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Metas'
+export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Metas'
 
 export interface ColumnSpec {
   key: string
@@ -23,6 +23,15 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'telefono', header: 'telefono', type: S },
     { key: 'direccion', header: 'direccion', type: S },
     { key: 'fecha_registro', header: 'fecha_registro', type: D }
+  ],
+  Empleados: [
+    { key: 'id_empleado', header: 'id_empleado', type: S },
+    { key: 'nombre', header: 'nombre', type: S },
+    { key: 'rfc', header: 'rfc', type: S },
+    { key: 'puesto', header: 'puesto', type: S },
+    { key: 'salario', header: 'salario', type: N },
+    { key: 'fecha_ingreso', header: 'fecha_ingreso', type: D },
+    { key: 'activo', header: 'activo', type: S }
   ],
   Facturas: [
     { key: 'id_factura', header: 'id_factura', type: S },
