@@ -29,7 +29,7 @@ finance-tracker/
 │       └── .env.example    # VITE_OAUTH_CLIENT_ID / VITE_OAUTH_REDIRECT_URI
 ├── packages/
 │   └── shared/             # Lógica de negocio + API Google Sheets + store
-├── docs/                   # Spec funcional y plan de implementación
+├── docs/                   # Spec funcional, plan de implementación y guía de despliegue
 └── FUNCIONALIDADES.md      # Especificación funcional (origen)
 ```
 
@@ -101,6 +101,26 @@ Se genera `apps/web/dist`. Desplegar a **Netlify** o **Vercel** (build: `pnpm -F
 1. **Permisos**: al abrir el popup/dashboard o la web, la app pide acceso a Google (cuenta con acceso al proyecto GCP como test user).
 2. **Creación de la hoja**: si no existe un `spreadsheetId` guardado, se crea la hoja `FinanceTracker` con sus 9 hojas iniciales y datos de configuración.
 3. **Persistencia**: el `spreadsheetId` se guarda en storage (`chrome.storage` en la extensión, `localStorage` en web) bajo la clave `ft_spreadsheet_id`. En usos siguientes se reutiliza sin volver a crear nada.
+
+## Compartir con roles
+
+El dueño puede dar acceso a **otras personas** sin compartir la hoja de cálculo (que queda siempre privada). Se apoya en un backend desplegado en Google Apps Script:
+
+```bash
+pnpm build:script    # genera apps/script/dist/Code.js (backend para Apps Script)
+```
+
+El dueño genera un link en la sección **Compartir** de la app: `tu-app.com/?vista=1&api=<url-del-backend>`. Quien lo abra entra en modo visita con **su cuenta de Google** y ve solo lo que su rol permite.
+
+Qué ve cada rol:
+
+- **admin** (dueño, automático): todo, ver y editar.
+- **asistente**: edita los módulos que el dueño elija.
+- **solo_lectura**: ve todo, no edita nada.
+- **ver_facturas / ver_reportes / ver_gastos / ver_empleados / ver_cuentas**: ve el panel y solo ese módulo (lectura).
+- **personalizado**: módulos elegidos a mano por el dueño.
+
+La guía completa de despliegue (paso a paso para no técnicos, tabla de roles, seguridad y solución de problemas) está en **[docs/DEPLOY_BACKEND.md](docs/DEPLOY_BACKEND.md)**. Reglas clave: nunca compartir la hoja por Google ni dar acceso al proyecto del script; el único link que se comparte es `tu-app.com/?vista=1&api=...`.
 
 ## Testing
 
