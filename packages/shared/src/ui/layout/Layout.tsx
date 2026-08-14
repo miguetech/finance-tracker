@@ -1,14 +1,15 @@
 import React, { useState } from 'react'
 import type { ReactNode } from 'react'
 import { cx } from '../components'
-import { IconDashboard, IconInvoice, IconClient, IconPayables, IconProvider, IconExpense, IconReport, IconSettings, IconMenu, IconLogo } from '../icons'
+import { IconDashboard, IconInvoice, IconClient, IconUsers, IconPayables, IconProvider, IconExpense, IconReport, IconSettings, IconMenu, IconLogo } from '../icons'
 
-export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'cuentas' | 'proveedores' | 'gastos' | 'reportes' | 'configuracion'
+export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuentas' | 'proveedores' | 'gastos' | 'reportes' | 'configuracion'
 
 const NAV: { key: NavKey; label: string; Icon: (p: { className?: string }) => ReactNode }[] = [
   { key: 'dashboard', label: 'Dashboard', Icon: IconDashboard },
   { key: 'facturas', label: 'Facturas', Icon: IconInvoice },
   { key: 'clientes', label: 'Clientes', Icon: IconClient },
+  { key: 'empleados', label: 'Empleados', Icon: IconUsers },
   { key: 'cuentas', label: 'Cuentas por Pagar', Icon: IconPayables },
   { key: 'proveedores', label: 'Proveedores', Icon: IconProvider },
   { key: 'gastos', label: 'Gastos', Icon: IconExpense },

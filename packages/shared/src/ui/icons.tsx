@@ -20,6 +20,9 @@ export function IconInvoice({ className }: { className?: string }) {
 export function IconClient({ className }: { className?: string }) {
   return <Icon className={className}><circle cx="9" cy="8" r="3.5" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" /><circle cx="17.5" cy="9" r="2.5" /><path d="M21 20c0-2.8-1.8-5-4.5-5.4" /></Icon>
 }
+export function IconUsers({ className }: { className?: string }) {
+  return <Icon className={className}><circle cx="9" cy="8" r="3.5" /><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" /><path d="M16 3.5a3.5 3.5 0 0 1 0 7" /><path d="M18 14c2 1 3 2.7 3 4.5" /></Icon>
+}
 export function IconExpense({ className }: { className?: string }) {
   return <Icon className={className}><path d="M12 3v18" /><path d="M17 7c-1-2-5-2-5 0s4 1.5 4 3.5S11.5 14 10 14" /><path d="M7 16c1 2 5 2 5 0" /></Icon>
 }
