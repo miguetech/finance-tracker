@@ -454,7 +454,7 @@ git commit -m "feat: config de backend y CRUD de usuarios en repositorio"
 Crea `apps/script/src/backend.ts`:
 
 ```ts
-declare const ContentService: { createTextOutput: (s: string) => { setMimeType: (m: { JSON: string }) => void } }
+declare const ContentService: { MimeType: { JSON: string }; createTextOutput: (s: string) => { setMimeType: (m: string) => void } }
 
 function respond(obj: unknown) {
   const out = ContentService.createTextOutput(JSON.stringify(obj))
