@@ -5,6 +5,7 @@
   "scripts": {
     "dev:extension": "pnpm --filter @ft/extension dev",
     "dev:web": "pnpm --filter @ft/web dev",
+    "build:script": "pnpm --filter @ft/script build",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @ft/web test:e2e"
