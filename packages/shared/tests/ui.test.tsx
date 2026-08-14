@@ -18,11 +18,11 @@ describe('Button', () => {
   it('renderiza con variante success', () => {
     render(<Button variant="success">Guardar</Button>)
     const btn = screen.getByText('Guardar')
-    expect(btn.className).toContain('bg-green-600')
+    expect(btn.className).toContain('bg-success')
   })
   it('size lg agrega padding grande', () => {
     render(<Button size="lg">Grande</Button>)
-    expect(screen.getByText('Grande').className).toContain('px-5')
+    expect(screen.getByText('Grande').className).toContain('px-6')
   })
   it('iconOnly no renderiza texto', () => {
     const { container } = render(<Button iconOnly aria-label="editar">✎</Button>)
