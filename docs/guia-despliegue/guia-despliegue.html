@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FinanceTracker — Activa el modo Compartir</title>
+<style>
+:root{
+  --lime:#84cc16; --lime-dark:#4d7c0f; --lime-soft:#ecfccb;
+  --ink:#1c1917; --ink-soft:#44403c; --muted:#78716c;
+  --bg:#f5f0e8; --card:#fdfbf6; --line:#e7e5e4;
+  --radius:14px;
+  --shadow:0 1px 2px rgba(28,25,23,.06), 0 8px 24px -12px rgba(28,25,23,.12);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.6}
+a{color:var(--lime-dark)}
+.wrap{display:flex;min-height:100vh}
+aside{width:260px;background:var(--ink);color:#fff;padding:28px 20px;position:sticky;top:0;height:100vh;overflow-y:auto;flex-shrink:0}
+aside .logo{display:flex;align-items:center;gap:10px;margin-bottom:26px}
+aside .logo .mark{width:34px;height:34px;border-radius:10px;background:var(--lime);color:var(--ink);display:grid;place-items:center;font-weight:800;font-size:15px}
+aside nav a{display:block;color:#d6d3d1;text-decoration:none;font-size:13.5px;padding:8px 10px;border-radius:9px;margin-bottom:2px}
+aside nav a:hover{background:rgba(255,255,255,.08);color:#fff}
+aside nav a.sec{margin-top:14px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#a8a29e;padding:6px 10px}
+main{flex:1;max-width:880px;margin:0 auto;padding:48px 28px 80px}
+.kicker{display:inline-flex;align-items:center;gap:6px;background:var(--lime-soft);color:var(--lime-dark);font-weight:700;font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:6px 12px;border-radius:999px}
+h1{font-size:34px;line-height:1.15;margin:16px 0 10px}
+.hero p.sub{color:var(--ink-soft);font-size:16px;max-width:640px}
+.meta{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin:14px 0 8px}
+.meta b{color:var(--ink)}
+section{margin-top:52px}
+section > h2{display:flex;align-items:baseline;gap:14px;font-size:23px;margin:0 0 6px}
+section > h2 span.num{font-size:15px;font-weight:800;color:#fff;background:var(--lime);border-radius:8px;padding:2px 9px}
+section > p.lead{color:var(--ink-soft);margin:0 0 22px;max-width:640px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:26px;margin-bottom:20px}
+.card h3{margin:0 0 12px;font-size:17px}
+.card p{margin:8px 0}
+.card ul,.card ol{margin:8px 0;padding-left:22px}
+.card li{margin:6px 0}
+.figure{margin:0 0 20px}
+.figure img{width:100%;border:1px solid var(--line);border-radius:12px;display:block;background:#fff}
+.figcaption{font-size:13px;color:var(--muted);margin-top:8px}
+.figcaption b{color:var(--ink-soft)}
+.callout{border-radius:12px;padding:14px 16px;margin:16px 0;font-size:14px;border:1px solid}
+.callout.tip{background:var(--lime-soft);border-color:#d9f99d;color:#365314}
+.callout.warn{background:#fef3c7;border-color:#fde68a;color:#78350f}
+.callout.info{background:#e0f2fe;border-color:#bae6fd;color:#0c4a6e}
+.callout b{display:block;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line)}
+th{background:#f5f0e8;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft)}
+tr:last-child td{border-bottom:none}
+td b{color:var(--ink)}
+code{background:#f0ede6;border:1px solid var(--line);border-radius:6px;padding:2px 6px;font-size:13px;font-family:ui-monospace,Menlo,Consolas,monospace}
+kbd{background:#fff;border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:1px 6px;font-size:12px;font-family:ui-monospace,monospace}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:10px 0}
+summary{cursor:pointer;font-weight:600}
+details p{margin:10px 0 4px;font-size:14.5px}
+footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+@media(max-width:900px){
+  .wrap{display:block}
+  aside{width:100%;height:auto;position:static;padding:16px}
+  aside nav a{display:inline-block;margin:2px}
+  aside nav a.sec{display:block}
+  aside .logo{margin-bottom:12px}
+  main{padding:28px 16px 60px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<aside>
+  <div class="logo"><div class="mark">FT</div><div>FinanceTracker</div></div>
+  <nav>
+    <a href="#inicio">Inicio</a>
+    <a href="#antes">Antes de empezar</a>
+    <a class="sec">Parte 1 — Deploy del backend</a>
+    <a href="#paso1">1. Tu app lista</a>
+    <a href="#paso2">2. Abre tu hoja</a>
+    <a href="#paso3">3. Abre Apps Script</a>
+    <a href="#paso4">4. Pega el código</a>
+    <a href="#paso5">5. Crea el deployment</a>
+    <a href="#paso6">6. Configura el web app</a>
+    <a href="#paso7">7. Autoriza el acceso</a>
+    <a href="#paso8">8. Copia la URL</a>
+    <a class="sec">Parte 2 — Comparte en la app</a>
+    <a href="#paso9">9. Abre Compartir</a>
+    <a href="#paso10">10. Pega la URL</a>
+    <a href="#paso11">11. Agrega un colaborador</a>
+    <a href="#paso12">12. Revisa la lista</a>
+    <a href="#paso13">13. Comparte el link</a>
+    <a class="sec">Referencia</a>
+    <a href="#roles">Roles</a>
+    <a href="#seguridad">Seguridad</a>
+    <a href="#faq">Preguntas frecuentes</a>
+  </nav>
+</aside>
+<main>
+  <header id="inicio">
+    <span class="kicker">Guía paso a paso · ~15 min</span>
+    <h1>Activa el modo Compartir en FinanceTracker</h1>
+    <p class="sub">Despliega el backend de una sola vez y da acceso a tus colaboradores para que vean (y, si quieres, editen) solo lo que tú decidas. Tu hoja de cálculo queda <b>privada</b>: nadie más la ve, todo entra por la app.</p>
+    <div class="meta">
+      <span><b>Para:</b> el dueño de la cuenta</span>
+      <span><b>Nivel:</b> sin necesidad de programar</span>
+      <span><b>Resultado:</b> link de acceso por rol</span>
+    </div>
+  </header>
+
+  <section id="antes">
+    <h2><span class="num">0</span>Antes de empezar</h2>
+    <p class="lead">Reúne estos tres elementos y listo.</p>
+    <div class="card">
+      <ul>
+        <li><b>Tu cuenta de Google</b> con la que creaste la hoja de FinanceTracker.</li>
+        <li><b>Tu app desplegada</b> (la dirección web donde la usas, por ejemplo <code>tu-app.com</code>).</li>
+        <li><b>El archivo <code>Code.js</code></b> del backend. Si lo tienes del proyecto, sácalo con el comando <code>pnpm build:script</code>; se genera en <code>apps/script/dist/Code.js</code>.</li>
+      </ul>
+      <div class="callout tip"><b>¿Qué lograrás?</b> Cuando termines, cada colaborador entra con su cuenta de Google y ve únicamente los módulos (facturas, gastos, reportes…) que tú le asignes.</div>
+    </div>
+  </section>
+
+  <section id="paso1">
+    <h2><span class="num">1</span>Tu app ya está lista</h2>
+    <p class="lead">Abre tu app e inicia sesión como dueño. En el menú lateral verás la sección <b>Compartir</b>.</p>
+    <figure class="figure"><img src="captures/app-dashboard.png" alt="Dashboard de FinanceTracker"><figcaption><b>Dashboard.</b> El menú lateral ahora incluye <b>Compartir</b>. Lo usaremos en la Parte 2.</figcaption></figure>
+  </section>
+
+  <section id="paso2">
+    <h2><span class="num">2</span>Abre tu hoja de cálculo</h2>
+    <p class="lead">La hoja <b>FinanceTracker</b> es tu base de datos. Aquí vives tú, el dueño. <b>No la compartas con nadie</b>.</p>
+    <figure class="figure"><img src="captures/hoja-financetracker.png" alt="Hoja de cálculo FinanceTracker"><figcaption><b>Tu hoja.</b> Abre <i>docs.google.com/spreadsheets</i> y entra a tu hoja. Las pestañas (Config, Clientes, Facturas…) son tu base de datos.</figcaption></figure>
+    <div class="callout warn"><b>Regla de oro</b>Nunca compartas esta hoja por Google (ni en modo "solo lectura"). Quien la vea ve todo. El acceso de tus colaboradores pasa por la app, no por la hoja.</div>
+  </section>
+
+  <section id="paso3">
+    <h2><span class="num">3</span>Abre el editor de Apps Script</h2>
+    <p class="lead">Desde la hoja, ve al menú <b>Extensions → Apps Script</b>.</p>
+    <figure class="figure"><img src="captures/apps-script-editor.png" alt="Editor de Apps Script"><figcaption><b>Se abre el editor</b> con un archivo <code>Code.gs</code> vacío (pantalla 1). Es el proyecto del backend, ligado a tu hoja.</figcaption></figure>
+  </section>
+
+  <section id="paso4">
+    <h2><span class="num">4</span>Pega el código del backend</h2>
+    <p class="lead">Borra el contenido del editor y pega todo el archivo <code>Code.js</code> que generaste.</p>
+    <figure class="figure"><img src="captures/apps-script-codigo.png" alt="Código del backend en el editor"><figcaption><b>El código pegado.</b> Debe verse el contenido del backend (es normal que sea largo, ~27&nbsp;KB).</figcaption></figure>
+    <div class="callout info"><b>¿De dónde sale <code>Code.js</code>?</b>Del proyecto: ejecuta <code>pnpm build:script</code> y abre <code>apps/script/dist/Code.js</code>. Es un solo archivo; se copia completo.</div>
+  </section>
+
+  <section id="paso5">
+    <h2><span class="num">5</span>Crea el deployment</h2>
+    <p class="lead">Arriba a la derecha, botón <b>Deploy</b> → <b>New deployment</b>.</p>
+    <figure class="figure"><img src="captures/deploy-menu.png" alt="Menú Deploy"><figcaption><b>Deploy → New deployment.</b> Se abre el diálogo de configuración.</figcaption></figure>
+  </section>
+
+  <section id="paso6">
+    <h2><span class="num">6</span>Configura el web app</h2>
+    <p class="lead">Usa estas tres opciones exactas:</p>
+    <figure class="figure"><img src="captures/deploy-config.png" alt="Configuración del deployment"><figcaption><b>Configuración:</b> tipo <b>Web app</b>, <b>Ejecutar como: tú</b> (el dueño) y <b>Quién tiene acceso: Cualquier persona</b>. Termina con <b>Deploy</b>.</figcaption></figure>
+    <table>
+      <tr><th>Opción</th><th>Valor</th><th>Por qué</th></tr>
+      <tr><td>Tipo</td><td><b>Web app</b></td><td>El backend responde por internet.</td></tr>
+      <tr><td>Ejecutar como</td><td><b>Yo (tu cuenta)</b></td><td>El backend usa tus permisos; así lee tu hoja sin compartirla.</td></tr>
+      <tr><td>Quién tiene acceso</td><td><b>Cualquier persona</b></td><td>Los invitados pueden llamar al backend (los roles se controlan dentro de la app).</td></tr>
+    </table>
+    <div class="callout tip"><b>Importante</b>Esos permisos del backend no son la llave de acceso: la llave es la cuenta de Google de cada persona + el rol que le des en la app.</div>
+  </section>
+
+  <section id="paso7">
+    <h2><span class="num">7</span>Autoriza el acceso</h2>
+    <p class="lead">Google pedirá que autorices el proyecto. Es normal que diga que la app "no está verificada": es tu propio script.</p>
+    <figure class="figure"><img src="captures/deploy-autorizacion.png" alt="Autorización de Google"><figcaption><b>Pantalla de autorización.</b> Haz clic en <b>Advanced</b> → <b>Go to Untitled project (unsafe)</b> → <b>Continue</b> → <b>Continue</b> → <b>Allow</b>.</figcaption></figure>
+    <div class="callout tip"><b>Es tu script, es seguro</b>Google muestra ese aviso para cualquier app personal sin verificar. Como el proyecto es tuyo y tú lo autorizas, es correcto continuar.</div>
+  </section>
+
+  <section id="paso8">
+    <h2><span class="num">8</span>Copia la URL del web app</h2>
+    <p class="lead">Al terminar, Apps Script muestra la URL del deployment. Cópiala completa (termina en <code>/exec</code>).</p>
+    <figure class="figure"><img src="captures/deploy-exito.png" alt="Deploy exitoso con URL"><figcaption><b>Deployment creado.</b> La URL del Web App es lo que pegarás en tu app. Termina en <code>/exec</code>.</figcaption></figure>
+  </section>
+
+  <section id="paso9">
+    <h2><span class="num">9</span>Vuelve a tu app: abre Compartir</h2>
+    <p class="lead">En el menú lateral de tu app, abre la sección <b>Compartir</b>.</p>
+    <figure class="figure"><img src="captures/app-compartir.png" alt="Sección Compartir vacía"><figcaption><b>Sección Compartir.</b> Aquí pegas la URL del backend y administras quién entra.</figcaption></figure>
+  </section>
+
+  <section id="paso10">
+    <h2><span class="num">10</span>Pega la URL del backend y guárdala</h2>
+    <p class="lead">En "URL del backend", pega la URL que copiaste y presiona <b>Guardar</b>.</p>
+    <figure class="figure"><img src="captures/compartir-url.png" alt="URL del backend pegada"><figcaption><b>URL guardada.</b> A partir de aquí tu app sabe dónde está el backend.</figcaption></figure>
+  </section>
+
+  <section id="paso11">
+    <h2><span class="num">11</span>Agrega un colaborador</h2>
+    <p class="lead">Presiona <b>Agregar</b>, escribe su email y elige un <b>rol</b>. Si eliges <b>Asistente</b>, marca también qué módulos puede <b>editar</b>.</p>
+    <figure class="figure"><img src="captures/compartir-agregar.png" alt="Formulario para agregar colaborador"><figcaption><b>Formulario.</b> Email + rol. El asistente edita solo los módulos que marques (clientes, gastos, facturas); el resto solo ve.</figcaption></figure>
+    <div class="callout info"><b>Rol en una línea</b><b>Asistente:</b> crea y edita en sus módulos, nunca borra. <b>Solo lectura / presets:</b> solo ve. Detalle en la sección <a href="#roles">Roles</a>.</div>
+  </section>
+
+  <section id="paso12">
+    <h2><span class="num">12</span>Revisa la lista de usuarios</h2>
+    <p class="lead">El colaborador aparece en la tabla. Ahí puedes cambiar su rol o eliminarlo cuando quieras (pierde el acceso de inmediato).</p>
+    <figure class="figure"><img src="captures/compartir-usuarios.png" alt="Lista de usuarios"><figcaption><b>Colaborador agregado.</b> Visible con su rol y módulos. El botón <b>Eliminar</b> quita el acceso al instante.</figcaption></figure>
+  </section>
+
+  <section id="paso13">
+    <h2><span class="num">13</span>Comparte el link</h2>
+    <p class="lead">Presiona <b>Copiar link</b> y envíalo a la persona. Al abrirlo, elegirá su cuenta de Google y verá solo lo suyo.</p>
+    <figure class="figure"><img src="captures/compartir-link.png" alt="Link copiado"><figcaption><b>Link copiado.</b> La persona lo abre, entra con Google y ve únicamente sus módulos. Tú sigues viendo todo.</figcaption></figure>
+    <div class="callout tip"><b>Listo</b>Repite el paso 11 por cada colaborador. Todos entran con el mismo link; la app los distingue por su cuenta de Google.</div>
+  </section>
+
+  <section id="roles">
+    <h2><span class="num">·</span>Roles disponibles</h2>
+    <p class="lead">Cada usuario tiene un rol. El <b>admin</b> eres tú (el dueño), automático y sin necesidad de configurarlo.</p>
+    <table>
+      <tr><th>Rol</th><th>Ve</th><th>Edita</th></tr>
+      <tr><td><b>Admin (tú)</b></td><td>Todo</td><td>Sí</td></tr>
+      <tr><td><b>Asistente</b></td><td>Sus módulos</td><td>Clientes, gastos y facturas (los que le marques)</td></tr>
+      <tr><td><b>Solo lectura</b></td><td>Todos los módulos</td><td>No</td></tr>
+      <tr><td><b>Ver facturas</b></td><td>Facturas y clientes</td><td>No</td></tr>
+      <tr><td><b>Ver reportes</b></td><td>Dashboard y reportes (KPIs)</td><td>No</td></tr>
+      <tr><td><b>Ver gastos</b></td><td>Gastos</td><td>No</td></tr>
+      <tr><td><b>Ver empleados</b></td><td>Empleados</td><td>No</td></tr>
+      <tr><td><b>Ver cuentas</b></td><td>Proveedores y cuentas por pagar</td><td>No</td></tr>
+      <tr><td><b>Personalizado</b></td><td>Los módulos que tildes</td><td>No</td></tr>
+    </table>
+  </section>
+
+  <section id="seguridad">
+    <h2><span class="num">!</span>Seguridad: 3 reglas que no se negocian</h2>
+    <div class="card">
+      <ol>
+        <li><b>Nunca compartas la hoja de cálculo</b> por Google. Quien la abre ve todo, sin roles.</li>
+        <li><b>Nunca</b> des acceso al <b>proyecto de Apps Script</b> (ni editor ni visor).</li>
+        <li>Comparte <b>solo el link</b> de la app con personas de confianza. Para quitar acceso: borra al usuario en Compartir.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="faq">
+    <h2><span class="num">?</span>Preguntas frecuentes</h2>
+    <details><summary>Veo "Google hasn't verified this app" / "app no verificada"</summary><p>Es normal: es un proyecto personal. En la pantalla de autorización elige <b>Advanced → Go to (unsafe)</b> y continúa. Solo lo ves tú al desplegar.</p></details>
+    <details><summary>El invitado ve "Sin acceso" o una pantalla vacía</summary><p>Verifica que su <b>email exacto</b> esté en la sección Compartir y que la <b>URL del backend</b> sea correcta (termina en <code>/exec</code>). Pídele que abra el link en una ventana normal e inicie sesión con esa cuenta.</p></details>
+    <details><summary>El invitado ve "app in testing mode / access blocked"</summary><p>Es la pantalla de consentimiento de OAuth en modo Testing. Publica la app en Google Cloud Console (<i>APIs & Services → OAuth consent screen → Publish app</i>) o agrega a esa persona como test user.</p></details>
+    <details><summary>¿Cómo quito el acceso a alguien?</summary><p>En Compartir, presiona <b>Eliminar</b> en su fila. Pierde el acceso de inmediato, aunque conserve el link.</p></details>
+    <details><summary>¿Puede un asistente borrar datos?</summary><p>No. El asistente crea y edita en sus módulos; borrar es solo del admin (tú).</p></details>
+    <details><summary>¿Cambia algo en mi uso diario?</summary><p>No. Tú sigues usando la hoja y la app igual que siempre, con acceso total.</p></details>
+  </section>
+
+  <footer>FinanceTracker · Guía de despliegue del modo Compartir · Solo tú ves la hoja; los colaboradores ven lo que tú decidas.</footer>
+</main>
+</div>
+</body>
+</html>
