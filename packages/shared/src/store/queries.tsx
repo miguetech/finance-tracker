@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient
 import type { Repository } from '../data/repository'
 import { useAppStore } from './appStore'
 import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago } from '../types/entities'
+import type { Usuario } from '../roles/roles'
 import { getCurrency, type Currency } from '../currency'
 
 const RepoCtx = createContext<Repository | null>(null)
@@ -131,6 +132,16 @@ export function useRegisterPago() {
 export function useReportes(mes: string) {
   const repo = useRepo()
   return useQuery({ queryKey: ['reportes', mes], queryFn: () => repo.getReportes(mes) })
+}
+
+export function useUsuarios() {
+  const repo = useRepo()
+  const qc = useQueryClient()
+  const q = useQuery({ queryKey: ['usuarios'], queryFn: () => repo.listUsuarios() })
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['usuarios'] })
+  const save = useMutation({ mutationFn: (u: Usuario) => repo.saveUsuario(u), onSuccess: invalidate })
+  const del = useMutation({ mutationFn: (email: string) => repo.deleteUsuario(email), onSuccess: invalidate })
+  return { usuarios: q.data ?? [], isLoading: q.isLoading, saveUsuario: save, deleteUsuario: del }
 }
 
 export function useCategorias(kind: 'gastos' | 'cxp') {
