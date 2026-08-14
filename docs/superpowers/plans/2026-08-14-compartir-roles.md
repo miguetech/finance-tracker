@@ -1926,6 +1926,25 @@ En `FacturaDetail.tsx`: importar `usePerms`; `isAdmin` para "Registrar cobro"; "
 
 `canEdit('cuentas')` para "Nueva CXP"; `isAdmin` para "Eliminar"; "Ver" siempre.
 
+- [ ] **Step 6b: Gating de páginas y quick actions en modo visita**
+
+Además de los botones, el modo visita debe gatear a nivel de página y de accesos rápidos (hallazgo del review de Task 10: `filterNav` solo oculta el sidebar; los quick actions del Dashboard y los renders de página de `VisitorInner` no están gateados):
+
+En `apps/web/src/App.tsx` (`VisitorInner`), cada render de página requiere `canView`:
+
+```tsx
+          {nav === 'dashboard' && <Dashboard mes={mes} onNavigate={navigate} />}
+          {nav === 'facturas' && canView('facturas') && <Facturas />}
+          {nav === 'clientes' && canView('clientes') && <Clientes />}
+          {nav === 'empleados' && canView('empleados') && <Empleados />}
+          {nav === 'gastos' && canView('gastos') && <Gastos />}
+          {nav === 'proveedores' && canView('proveedores') && <Proveedores />}
+          {nav === 'cuentas' && canView('cuentas') && <CuentasPagar />}
+          {nav === 'reportes' && canView('reportes') && <Reportes mes={mes} setMes={cambiarMes} />}
+```
+
+Y gatear las acciones rápidas del `Dashboard` por permiso: en `packages/shared/src/features/dashboard/Dashboard.tsx`, envolver cada botón/acción rápida (`onNavigate('facturas'|'gastos'|'cuentas')`) con `usePerms().canView(...)` (leer el archivo y aplicar el patrón de Task 12 al Dashboard; si el Dashboard no usa `onNavigate` para escribir, confirmar y anotar en el reporte).
+
 - [ ] **Step 7: Typecheck + build + tests**
 
 ```bash
@@ -1933,12 +1952,12 @@ pnpm --filter @ft/web build
 pnpm --filter @ft/shared test
 ```
 
-Expected: sin errores, tests pasan.
+Expected: sin errores, tests pasan (ahora sí compila el build web completo, con `Compartir`/`IconShare` del Task 11).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add packages/shared/src/features
+git add packages/shared/src/features apps/web/src/App.tsx
 git commit -m "feat: gating de solo-lectura por permisos en features"
 ```
 
