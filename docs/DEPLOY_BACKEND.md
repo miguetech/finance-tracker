@@ -152,6 +152,12 @@ Sigue estas reglas siempre:
 
 ---
 
+## Concurrencia de folios
+
+Si dos personas emiten facturas al mismo tiempo, el número de folio podría duplicarse. El backend serializa sus propias escrituras con un candado de Apps Script (`LockService`) alrededor de la asignación de folios, de modo que las peticiones simultáneas al backend no chocan entre sí. Aún queda una ventana mínima de carrera si tú, como dueño, emites una factura **directamente desde tu sesión** (sin pasar por el backend) mientras otra persona la emite por el backend. Para evitar el problema, emite desde un solo lugar a la vez.
+
+---
+
 ## 6. Solución de problemas
 
 ### El invitado ve "Sin acceso" o una pantalla vacía

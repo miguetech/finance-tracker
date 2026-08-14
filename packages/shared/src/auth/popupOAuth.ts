@@ -20,7 +20,7 @@ export function popupOAuth(options: { clientId: string; redirectUri: string; pro
       const exp = String(Date.now() + expiresIn * 1000 - 60000)
       if (access) window.localStorage.setItem(TOKEN_KEY, access)
       if (idToken) window.localStorage.setItem(ID_TOKEN_KEY, idToken)
-      window.localStorage.setItem(EXPIRES_KEY, exp)
+      if (access || idToken) window.localStorage.setItem(EXPIRES_KEY, exp)
       return { access, idToken }
     } catch { return { access: null, idToken: null } }
   }
@@ -28,6 +28,15 @@ export function popupOAuth(options: { clientId: string; redirectUri: string; pro
   function storedIdToken(): string | null {
     try {
       const t = window.localStorage.getItem(ID_TOKEN_KEY)
+      const exp = Number(window.localStorage.getItem(EXPIRES_KEY) ?? 0)
+      if (t && exp > Date.now()) return t
+    } catch { /* storage no disponible */ }
+    return null
+  }
+
+  function storedAccessToken(): string | null {
+    try {
+      const t = window.localStorage.getItem(TOKEN_KEY)
       const exp = Number(window.localStorage.getItem(EXPIRES_KEY) ?? 0)
       if (t && exp > Date.now()) return t
     } catch { /* storage no disponible */ }
@@ -68,7 +77,7 @@ export function popupOAuth(options: { clientId: string; redirectUri: string; pro
         window.history.replaceState({}, document.title, window.location.pathname)
         return got.access
       }
-      const cached = (() => { try { return window.localStorage.getItem(TOKEN_KEY) } catch { return null } })()
+      const cached = storedAccessToken()
       if (cached) return cached
       const refreshed = await silentRefresh()
       if (refreshed.access) return refreshed.access

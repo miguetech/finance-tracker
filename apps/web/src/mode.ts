@@ -6,11 +6,20 @@ export function saveShareParams(apiUrl: string): void {
 
 export function loadShareParams(): { apiUrl: string } | null {
   const q = new URLSearchParams(window.location.search)
-  if (q.get('vista') === '1' && q.get('api')) {
-    const p = { apiUrl: String(q.get('api')) }
-    sessionStorage.setItem(KEY, JSON.stringify(p))
-    window.history.replaceState({}, document.title, window.location.pathname)
-    return p
+  const api = q.get('api')
+  if (q.get('vista') === '1' && api) {
+    let valid = false
+    try {
+      const url = new URL(api)
+      valid = url.protocol === 'https:' && url.hostname === 'script.google.com'
+    } catch { valid = false }
+    if (valid) {
+      const p = { apiUrl: api }
+      sessionStorage.setItem(KEY, JSON.stringify(p))
+      window.history.replaceState({}, document.title, window.location.pathname)
+      return p
+    }
+    return null
   }
   const raw = sessionStorage.getItem(KEY)
   if (!raw) return null

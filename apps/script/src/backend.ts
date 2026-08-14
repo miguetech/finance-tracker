@@ -15,6 +15,7 @@ declare const Session: any
 declare const ContentService: any
 declare const UrlFetchApp: any
 declare const CacheService: any
+declare const LockService: any
 
 const g = globalThis as Record<string, unknown>
 const tokenCache = new Map<string, { email: string; at: number }>()
@@ -101,7 +102,7 @@ async function verifyIdToken(idToken: string): Promise<string> {
   if (cached && Date.now() - cached.at < 10 * 60 * 1000) return cached.email
   const res = UrlFetchApp.fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`)
   const body = JSON.parse(res.getContentText())
-  if (!body.email || body.email_verified !== true) throw new Error('Sesión inválida')
+  if (!body.email || String(body.email_verified) !== 'true') throw new Error('Sesión inválida')
   tokenCache.set(idToken, { email: String(body.email), at: Date.now() })
   return String(body.email)
 }
@@ -197,12 +198,19 @@ async function backendCreateFactura(input: { id_cliente: string; items: { descri
   const parsed = { id_cliente: String(input.id_cliente), fecha_emision: input.fecha_emision || todayISO(), fecha_vencimiento: input.fecha_vencimiento || '', notas: input.notas || '', items }
   const { items: builtItems, totals } = buildFactura(parsed.items, cfg.iva_porcentaje, getCurrency(cfg.moneda).decimals)
   const id_factura = uid('fac_')
-  const folio = await withMutex(mutexReadRow, mutexWriteRow, async () => {
-    const c = readConfig()
-    const folioN = c.contador_folio
-    writeConfig({ ...c, contador_folio: c.contador_folio + 1 })
-    return `${expandFolioTemplate(c.prefijo_folio, parsed.fecha_emision)}${String(folioN).padStart(3, '0')}`
-  })
+  const lock = LockService.getScriptLock()
+  lock.waitLock(30000)
+  let folio = ''
+  try {
+    folio = await withMutex(mutexReadRow, mutexWriteRow, async () => {
+      const c = readConfig()
+      const folioN = c.contador_folio
+      writeConfig({ ...c, contador_folio: c.contador_folio + 1 })
+      return `${expandFolioTemplate(c.prefijo_folio, parsed.fecha_emision)}${String(folioN).padStart(3, '0')}`
+    })
+  } finally {
+    lock.releaseLock()
+  }
   const factura: Factura = {
     id_factura,
     folio,
@@ -255,10 +263,13 @@ async function route(action: string, payload: any, p: Perms): Promise<unknown> {
     case 'listCxp':
       if (!p.canView('cuentas')) return denied()
       return readTable('Cuentas_Pagar')
-    case 'listPagos':
+    case 'listPagos': {
       if (!p.canView('cuentas') && !p.canView('facturas')) return denied()
-      const pagos = readTable('Pagos') as unknown as Pago[]
-      return payload ? pagos.filter(p => p.id_origen === payload) : pagos
+      const all = readTable('Pagos') as unknown as Pago[]
+      if (payload) return all.filter(pago => pago.id_origen === payload)
+      if (p.canView('cuentas')) return all
+      return all.filter(pago => pago.tipo === 'cobro')
+    }
     case 'getReportes': {
       if (!p.canView('reportes') && !p.canView('dashboard')) return denied()
       const mes = String(payload ?? '')
@@ -272,7 +283,8 @@ async function route(action: string, payload: any, p: Perms): Promise<unknown> {
       return { kpis, categorias, top }
     }
     case 'getCategorias': {
-      if (!p.canView('gastos') && !p.canView('cuentas')) return denied()
+      const kind = payload === 'cxp' ? 'cuentas' : 'gastos'
+      if (!p.canView(kind)) return denied()
       const cfg = readConfig()
       const raw = payload === 'cxp' ? cfg.categorias_cxp : cfg.categorias_gastos
       return raw.split(',').map(s => s.trim()).filter(Boolean)

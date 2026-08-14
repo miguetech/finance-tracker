@@ -5,6 +5,8 @@ import { useToast } from '../../ui/components'
 import { IconPlus, IconTrash } from '../../ui/icons'
 import { MODULE_KEYS, type ModuleKey, type Usuario, type UserRole } from '../../roles/roles'
 
+const EDIT_MODULES: readonly ModuleKey[] = ['clientes', 'gastos', 'facturas']
+
 const ROLES: { value: UserRole; label: string }[] = [
   { value: 'solo_lectura', label: 'Solo lectura (todo)' },
   { value: 'ver_facturas', label: 'Ver facturas' },
@@ -18,7 +20,7 @@ const ROLES: { value: UserRole; label: string }[] = [
 
 function copyToClipboard(text: string) { navigator.clipboard?.writeText(text) }
 
-function ModulePicker({ value, onChange }: { value: string; onChange: (csv: string) => void }) {
+function ModulePicker({ value, onChange, allowed = MODULE_KEYS }: { value: string; onChange: (csv: string) => void; allowed?: readonly ModuleKey[] }) {
   const set = new Set(value.split(',').map(s => s.trim()).filter(Boolean))
   const toggle = (m: ModuleKey) => {
     const next = new Set(set)
@@ -27,7 +29,7 @@ function ModulePicker({ value, onChange }: { value: string; onChange: (csv: stri
   }
   return (
     <div className="flex flex-wrap gap-2">
-      {MODULE_KEYS.map(m => (
+      {allowed.map(m => (
         <button key={m} type="button" onClick={() => toggle(m)}
           className={cx('px-2 py-1 rounded-md text-xs border', set.has(m) ? 'bg-primary text-white border-primary' : 'border-gray-300 text-gray-600')}>
           {m}
@@ -62,7 +64,7 @@ function AddUserForm({ onClose }: { onClose: () => void }) {
           <div className="space-y-2">
             <div><div className="text-xs font-semibold mb-1">Ver</div><ModulePicker value={ver} onChange={setVer} /></div>
             {rol === 'asistente' && (
-              <div><div className="text-xs font-semibold mb-1">Editar</div><ModulePicker value={editar} onChange={setEditar} /></div>
+              <div><div className="text-xs font-semibold mb-1">Editar</div><ModulePicker value={editar} onChange={setEditar} allowed={EDIT_MODULES} /></div>
             )}
           </div>
         )}
