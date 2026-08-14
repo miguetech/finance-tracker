@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { useConfig, useRepo } from '../../store/queries'
 import { useQueryClient } from '@tanstack/react-query'
-import { Card, Button, Input, Select } from '../../ui/components'
+import { Card, Button, Input, Select, Dialog } from '../../ui/components'
 import { useToast } from '../../ui/components'
+import { IconPlus, IconX } from '../../ui/icons'
 import { CURRENCIES } from '../../currency'
 import { TIPO_DOC_OPTIONS, getDocLabel } from '../../taxid'
 import type { Config } from '../../types/entities'
@@ -67,10 +68,52 @@ export function Configuracion() {
         </div>
       </Card>
       <Card title="Categorías">
-        <div><label className="text-xs text-gray-500">Gastos (separadas por coma)</label><Input value={form.categorias_gastos} onChange={set('categorias_gastos')} /></div>
-        <div className="mt-3"><label className="text-xs text-gray-500">Cuentas por pagar (separadas por coma)</label><Input value={form.categorias_cxp} onChange={set('categorias_cxp')} /></div>
+        <div className="space-y-5">
+          <CategoriasEditor title="Gastos" value={form.categorias_gastos} onChange={v => setForm(f => f && ({ ...f, categorias_gastos: v }))} />
+          <CategoriasEditor title="Cuentas por pagar" value={form.categorias_cxp} onChange={v => setForm(f => f && ({ ...f, categorias_cxp: v }))} />
+        </div>
       </Card>
       <Button onClick={submit}>Guardar configuración</Button>
+    </div>
+  )
+}
+
+function CategoriasEditor({ title, value, onChange }: { title: string; value: string; onChange: (s: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [nueva, setNueva] = useState('')
+  const [error, setError] = useState('')
+  const items = value.split(',').map(s => s.trim()).filter(Boolean)
+
+  const add = () => {
+    const v = nueva.trim()
+    if (!v) { setError('Escribe una categoría'); return }
+    if (items.some(i => i.toLowerCase() === v.toLowerCase())) { setError('Ya existe esa categoría'); return }
+    onChange([...items, v].join(','))
+    setNueva(''); setError(''); setOpen(false)
+  }
+
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground mb-2">{title}</div>
+      <div className="flex flex-wrap gap-2">
+        {items.map(c => (
+          <span key={c} className="inline-flex items-center gap-1.5 bg-primary-soft text-primary rounded-full pl-3 pr-1.5 py-1 text-sm font-medium">
+            {c}
+            <button type="button" onClick={() => onChange(items.filter(x => x !== c).join(','))}
+              className="p-0.5 rounded-full hover:bg-primary/15 text-primary" aria-label={`Quitar ${c}`}>
+              <IconX className="w-3.5 h-3.5" />
+            </button>
+          </span>
+        ))}
+        <Button variant="outline" size="sm" icon={<IconPlus className="w-4 h-4" />} onClick={() => setOpen(true)}>Agregar</Button>
+      </div>
+      <Dialog open={open} onClose={() => { setOpen(false); setError(''); setNueva('') }} title={`Agregar categoría (${title})`}
+        footer={<>
+          <Button variant="outline" onClick={() => { setOpen(false); setError(''); setNueva('') }}>Cancelar</Button>
+          <Button onClick={add}>Agregar</Button>
+        </>}>
+        <Input value={nueva} onChange={e => { setNueva(e.target.value); setError('') }} placeholder="Nueva categoría…" error={error || undefined} autoFocus />
+      </Dialog>
     </div>
   )
 }
