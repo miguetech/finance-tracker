@@ -3,7 +3,11 @@ import { serializeRow, deserializeRow, migrateFacturaLegacyRow } from '../../../
 import { configFromRows, configToRows } from '../../../packages/shared/src/sheets/createSpreadsheet'
 import { permsFor, parseModules, type Perms, type PermsInfo, type Usuario, MODULE_KEYS } from '../../../packages/shared/src/roles/roles'
 import { kpisForMonth, gastosPorCategoria, topClientes } from '../../../packages/shared/src/calc/kpis'
-import { estadoDesdeSaldo } from '../../../packages/shared/src/calc/invoice'
+import { estadoDesdeSaldo, buildFactura, round2 } from '../../../packages/shared/src/calc/invoice'
+import { expandFolioTemplate } from '../../../packages/shared/src/calc/folio'
+import { uid } from '../../../packages/shared/src/lib/uid'
+import { withMutex } from '../../../packages/shared/src/sheets/mutex'
+import { getCurrency } from '../../../packages/shared/src/currency'
 import type { Config, Factura, Gasto, Cliente, CuentaPagar, Pago, Empleado, Proveedor, FacturaItem } from '../../../packages/shared/src/types/entities'
 
 declare const SpreadsheetApp: any
@@ -146,6 +150,78 @@ function listFacturasFiltro(filtro: { estado?: string; mes?: string }): Factura[
   return rows
 }
 
+function todayISO(): string { return new Date().toISOString().slice(0, 10) }
+
+function backendSaveCliente(c: Cliente): Cliente {
+  if (!c?.nombre || !String(c.nombre).trim()) throw new Error('Nombre obligatorio')
+  const parsed: Cliente = {
+    id_cliente: c.id_cliente || uid('cli_'),
+    nombre: String(c.nombre),
+    rfc: c.rfc || '',
+    email: c.email || '',
+    telefono: c.telefono || '',
+    direccion: c.direccion || '',
+    fecha_registro: c.fecha_registro || todayISO()
+  }
+  insertOrReplace('Clientes', 'id_cliente', parsed as unknown as Record<string, string | number>)
+  return parsed
+}
+
+function backendSaveGasto(ga: Gasto): Gasto {
+  if (!ga?.descripcion || !String(ga.descripcion).trim()) throw new Error('Descripción obligatoria')
+  const monto = Number(ga.monto)
+  if (!Number.isFinite(monto) || monto < 0) throw new Error('Monto inválido')
+  const parsed: Gasto = {
+    id_gasto: ga.id_gasto || uid('gas_'),
+    fecha: ga.fecha || todayISO(),
+    categoria: ga.categoria || '',
+    descripcion: String(ga.descripcion),
+    monto: round2(monto),
+    metodo_pago: ['Efectivo', 'Transferencia', 'Tarjeta'].includes(ga.metodo_pago) ? ga.metodo_pago : 'Efectivo',
+    proveedor: ga.proveedor || ''
+  }
+  insertOrReplace('Gastos', 'id_gasto', parsed as unknown as Record<string, string | number>)
+  return parsed
+}
+
+async function backendCreateFactura(input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string }): Promise<Factura> {
+  if (!input?.id_cliente) throw new Error('Cliente obligatorio')
+  const items = Array.isArray(input.items)
+    ? input.items.filter(i => i && i.descripcion && Number(i.cantidad) > 0 && Number(i.precio_unitario) >= 0)
+    : []
+  if (items.length === 0) throw new Error('Mínimo 1 concepto')
+  const clientes = readTable('Clientes') as unknown as Cliente[]
+  const cliente = clientes.find(c => c.id_cliente === input.id_cliente)
+  if (!cliente) throw new Error('Cliente no existe')
+  const cfg = readConfig()
+  const parsed = { id_cliente: String(input.id_cliente), fecha_emision: input.fecha_emision || todayISO(), fecha_vencimiento: input.fecha_vencimiento || '', notas: input.notas || '', items }
+  const { items: builtItems, totals } = buildFactura(parsed.items, cfg.iva_porcentaje, getCurrency(cfg.moneda).decimals)
+  const id_factura = uid('fac_')
+  const folio = await withMutex(mutexReadRow, mutexWriteRow, async () => {
+    const c = readConfig()
+    const folioN = c.contador_folio
+    writeConfig({ ...c, contador_folio: c.contador_folio + 1 })
+    return `${expandFolioTemplate(c.prefijo_folio, parsed.fecha_emision)}${String(folioN).padStart(3, '0')}`
+  })
+  const factura: Factura = {
+    id_factura,
+    folio,
+    id_cliente: parsed.id_cliente,
+    nombre_cliente: String(cliente.nombre),
+    fecha_emision: parsed.fecha_emision,
+    fecha_vencimiento: parsed.fecha_vencimiento,
+    subtotal: totals.subtotal,
+    iva: totals.iva,
+    total: totals.total,
+    saldo: totals.total,
+    fecha_pago: '',
+    notas: parsed.notas
+  }
+  appendRow('Facturas', factura as unknown as Record<string, string | number>)
+  for (const it of builtItems) appendRow('Factura_Items', { id_factura, ...it } as unknown as Record<string, string | number>)
+  return factura
+}
+
 async function route(action: string, payload: any, p: Perms): Promise<unknown> {
   switch (action) {
     case 'getPerms': return permsInfo(p)
@@ -201,6 +277,15 @@ async function route(action: string, payload: any, p: Perms): Promise<unknown> {
       const raw = payload === 'cxp' ? cfg.categorias_cxp : cfg.categorias_gastos
       return raw.split(',').map(s => s.trim()).filter(Boolean)
     }
+    case 'saveCliente':
+      if (!p.canEdit('clientes')) return denied()
+      return backendSaveCliente(payload)
+    case 'saveGasto':
+      if (!p.canEdit('gastos')) return denied()
+      return backendSaveGasto(payload)
+    case 'createFactura':
+      if (!p.canEdit('facturas')) return denied()
+      return backendCreateFactura(payload)
     default:
       return denied()
   }
