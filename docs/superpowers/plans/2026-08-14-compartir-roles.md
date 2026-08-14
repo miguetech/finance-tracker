@@ -256,6 +256,8 @@ Expected: FAIL con "Property 'Usuarios' does not exist on type ... TABLES"
 
 - [ ] **Step 3: Implement**
 
+Primero, ajustar las 2 assertions existentes en `sheets.test.ts` que cuentan tablas (agregar `Usuarios`): el `describe('tables')` pasa de `toHaveLength(10)` a `toHaveLength(11)`, y el primer test de `ensureTables` incluye `'Usuarios'` en la lista hardcodeada de hojas existentes (ver el archivo y actualizar ambos valores; el resto del test queda igual).
+
 En `tables.ts`:
 
 ```ts
@@ -293,7 +295,12 @@ export * from './roles/roles'
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @ft/shared test -- sheets`
-Expected: PASS
+Expected: PASS (incluye las 2 assertions actualizadas a 11 tablas)
+
+- [ ] **Step 4b: Correr la suite completa**
+
+Run: `pnpm --filter @ft/shared test`
+Expected: PASS completo
 
 - [ ] **Step 5: Commit**
 
