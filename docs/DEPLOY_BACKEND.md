@@ -80,7 +80,8 @@ pnpm build:script
    - **Execute as (Ejecutar como)**: **Me** (tú, el dueño). Así el backend siempre actúa con tu identidad y nadie más necesita acceso a la hoja.
    - **Who has access (Quién tiene acceso)**: **Anyone** (cualquier persona). No te preocupes: aunque cualquiera pueda "llamar a la puerta", **sin tu link y sin un rol asignado no ve nada**.
 4. Click en **Deploy**.
-5. Copia la **URL del deployment** (termina en `/exec`). Se parece a `https://script.google.com/macros/s/AKfycb.../exec`.
+5. Google te mostrará una **pantalla de autorización** pidiendo que permitas al script acceder a tu hoja de cálculo. **Acéptala** (elige tu cuenta y *Allow*). Si te avisa que *"Google has not verified this app"*, es **normal** para un script personal: dale a *Advanced → Go to ... (unsafe)*. Esto solo lo haces tú, el dueño, en este paso.
+6. Copia la **URL del deployment** (termina en `/exec`). Se parece a `https://script.google.com/macros/s/AKfycb.../exec`.
 
 **[CAPTURA 5: pantalla de New deployment con la URL del Web app]**
 
@@ -93,6 +94,13 @@ pnpm build:script
 3. En "URL del backend", pega la URL del paso anterior y dale **Guardar**.
 
 **[CAPTURA 6: sección Compartir con la URL del backend guardada]**
+
+> **IMPORTANTE — la pantalla de Google que ve el invitado:** tu app usa el inicio de sesión de Google, y en la configuración de Google Cloud la pantalla de consentimiento suele estar en **modo Testing** (solo tú apareces como usuario de prueba). Eso haría que un invitado vea *"app in testing mode / access blocked"* al entrar. Para que las personas invitadas puedan entrar:
+>
+> - En **Google Cloud Console** → *APIs & Services → OAuth consent screen*, publica la app (botón **Publish app**) para que cualquiera con tu link pueda usar el inicio de sesión, **o**
+> - Agrega cada persona invitada como **test user** en esa misma pantalla (solo sirve para equipos muy pequeños).
+>
+> Publicar la app es lo recomendado. Hazlo **antes** de compartir el link.
 
 ### Paso 5: Copiar el link para invitar personas
 
@@ -150,6 +158,9 @@ Sigue estas reglas siempre:
 - Verifica que su **email exacto** está en la sección Compartir (el backend compara el email de su cuenta de Google).
 - Verifica que la **URL del backend** guardada en la sección Compartir es la correcta (termina en `/exec`).
 - Pide que abra el link **en una ventana normal**, sin modo incógnito, e inicie sesión con esa cuenta.
+
+### El invitado ve "app in testing mode / access blocked"
+- Es la **pantalla de consentimiento de OAuth** en modo Testing. Publica la app en Google Cloud Console (*APIs & Services → OAuth consent screen → Publish app*) o agrega a esa persona como **test user**. Ver el aviso del Paso 4.
 
 ### El link abre la app pero pide iniciar sesión en Google
 - Es normal: la persona entra con **su** cuenta de Google. El backend la reconoce por el email.

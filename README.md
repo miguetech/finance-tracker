@@ -117,10 +117,12 @@ Qué ve cada rol:
 - **admin** (dueño, automático): todo, ver y editar.
 - **asistente**: edita los módulos que el dueño elija.
 - **solo_lectura**: ve todo, no edita nada.
-- **ver_facturas / ver_reportes / ver_gastos / ver_empleados / ver_cuentas**: ve el panel y solo ese módulo (lectura).
+- **ver_facturas / ver_reportes / ver_gastos / ver_empleados / ver_cuentas**: ve el panel y sus módulos asociados (lectura). Por ejemplo, **ver_facturas** incluye también **clientes**; **ver_cuentas** incluye proveedores y cuentas por pagar.
 - **personalizado**: módulos elegidos a mano por el dueño.
 
 La guía completa de despliegue (paso a paso para no técnicos, tabla de roles, seguridad y solución de problemas) está en **[docs/DEPLOY_BACKEND.md](docs/DEPLOY_BACKEND.md)**. Reglas clave: nunca compartir la hoja por Google ni dar acceso al proyecto del script; el único link que se comparte es `tu-app.com/?vista=1&api=...`.
+
+> **Antes de invitar:** la pantalla de consentimiento de OAuth en Google Cloud suele estar en **modo Testing**, lo que bloquea a los invitados ("app in testing mode / access blocked"). Publica la app en *APIs & Services → OAuth consent screen → Publish app* (o agrega a cada invitado como test user).
 
 ## Testing
 
