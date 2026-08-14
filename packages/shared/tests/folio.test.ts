@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { expandFolioTemplate, invalidFolioTokens, FOLIO_TOKENS } from '../src/calc/folio'
+import { ConfigSchema } from '../src/types/schemas'
+import { configFromRows } from '../src/sheets/createSpreadsheet'
 
 describe('folio template', () => {
   it('FOLIO_TOKENS expone los 4 tokens', () => {
@@ -24,5 +26,20 @@ describe('folio template', () => {
     expect(invalidFolioTokens('FAC-{HOLA}-')).toEqual(['{HOLA}'])
     expect(invalidFolioTokens('FAC-{YYYY}-{MM}-')).toEqual([])
     expect(invalidFolioTokens('FAC-{YY}-{BANANA}')).toEqual(['{BANANA}'])
+  })
+})
+
+describe('config emisor', () => {
+  it('ConfigSchema defaults de campos emisor vacíos', () => {
+    const c = ConfigSchema.parse({ empresa_nombre: 'X', prefijo_folio: 'FAC-' })
+    expect(c.empresa_cp).toBe('')
+    expect(c.empresa_ciudad).toBe('')
+    expect(c.empresa_pais).toBe('')
+  })
+  it('configFromRows lee CP, ciudad y país', () => {
+    const c = configFromRows([['empresa_cp', '45010'], ['empresa_ciudad', 'Guadalajara'], ['empresa_pais', 'México']])
+    expect(c.empresa_cp).toBe('45010')
+    expect(c.empresa_ciudad).toBe('Guadalajara')
+    expect(c.empresa_pais).toBe('México')
   })
 })

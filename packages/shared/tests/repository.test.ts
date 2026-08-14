@@ -129,6 +129,21 @@ describe('repository', () => {
     expect(f2.folio).toBe('FAC-002')
   })
 
+  it('createFactura expande plantilla en folio', async () => {
+    const { repo } = setup()
+    const cfg = await repo.getConfig()
+    await repo.saveConfig({ ...cfg, prefijo_folio: 'FAC-{YYYY}-' })
+    const cli = await repo.saveCliente({ nombre: 'ACME' } as never)
+    const f = await repo.createFactura({
+      id_cliente: cli.id_cliente,
+      items: [{ descripcion: 'web', cantidad: 1, precio_unitario: 1000 }],
+      fecha_emision: '2026-08-11',
+      fecha_vencimiento: '',
+      notas: ''
+    })
+    expect(f.folio).toBe('FAC-2026-001')
+  })
+
   it('registerPago reduce saldo y deja pagada', async () => {
     const { repo } = setup()
     const cli = await repo.saveCliente({ nombre: 'A' } as never)

@@ -88,6 +88,9 @@ export interface Config {
   empresa_telefono: string
   empresa_email: string
   empresa_logo: string
+  empresa_cp: string
+  empresa_ciudad: string
+  empresa_pais: string
   prefijo_folio: string
   contador_folio: number
   moneda: string

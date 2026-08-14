@@ -7,6 +7,7 @@ import { KEYS, type StorageAdapter } from './storage'
 import { uid } from '../lib/uid'
 import { buildFactura, estadoDesdeSaldo, round2 } from '../calc/invoice'
 import { kpisForMonth, topClientes, gastosPorCategoria, type Kpis } from '../calc/kpis'
+import { expandFolioTemplate } from '../calc/folio'
 import type { Config, Cliente, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago } from '../types/entities'
 import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema } from '../types/schemas'
 
@@ -123,7 +124,7 @@ export function createRepository(ctx: RepoContext) {
           const c = await readConfig()
           const folioN = c.contador_folio
           await writeConfig({ ...c, contador_folio: c.contador_folio + 1 })
-          return `${c.prefijo_folio}${String(folioN).padStart(3, '0')}`
+          return `${expandFolioTemplate(c.prefijo_folio, parsed.fecha_emision)}${String(folioN).padStart(3, '0')}`
         }
       )
       const factura: Factura = {

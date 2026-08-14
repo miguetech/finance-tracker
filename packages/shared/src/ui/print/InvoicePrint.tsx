@@ -9,7 +9,8 @@ export function InvoicePrint({ factura, items, config }: { factura: Factura; ite
         <div>
           <h1 className="text-xl font-bold">{config.empresa_nombre}</h1>
           <p>{config.empresa_rfc}</p>
-          <p>{config.empresa_direccion}</p>
+          <p>{[config.empresa_direccion, config.empresa_cp].filter(Boolean).join(', ')}</p>
+          <p>{[config.empresa_ciudad, config.empresa_pais].filter(Boolean).join(', ')}</p>
           <p>{config.empresa_telefono} {config.empresa_email}</p>
         </div>
         {config.empresa_logo && <img src={config.empresa_logo} alt="logo" className="h-16" />}
