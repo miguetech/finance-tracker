@@ -9,11 +9,8 @@ export interface RemoteRepositoryCtx {
 export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & { getPerms(): Promise<PermsInfo> } {
   async function call<T>(action: string, payload: unknown = {}): Promise<T> {
     const idToken = await ctx.getIdToken()
-    const res = await fetch(ctx.apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ id_token: idToken, action, payload })
-    })
+    const qs = new URLSearchParams({ id_token: idToken, action, payload: JSON.stringify(payload) })
+    const res = await fetch(`${ctx.apiUrl}?${qs.toString()}`, { method: 'GET' })
     const data = (await res.json()) as { ok: boolean; data?: T; error?: string }
     if (!data.ok) throw new Error(data.error ?? 'Error')
     return data.data as T

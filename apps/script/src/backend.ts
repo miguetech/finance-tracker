@@ -303,12 +303,11 @@ async function route(action: string, payload: any, p: Perms): Promise<unknown> {
   }
 }
 
-async function handle(e: any): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+async function routeAction(action: string, idToken: string, payload: unknown): Promise<{ ok: boolean; data?: unknown; error?: string }> {
   try {
-    const body = JSON.parse(e.postData.contents)
-    const email = await verifyIdToken(body.id_token)
+    const email = await verifyIdToken(idToken)
     const p = permsFor(email, ownerEmail(), usuarioFor(email))
-    const data = await route(body.action, body.payload, p)
+    const data = await route(action, payload, p)
     return { ok: true, data }
   } catch (err: any) {
     return { ok: false, error: err?.message ?? 'Error interno' }
@@ -321,12 +320,19 @@ function respond(obj: unknown) {
   return out
 }
 
-function doGet() {
-  return respond({ ok: true, service: 'ft-backend' })
+async function doGet(e: any) {
+  const p = e?.parameter ?? {}
+  if (!p.action) return respond({ ok: true, service: 'ft-backend' })
+  let payload: unknown = {}
+  if (p.payload) {
+    try { payload = JSON.parse(p.payload) } catch { payload = String(p.payload) }
+  }
+  return respond(await routeAction(p.action, String(p.id_token ?? ''), payload))
 }
 
 async function doPost(e: any) {
-  return respond(await handle(e))
+  const body = JSON.parse(e.postData.contents)
+  return respond(await routeAction(body.action, body.id_token, body.payload))
 }
 
 g.doGet = doGet

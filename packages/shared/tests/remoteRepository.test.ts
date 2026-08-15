@@ -8,15 +8,18 @@ describe('createRemoteRepository', () => {
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
   })
-  it('envía id_token y action; parsea data', async () => {
+  it('envía id_token y action por query (GET); parsea data', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: true, data: [{ id: 1 }] }) })
     const repo = createRemoteRepository({ apiUrl: 'https://script.example/exec', getIdToken: async () => 'TOK' })
     const res = await repo.listClientes()
     expect(res).toEqual([{ id: 1 }])
     const [url, init] = fetchMock.mock.calls[0]
-    expect(url).toBe('https://script.example/exec')
-    expect((init.headers as Record<string, string>)['Content-Type']).toBe('text/plain')
-    expect(init.body).toBe(JSON.stringify({ id_token: 'TOK', action: 'listClientes', payload: {} }))
+    expect(init.method).toBe('GET')
+    expect(url.startsWith('https://script.example/exec?')).toBe(true)
+    const qs = new URLSearchParams(String(url.split('?')[1]))
+    expect(qs.get('id_token')).toBe('TOK')
+    expect(qs.get('action')).toBe('listClientes')
+    expect(qs.get('payload')).toBe('{}')
   })
   it('lanza el error del backend', async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: false, error: 'No tienes permiso' }) })
