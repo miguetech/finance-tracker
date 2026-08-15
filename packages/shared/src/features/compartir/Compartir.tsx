@@ -81,9 +81,13 @@ export function Compartir() {
   const { usuarios, deleteUsuario } = useUsuarios()
   const { config, saveConfig } = useConfig()
   const toast = useToast()
-  const [backendUrl, setBackendUrl] = useState(config?.share_backend_url ?? '')
+  const [backendUrl, setBackendUrl] = useState('')
   const [addOpen, setAddOpen] = useState(false)
   const [deleteEmail, setDeleteEmail] = useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (config) setBackendUrl(config.share_backend_url ?? '')
+  }, [config])
 
   const saveBackendUrl = async () => {
     try {
