@@ -3,7 +3,7 @@ import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, Sh
 import type { NavKey, NavItem, ModuleKey, PermsInfo } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
-import { loadShareParams, saveShareParams, clearShareParams, loadSessionToken, saveSessionToken, clearSessionToken } from './mode'
+import { loadShareParams, saveShareParams, clearShareParams, loadSessionToken, saveSessionToken, clearSessionToken, saveDeviceToken, loadDeviceToken } from './mode'
 
 const NAV_MODULE: Partial<Record<NavKey, ModuleKey>> = {
   dashboard: 'dashboard', facturas: 'facturas', clientes: 'clientes', empleados: 'empleados',
@@ -110,7 +110,10 @@ function VisitorShell({ apiUrl }: { apiUrl: string }) {
   const { t } = useI18n()
   const [state, setState] = useState<'boot' | 'login' | 'ready' | 'denied' | 'error'>('boot')
   const [session, setSession] = useState<ReturnType<typeof permsFromInfo> | null>(null)
+  const [paso, setPaso] = useState<'codigo' | 'verificacion'>('codigo')
   const [codigo, setCodigo] = useState('')
+  const [intentoId, setIntentoId] = useState('')
+  const [verifCodigo, setVerifCodigo] = useState('')
   const [loginError, setLoginError] = useState('')
   const [entrando, setEntrando] = useState(false)
   const repo = useMemo(() => createRemoteRepository({
@@ -141,14 +144,45 @@ function VisitorShell({ apiUrl }: { apiUrl: string }) {
       const res = await fetch(`${apiUrl}/api/auth/codigo`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codigo: codigo.trim() })
+        body: JSON.stringify({ codigo: codigo.trim(), dispositivo: loadDeviceToken() })
       })
-      const data = await res.json() as { ok?: boolean; data?: { token?: string }; error?: string }
-      if (!data.ok || !data.data?.token) throw new Error(data.error ?? '')
+      const data = await res.json() as { ok?: boolean; data?: { token?: string; necesitaVerificacion?: boolean; intentoId?: string; dev?: string }; error?: string }
+      if (!data.ok) throw new Error(data.error ?? '')
+      if (data.data?.necesitaVerificacion && data.data.intentoId) {
+        setIntentoId(data.data.intentoId)
+        setPaso('verificacion')
+        return
+      }
+      if (!data.data?.token) throw new Error(data.error ?? '')
+      if (data.data.dev) saveDeviceToken(data.data.dev)
       saveSessionToken(data.data.token)
+      setPaso('codigo')
+      entrarConPermisos(await repo.getPerms())
+    } catch (e) {
+      setLoginError(e instanceof Error && e.message ? e.message : t('auth.codigoInvalido'))
+    } finally {
+      setEntrando(false)
+    }
+  }
+
+  const verificarCodigo = async () => {
+    if (!verifCodigo.trim() || entrando) return
+    setEntrando(true)
+    setLoginError('')
+    try {
+      const res = await fetch(`${apiUrl}/api/auth/verificar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intentoId, codigo: verifCodigo.trim() })
+      })
+      const data = await res.json() as { ok?: boolean; data?: { token?: string; dev?: string }; error?: string }
+      if (!data.ok || !data.data?.token) throw new Error(data.error ?? '')
+      if (data.data.dev) saveDeviceToken(data.data.dev)
+      saveSessionToken(data.data.token)
+      setPaso('codigo')
       entrarConPermisos(await repo.getPerms())
     } catch {
-      setLoginError(t('auth.codigoInvalido'))
+      setLoginError(t('auth.verifInvalido'))
     } finally {
       setEntrando(false)
     }
@@ -179,10 +213,19 @@ function VisitorShell({ apiUrl }: { apiUrl: string }) {
         <h1 className="text-xl font-semibold text-center">{t('auth.loginTitle')}</h1>
         <Button className="w-full" onClick={iniciarConGoogle}>{t('auth.conGoogle')}</Button>
         <div className="text-sm text-gray-500">{t('auth.conCodigo')}</div>
-        <form className="space-y-2" onSubmit={e => { e.preventDefault(); entrarConCodigo() }}>
-          <Input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder={t('auth.codigo')} autoCapitalize="characters" />
-          <Button type="submit" className="w-full" disabled={entrando}>{t('auth.entrar')}</Button>
-        </form>
+        {paso === 'codigo' ? (
+          <form className="space-y-2" onSubmit={e => { e.preventDefault(); entrarConCodigo() }}>
+            <Input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder={t('auth.codigo')} autoCapitalize="characters" />
+            <Button type="submit" className="w-full" disabled={entrando}>{t('auth.entrar')}</Button>
+          </form>
+        ) : (
+          <form className="space-y-2" onSubmit={e => { e.preventDefault(); verificarCodigo() }}>
+            <p className="text-sm text-gray-600">{t('auth.verifEnviado')}</p>
+            <Input value={verifCodigo} onChange={e => setVerifCodigo(e.target.value)} placeholder={t('auth.verifCodigo')} inputMode="numeric" autoComplete="one-time-code" />
+            <Button type="submit" className="w-full" disabled={entrando}>{t('auth.verificar')}</Button>
+            <button type="button" onClick={() => { setPaso('codigo'); setLoginError('') }} className="w-full text-center text-sm text-blue-600">{t('auth.conCodigo')}</button>
+          </form>
+        )}
         {loginError && <div className="text-sm text-red-600">{loginError}</div>}
       </div>
     </div>

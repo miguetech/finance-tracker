@@ -241,7 +241,12 @@ const en: Partial<Dict> = {
     codigoInvalido: 'Invalid or expired code',
     sinAcceso: 'You do not have access to this panel. Ask the administrator for access.',
     conectando: 'Connecting…', conectandoSheets: 'Connecting to Google Sheets…',
-    sesionRequerida: 'Session required', sesionInvalida: 'Invalid session'
+    sesionRequerida: 'Session required', sesionInvalida: 'Invalid session',
+    verifEnviado: 'We sent a verification code to the person responsible. Enter it here.',
+    verifCodigo: 'Verification code',
+    verificar: 'Verify',
+    verifInvalido: 'Invalid or expired verification code',
+    espera: 'Too many attempts. Wait {min} min.'
   },
   errors: {
     nombreObligatorio: 'Name required', cantidadMayor: 'Quantity > 0', precioMayorIgual: 'Price >= 0',

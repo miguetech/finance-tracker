@@ -104,7 +104,12 @@ const pt: Partial<Dict> = {
     codigoInvalido: 'Código inválido ou expirado',
     sinAcceso: 'Você não tem acesso a este painel. Peça acesso ao administrador.',
     conectando: 'Conectando…', conectandoSheets: 'Conectando ao Google Sheets…',
-    sesionRequerida: 'Sessão obrigatória', sesionInvalida: 'Sessão inválida'
+    sesionRequerida: 'Sessão obrigatória', sesionInvalida: 'Sessão inválida',
+    verifEnviado: 'Enviamos um código de verificação ao responsável. Digite aqui.',
+    verifCodigo: 'Código de verificação',
+    verificar: 'Verificar',
+    verifInvalido: 'Código de verificação inválido ou expirado',
+    espera: 'Muitas tentativas. Aguarde {min} min.'
   },
   errors: {
     nombreObligatorio: 'Nome obrigatório', cantidadMayor: 'Quantidade > 0', precioMayorIgual: 'Preço >= 0',

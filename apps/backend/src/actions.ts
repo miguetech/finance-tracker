@@ -152,6 +152,15 @@ export async function route(repo: Repository, action: string, payload: Payload, 
       if (!p.isAdmin) return denied()
       await repo.deleteCodigo(String(payload))
       return { ok: true }
+    case 'listDispositivos':
+      if (!p.isAdmin) return denied()
+      return repo.listDispositivos()
+    case 'removerDispositivo':
+      if (!p.isAdmin) return denied()
+      await repo.removerDispositivo(String(payload))
+      return { ok: true }
+    case 'registrarDispositivo':
+      return repo.registrarDispositivo(payload as Parameters<Repository['registrarDispositivo']>[0])
     case 'saveConfig':
       if (!p.isAdmin) return denied()
       await repo.saveConfig(payload as Parameters<Repository['saveConfig']>[0])

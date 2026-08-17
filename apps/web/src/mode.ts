@@ -1,5 +1,6 @@
 const KEY = 'ft_share_params'
 const SESSION_KEY = 'ft_code_session'
+const DEVICE_KEY = 'ft_device_token'
 
 export function saveSessionToken(token: string): void {
   localStorage.setItem(SESSION_KEY, token)
@@ -11,6 +12,14 @@ export function loadSessionToken(): string | null {
 
 export function clearSessionToken(): void {
   localStorage.removeItem(SESSION_KEY)
+}
+
+export function saveDeviceToken(dev: string): void {
+  localStorage.setItem(DEVICE_KEY, dev)
+}
+
+export function loadDeviceToken(): string | null {
+  return localStorage.getItem(DEVICE_KEY)
 }
 
 export function saveShareParams(apiUrl: string): void {

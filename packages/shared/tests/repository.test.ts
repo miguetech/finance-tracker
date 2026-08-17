@@ -372,5 +372,28 @@ describe('dispositivos', () => {
     await repo.removerDispositivo('nope')
     expect(await repo.listDispositivos()).toHaveLength(1)
   })
+
+  it('registrarDispositivo agrega un dispositivo nuevo', async () => {
+    const { repo } = setup()
+    const d = { codigo: 'ANA-2026-XK3Q', dispositivo: 'dev_ABC123', ip_info: '200.1.2.3', registrado_en: '2026-08-17' }
+    const saved = await repo.registrarDispositivo(d)
+    expect(saved).toEqual(d)
+    const list = await repo.listDispositivos()
+    expect(list).toHaveLength(1)
+    expect(list[0].dispositivo).toBe('dev_ABC123')
+  })
+
+  it('registrarDispositivo no duplica un dispositivo existente', async () => {
+    const { repo, grid } = setup()
+    grid.set('Dispositivos', [
+      ['', '', '', ''],
+      ['ANA-2026-XK3Q', 'dev_ABC123', '200.1.2.3', '2026-08-17']
+    ])
+    const d = { codigo: 'ANA-2026-XK3Q', dispositivo: 'dev_ABC123', ip_info: '9.9.9.9', registrado_en: '2026-08-18' }
+    await repo.registrarDispositivo(d)
+    const list = await repo.listDispositivos()
+    expect(list).toHaveLength(1)
+    expect(list[0].ip_info).toBe('200.1.2.3')
+  })
 })
 

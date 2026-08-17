@@ -103,7 +103,12 @@ const ca: Partial<Dict> = {
     codigoInvalido: 'Codi invàlid o caducat',
     sinAcceso: 'No tens accés a aquest panell. Demana accés a l\'administrador.',
     conectando: 'Connectant…', conectandoSheets: 'Connectant a Google Sheets…',
-    sesionRequerida: 'Sessió obligatòria', sesionInvalida: 'Sessió invàlida'
+    sesionRequerida: 'Sessió obligatòria', sesionInvalida: 'Sessió invàlida',
+    verifEnviado: 'Hem enviat un codi de verificació al responsable. Escriu-lo aquí.',
+    verifCodigo: 'Codi de verificació',
+    verificar: 'Verificar',
+    verifInvalido: 'Codi de verificació invàlid o caducat',
+    espera: 'Massa intents. Espera {min} min.'
   },
   errors: {
     nombreObligatorio: 'Nom obligatori', cantidadMayor: 'Quantitat > 0', precioMayorIgual: 'Preu >= 0',

@@ -103,7 +103,12 @@ const gl: Partial<Dict> = {
     codigoInvalido: 'Código non válido ou caducado',
     sinAcceso: 'Non tes acceso a este panel. Pide acceso ao administrador.',
     conectando: 'Conectando…', conectandoSheets: 'Conectando a Google Sheets…',
-    sesionRequerida: 'Sesión obrigatoria', sesionInvalida: 'Sesión inválida'
+    sesionRequerida: 'Sesión obrigatoria', sesionInvalida: 'Sesión inválida',
+    verifEnviado: 'Enviamos un código de verificación ao responsable. Escríbeo aquí.',
+    verifCodigo: 'Código de verificación',
+    verificar: 'Verificar',
+    verifInvalido: 'Código de verificación non válido ou caducado',
+    espera: 'Demasiados intentos. Agarda {min} min.'
   },
   errors: {
     nombreObligatorio: 'Nome obrigatorio', cantidadMayor: 'Cantidade > 0', precioMayorIgual: 'Prezo >= 0',

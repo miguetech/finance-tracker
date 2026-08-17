@@ -7,6 +7,7 @@ export interface SessionClaims {
   modulos_ver: string
   modulos_editar: string
   owner: string
+  dev?: string
 }
 
 export async function emitirSessionJwt(secret: string, claims: SessionClaims): Promise<string> {
@@ -15,7 +16,8 @@ export async function emitirSessionJwt(secret: string, claims: SessionClaims): P
     rol: claims.rol,
     modulos_ver: claims.modulos_ver,
     modulos_editar: claims.modulos_editar,
-    owner: claims.owner
+    owner: claims.owner,
+    ...(claims.dev ? { dev: claims.dev } : {})
   })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(claims.sub)
@@ -29,7 +31,7 @@ export async function verificarSessionJwt(secret: string, token: string): Promis
   try {
     const key = new TextEncoder().encode(secret)
     const { payload } = await jwtVerify(token, key)
-    const { sub, rol, owner, modulos_ver, modulos_editar } = payload
+    const { sub, rol, owner, modulos_ver, modulos_editar, dev } = payload
     if (typeof sub !== 'string' || typeof rol !== 'string' || typeof owner !== 'string') {
       throw new Error('Sesión inválida')
     }
@@ -38,7 +40,8 @@ export async function verificarSessionJwt(secret: string, token: string): Promis
       rol: rol as UserRole,
       modulos_ver: typeof modulos_ver === 'string' ? modulos_ver : '',
       modulos_editar: typeof modulos_editar === 'string' ? modulos_editar : '',
-      owner
+      owner,
+      ...(typeof dev === 'string' ? { dev } : {})
     }
   } catch {
     throw new Error('Sesión inválida')

@@ -33,6 +33,12 @@ export function generarCodigo(prefijo: string, año: number, existentes: string[
   throw new Error('No se pudo generar un código único')
 }
 
+export function randomAlfa(len: number): string {
+  let s = ''
+  for (let i = 0; i < len; i++) s += CODIGO_ALFABETO[randomInt(CODIGO_ALFABETO.length)]
+  return s
+}
+
 export function esCodigoValido(codigo: string): boolean {
   return CODIGO_REGEX.test(codigo)
 }

@@ -175,6 +175,13 @@ export function createRepository(ctx: RepoContext) {
       return readTable<Dispositivo>('Dispositivos')
     },
 
+    async registrarDispositivo(d: Dispositivo): Promise<Dispositivo> {
+      const existentes = await readTable<Dispositivo>('Dispositivos')
+      if (existentes.some(x => x.dispositivo === d.dispositivo)) return d
+      await appendRows('Dispositivos', [d])
+      return d
+    },
+
     async removerDispositivo(dispositivo: string): Promise<void> {
       await replaceTable('Dispositivos', (await readTable('Dispositivos')).filter(r => r.dispositivo !== dispositivo))
     },

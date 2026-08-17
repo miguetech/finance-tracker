@@ -476,7 +476,12 @@ export const messages = {
     conectando: 'Conectando…',
     conectandoSheets: 'Conectando a Google Sheets…',
     sesionRequerida: 'Sesión requerida',
-    sesionInvalida: 'Sesión inválida'
+    sesionInvalida: 'Sesión inválida',
+    verifEnviado: 'Enviamos un código de verificación al responsable. Escríbelo aquí.',
+    verifCodigo: 'Código de verificación',
+    verificar: 'Verificar',
+    verifInvalido: 'Código de verificación inválido o expirado',
+    espera: 'Demasiados intentos. Espera {min} min.'
   },
   errors: {
     nombreObligatorio: 'Nombre obligatorio',
