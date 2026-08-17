@@ -1,4 +1,4 @@
-export const MODULE_KEYS = ['dashboard', 'facturas', 'clientes', 'gastos', 'empleados', 'proveedores', 'cuentas', 'reportes'] as const
+export const MODULE_KEYS = ['dashboard', 'facturas', 'clientes', 'gastos', 'empleados', 'proveedores', 'cuentas', 'cxc', 'reportes', 'inventario'] as const
 export type ModuleKey = (typeof MODULE_KEYS)[number]
 
 export type UserRole = 'admin' | 'asistente' | 'solo_lectura' | 'ver_facturas' | 'ver_reportes' | 'ver_gastos' | 'ver_empleados' | 'ver_cuentas' | 'personalizado'
@@ -26,7 +26,7 @@ export interface PermsInfo {
 
 export const ROLE_PRESETS: Record<'solo_lectura' | 'ver_facturas' | 'ver_reportes' | 'ver_gastos' | 'ver_empleados' | 'ver_cuentas', ModuleKey[]> = {
   solo_lectura: [...MODULE_KEYS],
-  ver_facturas: ['dashboard', 'facturas', 'clientes'],
+  ver_facturas: ['dashboard', 'facturas', 'clientes', 'cxc'],
   ver_reportes: ['dashboard', 'reportes'],
   ver_gastos: ['dashboard', 'gastos'],
   ver_empleados: ['dashboard', 'empleados'],

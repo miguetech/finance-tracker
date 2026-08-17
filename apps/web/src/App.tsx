@@ -1,18 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, createInitialSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare } from '@ft/shared'
+import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, createInitialSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider } from '@ft/shared'
 import type { NavKey, NavItem, ModuleKey } from '@ft/shared'
+import { monthLocal } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
 import { loadShareParams, saveShareParams, clearShareParams } from './mode'
 
 const NAV_MODULE: Partial<Record<NavKey, ModuleKey>> = {
   dashboard: 'dashboard', facturas: 'facturas', clientes: 'clientes', empleados: 'empleados',
-  cuentas: 'cuentas', proveedores: 'proveedores', gastos: 'gastos', reportes: 'reportes'
+  cuentas: 'cuentas', cxc: 'cxc', proveedores: 'proveedores', gastos: 'gastos', reportes: 'reportes', inventario: 'inventario'
 }
 
 function OwnerShell() {
   const [sheet, setSheet] = useState<{ id: string } | null>(null)
   const [nav, setNav] = useState<NavKey>(() => (sessionStorage.getItem('ft_nav') as NavKey) || 'dashboard')
-  const [mes, setMes] = useState(() => sessionStorage.getItem('ft_mes') || new Date().toISOString().slice(0, 7))
+  const [mes, setMes] = useState(() => sessionStorage.getItem('ft_mes') || monthLocal())
   const [error, setError] = useState('')
 
   const navigate = (k: NavKey) => { sessionStorage.setItem('ft_nav', k); setNav(k) }
@@ -58,6 +59,8 @@ function OwnerShell() {
             {nav === 'gastos' && <Gastos />}
             {nav === 'proveedores' && <Proveedores />}
             {nav === 'cuentas' && <CuentasPagar />}
+            {nav === 'cxc' && <CuentasPorCobrar />}
+            {nav === 'inventario' && <Inventario />}
             {nav === 'reportes' && <Reportes mes={mes} setMes={cambiarMes} />}
             {nav === 'configuracion' && <Configuracion />}
             {nav === 'compartir' && <Compartir />}
@@ -74,7 +77,7 @@ function VisitorInner({ apiUrl }: { apiUrl: string }) {
     const first = (Object.keys(NAV_MODULE) as NavKey[]).find(k => NAV_MODULE[k] && canView(NAV_MODULE[k]!))
     return first ?? 'dashboard'
   })
-  const [mes, setMes] = useState(() => new Date().toISOString().slice(0, 7))
+  const [mes, setMes] = useState(() => monthLocal())
   const navigate = (k: NavKey) => setNav(k)
   const cambiarMes = (m: string) => setMes(m)
   const repo = useMemo(() => createRemoteRepository({ apiUrl, getIdToken: async () => { try { return await webAuth.getIdToken(false) } catch { return await webAuth.getIdToken(true) } } }), [apiUrl])
@@ -90,6 +93,8 @@ function VisitorInner({ apiUrl }: { apiUrl: string }) {
           {nav === 'gastos' && canView('gastos') && <Gastos />}
           {nav === 'proveedores' && canView('proveedores') && <Proveedores />}
           {nav === 'cuentas' && canView('cuentas') && <CuentasPagar />}
+          {nav === 'cxc' && canView('cxc') && <CuentasPorCobrar />}
+          {nav === 'inventario' && canView('inventario') && <Inventario />}
           {nav === 'reportes' && canView('reportes') && <Reportes mes={mes} setMes={cambiarMes} />}
         </Layout>
       </Toaster>
@@ -112,7 +117,7 @@ function VisitorShell({ apiUrl }: { apiUrl: string }) {
         if (!p.isAdmin && info.view.length === 0) { setState('denied'); return }
         setPerms(p)
         setState('ready')
-      } catch (e) { setState('error') }
+      } catch { setState('error') }
     })()
   }, [apiUrl])
   if (state === 'boot') return <div className="p-8">Conectando…</div>
@@ -125,6 +130,6 @@ export function App() {
   const share = loadShareParams()
   const [ownerId, setOwnerId] = useState<string | null>(null)
   useEffect(() => { localStorageAdapter.get(KEYS.spreadsheetId).then(setOwnerId) }, [])
-  if (share && !ownerId) return <VisitorShell apiUrl={share.apiUrl} />
-  return <OwnerShell />
+  const inner = share && !ownerId ? <VisitorShell apiUrl={share.apiUrl} /> : <OwnerShell />
+  return <I18nProvider>{inner}</I18nProvider>
 }

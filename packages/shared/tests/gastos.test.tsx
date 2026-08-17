@@ -19,6 +19,6 @@ const wrapper = ({ children }: { children: React.ReactNode }) => {
 describe('Gastos', () => {
   it('renderiza título', () => {
     render(<Gastos />, { wrapper })
-    expect(screen.getByText(/registrar gasto/i)).toBeTruthy()
+    expect(screen.getByText(/nuevo gasto/i)).toBeTruthy()
   })
 })

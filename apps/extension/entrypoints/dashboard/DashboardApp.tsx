@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react'
 import { ensureSheet, getChromeToken } from '../../src/onboarding'
-import { createRepository, chromeStorageAdapter, KEYS, SheetsApi, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, Reportes, Configuracion, Toaster, useConfig, PermsProvider, adminPerms } from '@ft/shared'
+import { createRepository, chromeStorageAdapter, SheetsApi, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Toaster, useConfig, PermsProvider, adminPerms } from '@ft/shared'
 import type { NavKey } from '@ft/shared'
+import { monthLocal } from '@ft/shared'
 
 function Boot() {
   const [sheet, setSheet] = useState<{ id: string } | null>(null)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
   const [nav, setNav] = useState<NavKey>('dashboard')
-  const [mes, setMes] = useState(new Date().toISOString().slice(0, 7))
+  const [mes, setMes] = useState(monthLocal())
 
   useEffect(() => {
     (async () => {
       try {
-        const s = await ensureSheet((chrome.runtime as unknown as { getManifest: () => { oauth2?: { client_id?: string } } }).getManifest().oauth2?.client_id ?? '')
+        const s = await ensureSheet()
         if (s) setSheet({ id: s.spreadsheetId })
       } catch (e) { setErr((e as Error).message) }
       setLoading(false)
@@ -38,6 +39,8 @@ function Boot() {
             {nav === 'gastos' && <Gastos />}
             {nav === 'proveedores' && <Proveedores />}
             {nav === 'cuentas' && <CuentasPagar />}
+            {nav === 'cxc' && <CuentasPorCobrar />}
+            {nav === 'inventario' && <Inventario />}
             {nav === 'reportes' && <Reportes mes={mes} setMes={setMes} />}
             {nav === 'configuracion' && <Configuracion />}
           </Layout>

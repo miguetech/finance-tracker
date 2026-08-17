@@ -43,8 +43,16 @@ export class SheetsApi {
     }).then(r => ({ spreadsheetId: r.spreadsheetId, url: r.spreadsheetUrl }))
   }
 
-  getSpreadsheet(spreadsheetId: string): Promise<{ sheets: { properties: { title: string } }[] }> {
-    return this.request<{ sheets: { properties: { title: string } }[] }>(`${BASE}/${spreadsheetId}`)
+  getSpreadsheet(spreadsheetId: string): Promise<{ sheets: { properties: { title: string; sheetId: number; gridProperties?: { columnCount?: number } } }[] }> {
+    return this.request<{ sheets: { properties: { title: string; sheetId: number; gridProperties?: { columnCount?: number } } }[] }>(`${BASE}/${spreadsheetId}`)
+  }
+
+  /** batchUpdate a nivel de estructura de la hoja (aumentar columnas, etc.). */
+  gridBatchUpdate(spreadsheetId: string, requests: unknown[]): Promise<void> {
+    return this.request(`${BASE}/${spreadsheetId}:batchUpdate`, {
+      method: 'POST',
+      body: JSON.stringify({ requests })
+    }).then(() => undefined)
   }
 
   addSheets(spreadsheetId: string, titles: string[]): Promise<void> {

@@ -1,14 +1,17 @@
 import React, { useState } from 'react'
+import { todayLocal } from '../../lib/date'
 import { useCxp, useConfig } from '../../store/queries'
-import { Table, Button, Select, ConfirmDialog, Badge } from '../../ui/components'
+import { Table, Button, Select, ConfirmDialog, Badge, StatCard } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { usePerms } from '../../store/perms'
-import { formatMoney } from '../../currency'
+import { formatMoneyConverted } from '../../currency'
 import { IconPlus, IconTrash } from '../../ui/icons'
+import { useI18n } from '../../i18n'
 import { CxpFormModal } from './CxpFormModal'
 import { CxpDetail } from './CxpDetail'
 
 export function CuentasPagar() {
+  const { t } = useI18n()
   const { cxps, deleteCxp } = useCxp()
   const { config } = useConfig()
   const { canEdit, isAdmin } = usePerms()
@@ -18,44 +21,59 @@ export function CuentasPagar() {
   const [detalleId, setDetalleId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const moneda = config?.moneda ?? 'USD'
+  const hoy = todayLocal()
   const filtrados = cxps.filter(c => !estado || c.estado === estado)
-  const tone = (c: { saldo: number; estado: string }) => c.saldo <= 0 ? 'green' as const : c.estado === 'pendiente' ? 'red' as const : 'yellow' as const
+  const tone = (c: { saldo: number; estado: string; fecha_vencimiento: string }) =>
+    c.saldo <= 0 ? 'green' as const
+    : c.fecha_vencimiento && c.fecha_vencimiento < hoy ? 'red' as const
+    : c.estado === 'parcial' ? 'yellow' as const
+    : 'blue' as const
+  const estadoLabel = (c: { saldo: number; estado: string; fecha_vencimiento: string }) =>
+    c.saldo <= 0 ? t('states.pagada') : c.fecha_vencimiento && c.fecha_vencimiento < hoy ? t('states.vencida') : c.estado === 'parcial' ? t('states.parcial') : t('states.pendiente')
+
+  const totalPorPagar = cxps.filter(c => c.saldo > 0).reduce((s, c) => s + (Number(c.monto_total) || 0) / (Number(c.tipo_cambio) || 1), 0)
+  const totalVencidas = cxps.filter(c => c.saldo > 0 && c.fecha_vencimiento < hoy).reduce((s, c) => s + (Number(c.saldo) || 0) / (Number(c.tipo_cambio) || 1), 0)
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold">Cuentas por Pagar</h1>
-          <p className="text-sm text-muted-foreground">Obligaciones pendientes con proveedores — dinero que aún debes y aún no sale de tu cuenta.</p>
+          <h1 className="text-xl font-bold">{t('cuentas.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('cuentas.subtitulo')}</p>
         </div>
         <div className="flex gap-2">
-          <Select value={estado} onChange={setEstado} options={[{ value: 'pendiente', label: 'Pendiente' }, { value: 'parcial', label: 'Parcial' }, { value: 'pagada', label: 'Pagada' }]} placeholder="Estado" />
-          {canEdit('cuentas') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setFormOpen(true)}>Nueva CXP</Button>)}
+          <Select value={estado} onChange={setEstado} options={[{ value: 'pendiente', label: t('states.pendiente') }, { value: 'parcial', label: t('states.parcial') }, { value: 'pagada', label: t('states.pagada') }]} placeholder={t('common.estado')} />
+          {canEdit('cuentas') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setFormOpen(true)}>{t('cuentas.nuevaCxp')}</Button>)}
         </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard label={t('cuentas.totalPorPagar')} value={formatMoneyConverted(totalPorPagar, moneda, moneda, config)} />
+        <StatCard label={t('states.vencidas')} value={formatMoneyConverted(totalVencidas, moneda, moneda, config)} tone="negative" />
+        <StatCard label={t('cuentas.activas')} value={String(cxps.filter(c => c.saldo > 0).length)} />
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table columns={[
-          { key: 'prov', header: 'Proveedor', render: r => String(r.nombre_proveedor) },
-          { key: 'desc', header: 'Descripción', render: r => String(r.descripcion) },
-          { key: 'venc', header: 'Vence', render: r => String(r.fecha_vencimiento) },
-          { key: 'total', header: 'Total', render: r => formatMoney(Number(r.monto_total), moneda) },
-          { key: 'saldo', header: 'Saldo', render: r => formatMoney(Number(r.saldo), moneda) },
-          { key: 'estado', header: 'Estado', render: r => { const t = tone(r as { saldo: number; estado: string }); return <Badge tone={t}>{String(r.estado)}</Badge> } },
+          { key: 'prov', header: t('cuentas.proveedor'), render: r => String(r.nombre_proveedor) },
+          { key: 'desc', header: t('cuentas.descripcion'), render: r => String(r.descripcion) },
+          { key: 'venc', header: t('cuentas.vence'), render: r => <span className={String(r.fecha_vencimiento) < hoy && Number(r.saldo) > 0 ? 'text-red-600 font-medium' : ''}>{String(r.fecha_vencimiento)}</span> },
+          { key: 'total', header: t('facturas.total'), render: r => formatMoneyConverted(Number(r.monto_total), String(r.moneda), moneda, config) },
+          { key: 'saldo', header: t('facturas.saldo'), render: r => formatMoneyConverted(Number(r.saldo), String(r.moneda), moneda, config) },
+          { key: 'estado', header: t('common.estado'), render: r => { const c = r as { saldo: number; estado: string; fecha_vencimiento: string }; return <Badge tone={tone(c)}>{estadoLabel(c)}</Badge> } },
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => setDetalleId(String(r.id_cxp))}>Ver</Button>
-              {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_cxp))}>Eliminar</Button>)}
+              <Button variant="ghost" onClick={() => setDetalleId(String(r.id_cxp))}>{t('facturas.ver')}</Button>
+              {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_cxp))}>{t('common.eliminar')}</Button>)}
             </div>
           ) }
         ]} rows={filtrados as unknown as Record<string, unknown>[]} />
-        {filtrados.length === 0 && <p className="p-4 text-sm text-gray-500">Sin CXP registradas</p>}
+        {filtrados.length === 0 && <p className="p-4 text-sm text-gray-500">{t('cuentas.sinCxp')}</p>}
       </div>
       <CxpFormModal open={formOpen} onClose={() => setFormOpen(false)} />
       {detalleId && <CxpDetail id={detalleId} onClose={() => setDetalleId(null)} />}
-      <ConfirmDialog open={deleteId !== null} title="Eliminar CXP" message="Se eliminará la cuenta y sus abonos. ¿Continuar?"
+      <ConfirmDialog open={deleteId !== null} title={t('cuentas.eliminarTitulo')} message={t('cuentas.eliminarMensaje')}
         onConfirm={async () => {
           if (deleteId) {
-            try { await deleteCxp.mutateAsync(deleteId); toast('CXP eliminada') }
+            try { await deleteCxp.mutateAsync(deleteId); toast(t('cuentas.eliminada')) }
             catch (e) { toast((e as Error).message, 'error') }
           }
           setDeleteId(null)

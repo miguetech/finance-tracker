@@ -28,24 +28,20 @@ describe('invoice', () => {
 })
 
 describe('kpis', () => {
-  const today = new Date()
-  const iso = (d: Date) => d.toISOString().slice(0, 10)
-  const ayer = new Date(today.getTime() - 86400000)
-  const en30dias = new Date(today.getTime() + 30 * 86400000)
   const fac: Factura[] = [
-    { id_factura: 'f1', folio: 'FAC-001', id_cliente: 'c1', nombre_cliente: 'A', fecha_emision: '2026-08-05', fecha_vencimiento: '', subtotal: 100, iva: 0, total: 100, saldo: 0, fecha_pago: '2026-08-06', notas: '' },
-    { id_factura: 'f2', folio: 'FAC-002', id_cliente: 'c2', nombre_cliente: 'B', fecha_emision: '2026-08-10', fecha_vencimiento: '', subtotal: 200, iva: 0, total: 200, saldo: 200, fecha_pago: '', notas: '' },
-    { id_factura: 'f3', folio: 'FAC-003', id_cliente: 'c3', nombre_cliente: 'C', fecha_emision: '2026-07-20', fecha_vencimiento: '', subtotal: 50, iva: 0, total: 50, saldo: 50, fecha_pago: '', notas: '' }
+    { id_factura: 'f1', folio: 'FAC-001', id_cliente: 'c1', nombre_cliente: 'A', fecha_emision: '2026-08-05', fecha_vencimiento: '', subtotal: 100, iva: 0, total: 100, saldo: 0, fecha_pago: '2026-08-06', notas: '', moneda: '', tipo_cambio: 1, editada: '', fecha_edicion: '' },
+    { id_factura: 'f2', folio: 'FAC-002', id_cliente: 'c2', nombre_cliente: 'B', fecha_emision: '2026-08-10', fecha_vencimiento: '', subtotal: 200, iva: 0, total: 200, saldo: 200, fecha_pago: '', notas: '', moneda: '', tipo_cambio: 1, editada: '', fecha_edicion: '' },
+    { id_factura: 'f3', folio: 'FAC-003', id_cliente: 'c3', nombre_cliente: 'C', fecha_emision: '2026-07-20', fecha_vencimiento: '', subtotal: 50, iva: 0, total: 50, saldo: 50, fecha_pago: '', notas: '', moneda: '', tipo_cambio: 1, editada: '', fecha_edicion: '' }
   ]
   const gas: Gasto[] = [
-    { id_gasto: 'g1', fecha: '2026-08-03', categoria: 'Renta', descripcion: '', monto: 30, metodo_pago: 'Efectivo', proveedor: '' }
+    { id_gasto: 'g1', fecha: '2026-08-03', categoria: 'Renta', descripcion: '', monto: 30, metodo_pago: 'Efectivo', proveedor: '', moneda: '', tipo_cambio: 1 }
   ]
   const cxp: CuentaPagar[] = [
-    { id_cxp: 'x1', id_proveedor: 'p1', nombre_proveedor: 'P', folio_documento: '', categoria: '', descripcion: '', fecha_emision: '2026-08-01', fecha_vencimiento: iso(ayer), monto_total: 500, saldo: 500, estado: 'pendiente', notas: '' },
-    { id_cxp: 'x2', id_proveedor: 'p1', nombre_proveedor: 'P', folio_documento: '', categoria: '', descripcion: '', fecha_emision: '2026-08-01', fecha_vencimiento: iso(en30dias), monto_total: 100, saldo: 100, estado: 'pendiente', notas: '' }
+    { id_cxp: 'x1', id_proveedor: 'p1', nombre_proveedor: 'P', folio_documento: '', categoria: '', descripcion: '', fecha_emision: '2026-08-01', fecha_vencimiento: '2020-01-01', monto_total: 500, saldo: 500, estado: 'pendiente', notas: '', moneda: '', tipo_cambio: 1 },
+    { id_cxp: 'x2', id_proveedor: 'p1', nombre_proveedor: 'P', folio_documento: '', categoria: '', descripcion: '', fecha_emision: '2026-08-01', fecha_vencimiento: '2099-01-01', monto_total: 100, saldo: 100, estado: 'pendiente', notas: '', moneda: '', tipo_cambio: 1 }
   ]
   const pag: Pago[] = [
-    { id_pago: 'p1', tipo: 'cobro', id_origen: 'f1', fecha: '2026-08-06', monto: 100, metodo_pago: 'Efectivo', notas: '' }
+    { id_pago: 'p1', tipo: 'cobro', id_origen: 'f1', fecha: '2026-08-06', monto: 100, metodo_pago: 'Efectivo', notas: '', moneda: '', tipo_cambio: 1 }
   ]
 
   it('kpis del mes', () => {
@@ -61,7 +57,7 @@ describe('kpis', () => {
   })
   it('cobrado cuenta por fecha de pago, no por emisión', () => {
     const facJun = [{ ...fac[0], id_factura: 'fJ', fecha_emision: '2026-06-20', saldo: 0, fecha_pago: '2026-07-02' }]
-    const pagJul: Pago[] = [{ id_pago: 'pJ', tipo: 'cobro', id_origen: 'fJ', fecha: '2026-07-02', monto: 100, metodo_pago: 'Efectivo', notas: '' }]
+    const pagJul: Pago[] = [{ id_pago: 'pJ', tipo: 'cobro', id_origen: 'fJ', fecha: '2026-07-02', monto: 100, metodo_pago: 'Efectivo', notas: '', moneda: '', tipo_cambio: 1 }]
     const kJun = kpisForMonth(facJun, [], [], [], '2026-06')
     expect(kJun.facturado).toBe(100)
     expect(kJun.cobrado).toBe(0)

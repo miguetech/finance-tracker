@@ -1,17 +1,21 @@
 import { SheetsApi } from '../sheets/api'
-import { TABLES, sheetName, HEADER_ROWS } from '../sheets/tables'
-import { serializeRow, deserializeRow, migrateFacturaLegacyRow } from '../sheets/rows'
+import { TABLES, HEADER_ROWS } from '../sheets/tables'
+import { serializeRow } from '../sheets/rows'
 import { configFromRows, configToRows } from '../sheets/createSpreadsheet'
 import { withMutex } from '../sheets/mutex'
-import { KEYS, type StorageAdapter } from './storage'
+import type { StorageAdapter } from './storage'
+import { createSheetsTableStore, type TableStore } from './tableStore'
 import { uid } from '../lib/uid'
+import { todayLocal } from '../lib/date'
 import { getCurrency } from '../currency'
+import { parseRates } from '../currency/rates'
 import { buildFactura, estadoDesdeSaldo, round2 } from '../calc/invoice'
 import { kpisForMonth, topClientes, gastosPorCategoria, type Kpis } from '../calc/kpis'
 import { expandFolioTemplate } from '../calc/folio'
-import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago } from '../types/entities'
-import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema, EmpleadoSchema, NominaInputSchema, UsuarioSchema } from '../types/schemas'
+import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago, Producto, MovimientoStock, TipoMovimiento } from '../types/entities'
+import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema, EmpleadoSchema, NominaInputSchema, UsuarioSchema, ProductoSchema, MovimientoStockSchema } from '../types/schemas'
 import type { Usuario } from '../roles/roles'
+import { assertClienteSinFacturas, assertProveedorSinCxp, enrichNombreProveedor, emailIgual } from './guards'
 
 export interface RepoContext {
   api: SheetsApi
@@ -20,48 +24,27 @@ export interface RepoContext {
 }
 
 export function createRepository(ctx: RepoContext) {
-  const { api, storage } = ctx
+  const { api } = ctx
   const sid = ctx.getSpreadsheetId
+  const store: TableStore = createSheetsTableStore(api, sid)
 
-  function rangeOf(t: keyof typeof TABLES): string {
-    const spec = TABLES[t]
-    const last = String.fromCharCode(64 + spec.length)
-    const rowStart = HEADER_ROWS(t) + 1
-    return `'${sheetName(t)}'!A${rowStart}:${last}`
+  function tipoCambioDe(cfg: Config, moneda: string): number {
+    if (!moneda || moneda === cfg.moneda) return 1
+    const r = parseRates(cfg.tasas_cambio)
+    const rate = r && r.base === cfg.moneda ? r.rates[moneda] : undefined
+    return rate && rate > 0 ? rate : 1
   }
 
-    async function readTable(t: keyof typeof TABLES): Promise<Record<string, string | number>[]> {
-    const id = await sid()
-    const res = await api.batchGet(id, [rangeOf(t)])
-    const rows = res[Object.keys(res)[0]] ?? []
-    const spec = TABLES[t]
-    const headerLen = HEADER_ROWS(t)
-    const data = rows.slice(headerLen === 0 ? 0 : headerLen - 1)
-    if (t === 'Facturas') return data.map(r => deserializeRow(spec, migrateFacturaLegacyRow(r))).filter(r => Object.values(r).some(v => v !== ''))
-    return data.map(r => deserializeRow(spec, r)).filter(r => Object.values(r).some(v => v !== ''))
+  function readTable<T = Record<string, string | number>>(t: keyof typeof TABLES): Promise<T[]> {
+    return store.getAll<T>(t)
   }
 
-  async function appendRows(t: keyof typeof TABLES, rows: Record<string, string | number>[]): Promise<void> {
-    const id = await sid()
-    const spec = TABLES[t]
-    const values = rows.map(r => serializeRow(spec, r))
-    const last = String.fromCharCode(64 + spec.length)
-    await api.appendValues(id, `'${sheetName(t)}'!A${HEADER_ROWS(t) + 1}:${last}`, values)
+  async function appendRows<T extends object>(t: keyof typeof TABLES, rows: T[]): Promise<void> {
+    await store.append(t, rows)
   }
 
-  async function replaceTable(t: keyof typeof TABLES, rows: Record<string, string | number>[]): Promise<void> {
-    const id = await sid()
-    const spec = TABLES[t]
-    const values = rows.map(r => serializeRow(spec, r))
-    const last = String.fromCharCode(64 + spec.length)
-    const base = HEADER_ROWS(t) + 1
-    const range = `'${sheetName(t)}'!A${base}:${last}`
-    if (values.length === 0) {
-      await api.clearRange(id, range)
-      return
-    }
-    await api.batchUpdate(id, [{ range, values }])
-    await api.clearRange(id, `'${sheetName(t)}'!A${base + values.length}:${last}`)
+  async function replaceTable<T extends object>(t: keyof typeof TABLES, rows: T[]): Promise<void> {
+    await store.replace(t, rows)
   }
 
   async function readConfig(): Promise<Config> {
@@ -94,14 +77,15 @@ export function createRepository(ctx: RepoContext) {
     await api.batchUpdate(id, [{ range: `'Config'!A${row}:B${row}`, values: [[clave, valor]] }])
   }
 
-  async function insertOrReplace(t: keyof typeof TABLES, idKey: string, obj: Record<string, string | number>): Promise<Record<string, string | number>> {
-    const all = await readTable(t)
-    const exists = all.some(r => r[idKey] === obj[idKey])
+  async function insertOrReplace<T extends object>(t: keyof typeof TABLES, idKey: string, obj: T): Promise<T> {
+    const all = await readTable<Record<string, string | number>>(t)
+    const o = obj as Record<string, string | number>
+    const exists = all.some(r => r[idKey] === o[idKey])
     if (!exists) {
       await appendRows(t, [obj])
       return obj
     }
-    await replaceTable(t, all.map(r => (r[idKey] === obj[idKey] ? obj : r)))
+    await replaceTable(t, all.map(r => (r[idKey] === o[idKey] ? o : r)))
     return obj
   }
 
@@ -113,43 +97,44 @@ export function createRepository(ctx: RepoContext) {
       await writeConfig(parsed)
     },
 
-    async listClientes(): Promise<Cliente[]> { return readTable('Clientes') as unknown as Cliente[] },
+    async listClientes(): Promise<Cliente[]> { return readTable<Cliente>('Clientes') },
 
     async saveCliente(cliente: Cliente): Promise<Cliente> {
       const parsed = ClienteSchema.parse(cliente)
-      const saved = { ...parsed, id_cliente: parsed.id_cliente || uid('cli_'), fecha_registro: parsed.fecha_registro || new Date().toISOString().slice(0, 10) } as unknown as Cliente
-      await insertOrReplace('Clientes', 'id_cliente', saved as unknown as Record<string, string | number>)
+      const saved = { ...parsed, id_cliente: parsed.id_cliente || uid('cli_'), fecha_registro: parsed.fecha_registro || todayLocal() } as unknown as Cliente
+      await insertOrReplace('Clientes', 'id_cliente', saved)
       return saved
     },
 
     async deleteCliente(id: string): Promise<void> {
       const facturas = await readTable('Facturas')
-      if (facturas.some(f => f.id_cliente === id)) throw new Error('Cliente tiene facturas asociadas')
+      assertClienteSinFacturas(facturas, id)
       const all = (await readTable('Clientes')).filter(r => r.id_cliente !== id)
       await replaceTable('Clientes', all)
     },
 
-    async listUsuarios(): Promise<Usuario[]> { return readTable('Usuarios') as unknown as Usuario[] },
+    async listUsuarios(): Promise<Usuario[]> { return readTable<Usuario>('Usuarios') },
 
     async saveUsuario(usuario: Usuario): Promise<Usuario> {
       const parsed = UsuarioSchema.parse(usuario)
       const saved = { ...parsed, email: parsed.email.trim().toLowerCase() } as Usuario
-      await insertOrReplace('Usuarios', 'email', saved as unknown as Record<string, string | number>)
+      await insertOrReplace('Usuarios', 'email', saved)
       return saved
     },
 
     async deleteUsuario(email: string): Promise<void> {
-      const all = (await readTable('Usuarios')).filter(r => String(r.email).toLowerCase() !== email.toLowerCase())
+      const all = (await readTable('Usuarios')).filter(r => !emailIgual(r.email, email))
       await replaceTable('Usuarios', all)
     },
 
-    async createFactura(input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string }): Promise<Factura> {
+    async createFactura(input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }): Promise<Factura> {
       const parsed = FacturaInputSchema.parse(input)
       const clientes = await readTable('Clientes')
       const cliente = clientes.find(c => c.id_cliente === parsed.id_cliente)
       if (!cliente) throw new Error('Cliente no existe')
       const cfg = await readConfig()
-      const { items, totals } = buildFactura(parsed.items, cfg.iva_porcentaje, getCurrency(cfg.moneda).decimals)
+      const moneda = parsed.moneda || cfg.moneda
+      const { items, totals } = buildFactura(parsed.items, cfg.iva_porcentaje, getCurrency(moneda).decimals)
       const id_factura = uid('fac_')
       const folio = await withMutex<string>(
         mutexReadRow,
@@ -173,16 +158,20 @@ export function createRepository(ctx: RepoContext) {
         total: totals.total,
         saldo: totals.total,
         fecha_pago: '',
-        notas: parsed.notas
+        notas: parsed.notas,
+        moneda,
+        tipo_cambio: tipoCambioDe(cfg, moneda),
+        editada: '',
+        fecha_edicion: ''
       }
-      await appendRows('Facturas', [factura as unknown as Record<string, string | number>])
+      await appendRows('Facturas', [factura])
       const itemRows = items.map(it => ({ id_factura, ...it }))
-      await appendRows('Factura_Items', itemRows as unknown as Record<string, string | number>[])
+      await appendRows('Factura_Items', itemRows)
       return factura
     },
 
     async listFacturas(filtro: { estado?: string; mes?: string } = {}): Promise<Factura[]> {
-      let rows = (await readTable('Facturas')) as unknown as Factura[]
+      let rows = await readTable<Factura>('Facturas')
       if (filtro.mes) rows = rows.filter(f => f.fecha_emision.slice(0, 7) === filtro.mes)
       if (filtro.estado) {
         const pagos = await readTable('Pagos')
@@ -197,13 +186,49 @@ export function createRepository(ctx: RepoContext) {
     },
 
     async getFactura(id: string): Promise<{ factura: Factura; items: FacturaItem[] }> {
-      const facturas = (await readTable('Facturas')) as unknown as Factura[]
+      const facturas = await readTable<Factura>('Facturas')
       const factura = facturas.find(f => f.id_factura === id)
       if (!factura) throw new Error('Factura no existe')
       const items = (await readTable('Factura_Items')).filter(i => i.id_factura === id).map(i => ({
         descripcion: String(i.descripcion), cantidad: Number(i.cantidad), precio_unitario: Number(i.precio_unitario), importe: Number(i.importe)
       }))
       return { factura, items }
+    },
+
+    async updateFactura(id: string, input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }): Promise<Factura> {
+      const parsed = FacturaInputSchema.parse(input)
+      const facturas = await readTable<Factura>('Facturas')
+      const actual = facturas.find(f => f.id_factura === id)
+      if (!actual) throw new Error('Factura no existe')
+      const clientes = await readTable('Clientes')
+      const cliente = clientes.find(c => c.id_cliente === parsed.id_cliente)
+      if (!cliente) throw new Error('Cliente no existe')
+      const cfg = await readConfig()
+      const moneda = parsed.moneda || actual.moneda || cfg.moneda
+      const { items, totals } = buildFactura(parsed.items, cfg.iva_porcentaje, getCurrency(moneda).decimals)
+      const diff = round2(totals.total - Number(actual.total))
+      const nuevoSaldo = round2(Math.max(0, Number(actual.saldo) + diff))
+      const hoy = todayLocal()
+      const updated: Factura = {
+        ...actual,
+        id_cliente: parsed.id_cliente,
+        nombre_cliente: String(cliente.nombre),
+        fecha_emision: parsed.fecha_emision,
+        fecha_vencimiento: parsed.fecha_vencimiento,
+        notas: parsed.notas,
+        moneda,
+        tipo_cambio: tipoCambioDe(cfg, moneda),
+        subtotal: totals.subtotal,
+        iva: totals.iva,
+        total: totals.total,
+        saldo: nuevoSaldo,
+        editada: 'true',
+        fecha_edicion: hoy
+      }
+      const oldItems = (await readTable('Factura_Items')).filter(i => i.id_factura !== id)
+      await replaceTable('Facturas', facturas.map(f => (f.id_factura === id ? updated : f)))
+      await replaceTable('Factura_Items', [...oldItems, ...items.map(it => ({ id_factura: id, ...it }))])
+      return updated
     },
 
     async deleteFactura(id: string): Promise<void> {
@@ -214,7 +239,7 @@ export function createRepository(ctx: RepoContext) {
     },
 
     async listGastos(filtro: { mes?: string; categoria?: string } = {}): Promise<Gasto[]> {
-      let rows = (await readTable('Gastos')) as unknown as Gasto[]
+      let rows = await readTable<Gasto>('Gastos')
       if (filtro.mes) rows = rows.filter(g => g.fecha.slice(0, 7) === filtro.mes)
       if (filtro.categoria) rows = rows.filter(g => g.categoria === filtro.categoria)
       return rows
@@ -222,8 +247,10 @@ export function createRepository(ctx: RepoContext) {
 
     async saveGasto(gasto: Gasto): Promise<Gasto> {
       const parsed = GastoSchema.parse(gasto)
-      const saved = { ...parsed, id_gasto: parsed.id_gasto || uid('gas_') } as unknown as Gasto
-      await insertOrReplace('Gastos', 'id_gasto', saved as unknown as Record<string, string | number>)
+      const cfg = await readConfig()
+      const moneda = parsed.moneda || cfg.moneda
+      const saved = { ...parsed, id_gasto: parsed.id_gasto || uid('gas_'), moneda, tipo_cambio: parsed.tipo_cambio || tipoCambioDe(cfg, moneda) } as unknown as Gasto
+      await insertOrReplace('Gastos', 'id_gasto', saved)
       return saved
     },
 
@@ -231,27 +258,27 @@ export function createRepository(ctx: RepoContext) {
       await replaceTable('Gastos', (await readTable('Gastos')).filter(r => r.id_gasto !== id))
     },
 
-    async listProveedores(): Promise<Proveedor[]> { return readTable('Proveedores') as unknown as Proveedor[] },
+    async listProveedores(): Promise<Proveedor[]> { return readTable<Proveedor>('Proveedores') },
 
     async saveProveedor(p: Proveedor): Promise<Proveedor> {
       const parsed = ProveedorSchema.parse(p)
-      const saved = { ...parsed, id_proveedor: parsed.id_proveedor || uid('prov_'), fecha_registro: parsed.fecha_registro || new Date().toISOString().slice(0, 10) } as unknown as Proveedor
-      await insertOrReplace('Proveedores', 'id_proveedor', saved as unknown as Record<string, string | number>)
+      const saved = { ...parsed, id_proveedor: parsed.id_proveedor || uid('prov_'), fecha_registro: parsed.fecha_registro || todayLocal() } as unknown as Proveedor
+      await insertOrReplace('Proveedores', 'id_proveedor', saved)
       return saved
     },
 
     async deleteProveedor(id: string): Promise<void> {
       const cxps = await readTable('Cuentas_Pagar')
-      if (cxps.some(c => c.id_proveedor === id)) throw new Error('Proveedor tiene cuentas por pagar asociadas')
+      assertProveedorSinCxp(cxps, id)
       await replaceTable('Proveedores', (await readTable('Proveedores')).filter(r => r.id_proveedor !== id))
     },
 
-    async listEmpleados(): Promise<Empleado[]> { return readTable('Empleados') as unknown as Empleado[] },
+    async listEmpleados(): Promise<Empleado[]> { return readTable<Empleado>('Empleados') },
 
     async saveEmpleado(emp: Empleado): Promise<Empleado> {
       const parsed = EmpleadoSchema.parse(emp)
-      const saved = { ...parsed, id_empleado: parsed.id_empleado || uid('emp_'), fecha_ingreso: parsed.fecha_ingreso || new Date().toISOString().slice(0, 10) } as unknown as Empleado
-      await insertOrReplace('Empleados', 'id_empleado', saved as unknown as Record<string, string | number>)
+      const saved = { ...parsed, id_empleado: parsed.id_empleado || uid('emp_'), fecha_ingreso: parsed.fecha_ingreso || todayLocal() } as unknown as Empleado
+      await insertOrReplace('Empleados', 'id_empleado', saved)
       return saved
     },
 
@@ -265,10 +292,12 @@ export function createRepository(ctx: RepoContext) {
       await replaceTable('Empleados', (await readTable('Empleados')).filter(r => r.id_empleado !== id))
     },
 
-    async registerNomina(input: { id_empleado: string; mes: string; monto: number; metodo_pago: MetodoPago; fecha: string; notas: string }): Promise<Gasto> {
+    async registerNomina(input: { id_empleado: string; mes: string; monto: number; metodo_pago: MetodoPago; fecha: string; notas: string; moneda?: string }): Promise<Gasto> {
       const parsed = NominaInputSchema.parse(input)
       const emp = (await readTable('Empleados')).find(r => r.id_empleado === parsed.id_empleado)
       if (!emp) throw new Error('Empleado no existe')
+      const cfg = await readConfig()
+      const moneda = parsed.moneda || cfg.moneda
       const fecha = parsed.fecha || `${parsed.mes}-01`
       const gasto: Gasto = {
         id_gasto: uid('gas_'),
@@ -277,17 +306,21 @@ export function createRepository(ctx: RepoContext) {
         descripcion: `Nómina ${parsed.mes} — ${String(emp.nombre)}`,
         monto: round2(parsed.monto),
         metodo_pago: parsed.metodo_pago,
-        proveedor: String(emp.nombre)
+        proveedor: String(emp.nombre),
+        moneda,
+        tipo_cambio: tipoCambioDe(cfg, moneda)
       }
-      await appendRows('Gastos', [gasto as unknown as Record<string, string | number>])
+      await appendRows('Gastos', [gasto])
       return gasto
     },
 
-    async createCxp(input: { id_proveedor: string; folio_documento: string; categoria: string; descripcion: string; fecha_emision: string; fecha_vencimiento: string; monto_total: number; notas: string }): Promise<CuentaPagar> {
+    async createCxp(input: { id_proveedor: string; folio_documento: string; categoria: string; descripcion: string; fecha_emision: string; fecha_vencimiento: string; monto_total: number; notas: string; moneda?: string }): Promise<CuentaPagar> {
       const parsed = CxpInputSchema.parse(input)
       const provs = await readTable('Proveedores')
       const prov = provs.find(p => p.id_proveedor === parsed.id_proveedor)
       if (!prov) throw new Error('Proveedor no existe')
+      const cfg = await readConfig()
+      const moneda = parsed.moneda || cfg.moneda
       const cxp: CuentaPagar = {
         id_cxp: uid('cxp_'),
         id_proveedor: parsed.id_proveedor,
@@ -300,14 +333,16 @@ export function createRepository(ctx: RepoContext) {
         monto_total: round2(parsed.monto_total),
         saldo: round2(parsed.monto_total),
         estado: 'pendiente',
-        notas: parsed.notas
+        notas: parsed.notas,
+        moneda,
+        tipo_cambio: tipoCambioDe(cfg, moneda)
       }
-      await appendRows('Cuentas_Pagar', [cxp as unknown as Record<string, string | number>])
+      await appendRows('Cuentas_Pagar', [cxp])
       return cxp
     },
 
     async listCxp(filtro: { estado?: string } = {}): Promise<CuentaPagar[]> {
-      let rows = (await readTable('Cuentas_Pagar')) as unknown as CuentaPagar[]
+      let rows = await readTable<CuentaPagar>('Cuentas_Pagar')
       if (filtro.estado) rows = rows.filter(c => c.estado === filtro.estado)
       return rows
     },
@@ -334,7 +369,9 @@ export function createRepository(ctx: RepoContext) {
         const saldoActual = Number(target.saldo)
         if (parsed.monto > saldoActual) throw new Error(`Pago excede saldo disponible (${saldoActual})`)
         const nuevoSaldo = round2(saldoActual - parsed.monto)
-        const pagoRow: Pago = { id_pago: uid('pag_'), ...parsed }
+        const monedaOrigen = String(target.moneda ?? '')
+        const tipoCambioOrigen = Number(target.tipo_cambio) || 1
+        const pagoRow: Pago = { id_pago: uid('pag_'), ...parsed, moneda: monedaOrigen, tipo_cambio: tipoCambioOrigen }
         const updated = rows.map(r => {
           if (r[idKey] === parsed.id_origen) {
             if (table === 'Facturas') return { ...r, saldo: nuevoSaldo, fecha_pago: nuevoSaldo <= 0 ? parsed.fecha : String(r.fecha_pago ?? '') }
@@ -352,16 +389,16 @@ export function createRepository(ctx: RepoContext) {
     },
 
     async listPagos(idOrigen?: string): Promise<Pago[]> {
-      let rows = (await readTable('Pagos')) as unknown as Pago[]
+      let rows = await readTable<Pago>('Pagos')
       if (idOrigen) rows = rows.filter(p => p.id_origen === idOrigen)
       return rows
     },
 
     async getReportes(mes: string) {
-      const [facturas, gastos, cxps, pagos] = await Promise.all([readTable('Facturas'), readTable('Gastos'), readTable('Cuentas_Pagar'), readTable('Pagos')])
-      const kpis: Kpis = kpisForMonth(facturas as unknown as Factura[], gastos as unknown as Gasto[], cxps as unknown as CuentaPagar[], pagos as unknown as Pago[], mes)
-      const categorias = gastosPorCategoria((gastos as unknown as Gasto[]).filter(g => g.fecha.slice(0, 7) === mes))
-      const top = topClientes((facturas as unknown as Factura[]).filter(f => f.fecha_emision.slice(0, 7) === mes))
+      const [facturas, gastos, cxps, pagos] = await Promise.all([readTable<Factura>('Facturas'), readTable<Gasto>('Gastos'), readTable<CuentaPagar>('Cuentas_Pagar'), readTable<Pago>('Pagos')])
+      const kpis: Kpis = kpisForMonth(facturas, gastos, cxps, pagos, mes)
+      const categorias = gastosPorCategoria(gastos.filter(g => g.fecha.slice(0, 7) === mes))
+      const top = topClientes(facturas.filter(f => f.fecha_emision.slice(0, 7) === mes))
       return { kpis, categorias, top }
     },
 
@@ -369,6 +406,67 @@ export function createRepository(ctx: RepoContext) {
       const cfg = await readConfig()
       const raw = kind === 'gastos' ? cfg.categorias_gastos : cfg.categorias_cxp
       return raw.split(',').map(s => s.trim()).filter(Boolean)
+    },
+
+    async listProductos(): Promise<Producto[]> {
+      const rows = await readTable<Producto>('Productos')
+      const provs = (await readTable('Proveedores')).reduce<Record<string, string>>((m, p) => { m[String(p.id_proveedor)] = String(p.nombre ?? ''); return m }, {})
+      return enrichNombreProveedor(rows, provs)
+    },
+
+    async saveProducto(p: Producto): Promise<Producto> {
+      const parsed = ProductoSchema.parse(p)
+      const provs = (await readTable('Proveedores')).reduce<Record<string, string>>((m, pr) => { m[String(pr.id_proveedor)] = String(pr.nombre ?? ''); return m }, {})
+      const saved = {
+        ...parsed,
+        id_producto: parsed.id_producto || uid('prod_'),
+        fecha_registro: parsed.fecha_registro || todayLocal(),
+        nombre_proveedor: parsed.nombre_proveedor || provs[String(parsed.id_proveedor)] || ''
+      } as unknown as Producto
+      await insertOrReplace('Productos', 'id_producto', saved)
+      return saved
+    },
+
+    async deleteProducto(id: string): Promise<void> {
+      const all = (await readTable('Productos')).filter(r => r.id_producto !== id)
+      await replaceTable('Productos', all)
+    },
+
+    async registrarMovimiento(input: { id_producto: string; tipo: TipoMovimiento; cantidad: number; motivo: string; id_proveedor: string; fecha: string }): Promise<MovimientoStock> {
+      const parsed = MovimientoStockSchema.parse(input)
+      return withMutex<MovimientoStock>(mutexReadRow, mutexWriteRow, async () => {
+        const productos = await readTable<Producto>('Productos')
+        const prod = productos.find(p => p.id_producto === parsed.id_producto)
+        if (!prod) throw new Error('Producto no existe')
+        const stockActual = Number(prod.stock) || 0
+        let nuevoStock = stockActual
+        if (parsed.tipo === 'entrada') nuevoStock = stockActual + parsed.cantidad
+        else if (parsed.tipo === 'salida') {
+          if (parsed.cantidad > stockActual) throw new Error(`Stock insuficiente (disponible: ${stockActual})`)
+          nuevoStock = stockActual - parsed.cantidad
+        } else {
+          nuevoStock = parsed.cantidad
+        }
+        const idProveedor = parsed.tipo === 'entrada' ? (parsed.id_proveedor || String(prod.id_proveedor || '')) : ''
+        const mov: MovimientoStock = {
+          id_movimiento: uid('mov_'),
+          id_producto: parsed.id_producto,
+          tipo: parsed.tipo,
+          cantidad: parsed.cantidad,
+          motivo: parsed.motivo,
+          id_proveedor: idProveedor,
+          fecha: parsed.fecha
+        }
+        await replaceTable('Productos', (productos).map(r => (r.id_producto === parsed.id_producto ? { ...r, stock: nuevoStock, id_proveedor: idProveedor || String(r.id_proveedor ?? '') } : r)))
+        await appendRows('Movimientos_Stock', [mov])
+        return mov
+      })
+    },
+
+    async listMovimientos(idProducto?: string): Promise<MovimientoStock[]> {
+      let rows = await readTable<MovimientoStock>('Movimientos_Stock')
+      if (idProducto) rows = rows.filter(m => m.id_producto === idProducto)
+      return rows.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
     }
   }
 }

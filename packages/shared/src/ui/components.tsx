@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useState } from 'react'
 import type { ReactNode } from 'react'
 import { IconX } from './icons'
+import { useI18n } from '../i18n'
 
 const cx = (...a: (string | false | undefined)[]) => a.filter(Boolean).join(' ')
 
@@ -126,9 +127,10 @@ export function Dialog({ open, onClose, title, children, footer }: { open: boole
 }
 
 export function ConfirmDialog({ open, title, message, onConfirm, onClose }: { open: boolean; title: string; message: string; onConfirm: () => void; onClose: () => void }) {
+  const { t } = useI18n()
   return (
     <Dialog open={open} onClose={onClose} title={title}
-      footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button variant="danger" onClick={onConfirm}>Eliminar</Button></>}>
+      footer={<><Button variant="outline" onClick={onClose}>{t('common.cancelar')}</Button><Button variant="danger" onClick={onConfirm}>{t('common.eliminar')}</Button></>}>
       <p>{message}</p>
     </Dialog>
   )

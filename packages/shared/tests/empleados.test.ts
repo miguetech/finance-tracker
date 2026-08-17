@@ -6,9 +6,9 @@ import { SheetsApi } from '../src/sheets/api'
 import type { StorageAdapter } from '../src/data/storage'
 
 describe('empleados schema', () => {
-  it('TABLES incluye la hoja Empleados con 7 columnas', () => {
+  it('TABLES incluye la hoja Empleados con 8 columnas', () => {
     const spec = TABLES.Empleados
-    expect(spec.map(c => c.key)).toEqual(['id_empleado', 'nombre', 'rfc', 'puesto', 'salario', 'fecha_ingreso', 'activo'])
+    expect(spec.map(c => c.key)).toEqual(['id_empleado', 'nombre', 'rfc', 'puesto', 'salario', 'salario_moneda', 'fecha_ingreso', 'activo'])
   })
   it('EmpleadoSchema requiere nombre y default salario 0', () => {
     const e = EmpleadoSchema.parse({ nombre: 'Ana' })
@@ -131,7 +131,7 @@ describe('empleados repository', () => {
   })
 
   it('registerNomina lanza Empleado no existe si falta el empleado', async () => {
-    const f = fakeApi()
+    fakeApi()
     const api = new SheetsApi(async () => 'T')
     const storage = memoryStorage()
     const repo = createRepository({ api, storage, getSpreadsheetId: async () => 'S' })
@@ -139,7 +139,7 @@ describe('empleados repository', () => {
   })
 
   it('deleteEmpleado bloquea si hay gasto Nómina del mismo proveedor', async () => {
-    const f = fakeApi({ Empleados: [[], ['emp_1', 'Ana', '', '', 5000, '2026-01-01', 'true']], Gastos: [[], ['gas_1', '2026-08-05', 'Nómina', 'Nómina 2026-08 — Ana', 5000, 'Transferencia', 'Ana']] })
+    fakeApi({ Empleados: [[], ['emp_1', 'Ana', '', '', 5000, '2026-01-01', 'true']], Gastos: [[], ['gas_1', '2026-08-05', 'Nómina', 'Nómina 2026-08 — Ana', 5000, 'Transferencia', 'Ana']] })
     const api = new SheetsApi(async () => 'T')
     const storage = memoryStorage()
     const repo = createRepository({ api, storage, getSpreadsheetId: async () => 'S' })

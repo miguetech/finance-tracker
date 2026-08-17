@@ -1,5 +1,7 @@
 import type { Factura, Gasto, CuentaPagar, Pago } from '../types/entities'
 import { round2 } from './invoice'
+import { toBase } from '../currency/rates'
+import { todayLocal } from '../lib/date'
 
 export interface Kpis {
   facturado: number
@@ -16,16 +18,20 @@ function inMonth(dateISO: string, mes: string): boolean {
   return dateISO.slice(0, 7) === mes
 }
 
+function toBaseMonto(monto: number, tipoCambio: number): number {
+  return round2(toBase(monto, Number(tipoCambio) || 1))
+}
+
 export function kpisForMonth(facturas: Factura[], gastos: Gasto[], cxps: CuentaPagar[], pagos: Pago[], mes: string): Kpis {
   const f = facturas.filter(x => inMonth(x.fecha_emision, mes))
-  const facturado = round2(f.reduce((s, x) => s + x.total, 0))
-  const cobrado = round2(pagos.filter(p => p.tipo === 'cobro' && inMonth(p.fecha, mes)).reduce((s, p) => s + p.monto, 0))
-  const pendiente = round2(f.filter(x => x.saldo > 0).reduce((s, x) => s + x.saldo, 0))
-  const gastosMes = round2(gastos.filter(g => inMonth(g.fecha, mes)).reduce((s, g) => s + g.monto, 0))
-  const today = new Date().toISOString().slice(0, 10)
-  const porPagar = round2(cxps.filter(x => x.saldo > 0).reduce((s, x) => s + x.saldo, 0))
-  const vencidas = round2(cxps.filter(x => x.saldo > 0 && x.fecha_vencimiento < today).reduce((s, x) => s + x.saldo, 0))
-  const porVencer = round2(cxps.filter(x => x.saldo > 0 && x.fecha_vencimiento >= today).reduce((s, x) => s + x.saldo, 0))
+  const facturado = round2(f.reduce((s, x) => s + toBaseMonto(x.total, x.tipo_cambio), 0))
+  const cobrado = round2(pagos.filter(p => p.tipo === 'cobro' && inMonth(p.fecha, mes)).reduce((s, p) => s + toBaseMonto(p.monto, p.tipo_cambio), 0))
+  const pendiente = round2(f.filter(x => x.saldo > 0).reduce((s, x) => s + toBaseMonto(x.saldo, x.tipo_cambio), 0))
+  const gastosMes = round2(gastos.filter(g => inMonth(g.fecha, mes)).reduce((s, g) => s + toBaseMonto(g.monto, g.tipo_cambio), 0))
+  const today = todayLocal()
+  const porPagar = round2(cxps.filter(x => x.saldo > 0).reduce((s, x) => s + toBaseMonto(x.saldo, x.tipo_cambio), 0))
+  const vencidas = round2(cxps.filter(x => x.saldo > 0 && x.fecha_vencimiento < today).reduce((s, x) => s + toBaseMonto(x.saldo, x.tipo_cambio), 0))
+  const porVencer = round2(cxps.filter(x => x.saldo > 0 && x.fecha_vencimiento >= today).reduce((s, x) => s + toBaseMonto(x.saldo, x.tipo_cambio), 0))
   return { facturado, cobrado, pendiente, gastos: gastosMes, utilidad: round2(cobrado - gastosMes), porPagar, vencidas, porVencer }
 }
 

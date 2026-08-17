@@ -15,8 +15,8 @@ describe('presets', () => {
   it('solo_lectura ve todos los módulos', () => {
     expect(ROLE_PRESETS.solo_lectura).toEqual([...MODULE_KEYS])
   })
-  it('ver_facturas ve dashboard, facturas y clientes', () => {
-    expect(ROLE_PRESETS.ver_facturas).toEqual(['dashboard', 'facturas', 'clientes'])
+  it('ver_facturas ve dashboard, facturas, clientes y cuentas por cobrar', () => {
+    expect(ROLE_PRESETS.ver_facturas).toEqual(['dashboard', 'facturas', 'clientes', 'cxc'])
   })
 })
 

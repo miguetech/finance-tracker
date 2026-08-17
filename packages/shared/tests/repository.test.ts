@@ -232,3 +232,51 @@ describe('usuarios', () => {
     await repo.deleteUsuario('a@b.c')
   })
 })
+
+describe('integridad FK', () => {
+  it('deleteCliente bloquea si tiene facturas', async () => {
+    const { repo } = setup()
+    const cli = await repo.saveCliente({ nombre: 'ACME' } as never)
+    await repo.createFactura({ id_cliente: cli.id_cliente, items: [{ descripcion: 'a', cantidad: 1, precio_unitario: 100 }], fecha_emision: '2026-08-11', fecha_vencimiento: '', notas: '' })
+    await expect(repo.deleteCliente(cli.id_cliente)).rejects.toThrow(/facturas/i)
+    expect((await repo.listClientes()).length).toBe(1)
+  })
+
+  it('deleteCliente permite sin facturas', async () => {
+    const { repo } = setup()
+    const cli = await repo.saveCliente({ nombre: 'Solo' } as never)
+    await repo.deleteCliente(cli.id_cliente)
+    expect((await repo.listClientes()).length).toBe(0)
+  })
+
+  it('deleteProveedor bloquea si tiene CxP', async () => {
+    const { repo } = setup()
+    const pr = await repo.saveProveedor({ nombre: 'Prov X' } as never)
+    await repo.createCxp({ id_proveedor: pr.id_proveedor, folio_documento: 'P-1', categoria: '', descripcion: 'compra', fecha_emision: '2026-08-11', fecha_vencimiento: '2026-09-11', monto_total: 500, notas: '' })
+    await expect(repo.deleteProveedor(pr.id_proveedor)).rejects.toThrow(/cuentas/i)
+    expect((await repo.listProveedores()).length).toBe(1)
+  })
+
+  it('deleteProveedor permite sin CxP', async () => {
+    const { repo } = setup()
+    const pr = await repo.saveProveedor({ nombre: 'Prov Libre' } as never)
+    await repo.deleteProveedor(pr.id_proveedor)
+    expect((await repo.listProveedores()).length).toBe(0)
+  })
+
+  it('deleteUsuario es case-insensitive', async () => {
+    const { repo } = setup()
+    await repo.saveUsuario({ email: 'a@b.c', rol: 'asistente', modulos_ver: 'facturas', modulos_editar: '' })
+    await repo.deleteUsuario('A@B.C')
+    expect((await repo.listUsuarios()).length).toBe(0)
+  })
+
+  it('listProductos enriquece nombre_proveedor', async () => {
+    const { repo, grid } = setup()
+    grid.set('Productos', [['p1', 'Manzana', 'Frutas', 'kg', 10, 2, 5, 8, 'prov1', '', '', 'true', '2026-08-11']])
+    grid.set('Proveedores', [['prov1', 'Frutería Central', 'RFC1', '', '', '', '2026-08-11']])
+    const [p] = await repo.listProductos()
+    expect(p.nombre_proveedor).toBe('Frutería Central')
+  })
+})
+

@@ -1,6 +1,6 @@
 import type { TipoDoc } from '../taxid'
 
-export type MetodoPago = 'Efectivo' | 'Transferencia' | 'Tarjeta'
+export type MetodoPago = string
 export type TipoPago = 'cobro' | 'abono'
 export type EstadoFactura = 'pendiente' | 'parcial' | 'pagada'
 
@@ -34,6 +34,10 @@ export interface Factura {
   saldo: number
   fecha_pago: string
   notas: string
+  moneda: string
+  tipo_cambio: number
+  editada: string
+  fecha_edicion: string
 }
 
 export interface Empleado {
@@ -42,6 +46,7 @@ export interface Empleado {
   rfc: string
   puesto: string
   salario: number
+  salario_moneda: string
   fecha_ingreso: string
   activo: string
 }
@@ -54,6 +59,8 @@ export interface Gasto {
   monto: number
   metodo_pago: MetodoPago
   proveedor: string
+  moneda: string
+  tipo_cambio: number
 }
 
 export interface Proveedor {
@@ -79,6 +86,8 @@ export interface CuentaPagar {
   saldo: number
   estado: EstadoFactura
   notas: string
+  moneda: string
+  tipo_cambio: number
 }
 
 export interface Pago {
@@ -89,6 +98,36 @@ export interface Pago {
   monto: number
   metodo_pago: MetodoPago
   notas: string
+  moneda: string
+  tipo_cambio: number
+}
+
+export interface Producto {
+  id_producto: string
+  nombre: string
+  categoria: string
+  unidad: string
+  stock: number
+  stock_minimo: number
+  precio_costo: number
+  precio_venta: number
+  id_proveedor: string
+  nombre_proveedor: string
+  notas: string
+  activo: string
+  fecha_registro: string
+}
+
+export type TipoMovimiento = 'entrada' | 'salida' | 'ajuste'
+
+export interface MovimientoStock {
+  id_movimiento: string
+  id_producto: string
+  tipo: TipoMovimiento
+  cantidad: number
+  motivo: string
+  id_proveedor: string
+  fecha: string
 }
 
 export interface Config {
@@ -107,6 +146,11 @@ export interface Config {
   iva_porcentaje: number
   categorias_gastos: string
   categorias_cxp: string
+  categorias_inventario: string
+  monedas_activas: string
+  monedas_custom: string
+  tasas_cambio: string
+  metodos_pago: string
   tipo_doc: TipoDoc
   tipo_doc_etiqueta: string
   share_backend_url: string

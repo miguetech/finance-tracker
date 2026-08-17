@@ -1,7 +1,9 @@
 import { z } from 'zod'
-import type { MetodoPago } from './entities'
+import { todayLocal } from '../lib/date'
 
-export const MetodoPagoSchema = z.enum(['Efectivo', 'Transferencia', 'Tarjeta'])
+export const DEFAULT_METODOS_PAGO = 'Efectivo,Transferencia,Tarjeta'
+
+export const MetodoPagoSchema = z.string().default('Efectivo')
 
 export const ClienteSchema = z.object({
   id_cliente: z.string().optional(),
@@ -22,9 +24,10 @@ export const FacturaItemSchema = z.object({
 
 export const FacturaInputSchema = z.object({
   id_cliente: z.string().min(1, 'Cliente obligatorio'),
-  fecha_emision: z.string().default(() => new Date().toISOString().slice(0, 10)),
+  fecha_emision: z.string().default(() => todayLocal()),
   fecha_vencimiento: z.string().default(''),
   notas: z.string().default(''),
+  moneda: z.string().default(''),
   items: z.array(FacturaItemSchema).min(1, 'Mínimo 1 concepto')
 })
 
@@ -35,7 +38,9 @@ export const GastoSchema = z.object({
   descripcion: z.string().min(1, 'Descripción obligatoria'),
   monto: z.number().nonnegative('Monto >= 0'),
   metodo_pago: MetodoPagoSchema.default('Efectivo'),
-  proveedor: z.string().default('')
+  proveedor: z.string().default(''),
+  moneda: z.string().default(''),
+  tipo_cambio: z.number().default(1)
 })
 
 export const ProveedorSchema = z.object({
@@ -54,6 +59,7 @@ export const EmpleadoSchema = z.object({
   rfc: z.string().default(''),
   puesto: z.string().default(''),
   salario: z.number().nonnegative('Salario >= 0').default(0),
+  salario_moneda: z.string().default(''),
   fecha_ingreso: z.string().default(''),
   activo: z.string().default('true')
 })
@@ -63,8 +69,9 @@ export const NominaInputSchema = z.object({
   mes: z.string().regex(/^\d{4}-\d{2}$/, 'Mes con formato YYYY-MM'),
   monto: z.number().positive('Monto > 0'),
   metodo_pago: MetodoPagoSchema.default('Transferencia'),
-  fecha: z.string().default(() => new Date().toISOString().slice(0, 10)),
-  notas: z.string().default('')
+  fecha: z.string().default(() => todayLocal()),
+  notas: z.string().default(''),
+  moneda: z.string().default('')
 })
 
 export const CxpInputSchema = z.object({
@@ -72,10 +79,36 @@ export const CxpInputSchema = z.object({
   folio_documento: z.string().default(''),
   categoria: z.string().default(''),
   descripcion: z.string().min(1, 'Descripción obligatoria'),
-  fecha_emision: z.string().default(() => new Date().toISOString().slice(0, 10)),
+  fecha_emision: z.string().default(() => todayLocal()),
   fecha_vencimiento: z.string().min(1, 'Fecha vencimiento obligatoria'),
   monto_total: z.number().positive('Monto > 0'),
-  notas: z.string().default('')
+  notas: z.string().default(''),
+  moneda: z.string().default('')
+})
+
+export const ProductoSchema = z.object({
+  id_producto: z.string().optional(),
+  nombre: z.string().min(1, 'Nombre obligatorio'),
+  categoria: z.string().default(''),
+  unidad: z.string().default('pieza'),
+  stock: z.number().nonnegative('Stock >= 0').default(0),
+  stock_minimo: z.number().nonnegative('Stock mínimo >= 0').default(0),
+  precio_costo: z.number().nonnegative('Costo >= 0').default(0),
+  precio_venta: z.number().nonnegative('Precio >= 0').default(0),
+  id_proveedor: z.string().default(''),
+  nombre_proveedor: z.string().default(''),
+  notas: z.string().default(''),
+  activo: z.string().default('true'),
+  fecha_registro: z.string().default('')
+})
+
+export const MovimientoStockSchema = z.object({
+  id_producto: z.string().min(1, 'Producto obligatorio'),
+  tipo: z.enum(['entrada', 'salida', 'ajuste']),
+  cantidad: z.number().positive('Cantidad > 0'),
+  motivo: z.string().default(''),
+  id_proveedor: z.string().default(''),
+  fecha: z.string().default(() => todayLocal())
 })
 
 export const PagoInputSchema = z.object({
@@ -103,6 +136,11 @@ export const ConfigSchema = z.object({
   iva_porcentaje: z.number().default(16),
   categorias_gastos: z.string().default('Renta,Internet,Papelería,Servicios'),
   categorias_cxp: z.string().default('Materiales,Servicios,Impuestos,Otros'),
+  categorias_inventario: z.string().default('Frutas,Verduras,Materiales,Limpieza'),
+  monedas_activas: z.string().default(''),
+  monedas_custom: z.string().default(''),
+  tasas_cambio: z.string().default(''),
+  metodos_pago: z.string().default(DEFAULT_METODOS_PAGO),
   tipo_doc: z.enum(['RFC', 'NIF', 'Cedula', 'Otro']).default('RFC'),
   tipo_doc_etiqueta: z.string().default(''),
   share_backend_url: z.string().default('')

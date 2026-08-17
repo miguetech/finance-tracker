@@ -1,23 +1,12 @@
 import React, { useState } from 'react'
 import type { ReactNode } from 'react'
 import { cx } from '../components'
-import { IconDashboard, IconInvoice, IconClient, IconUsers, IconPayables, IconProvider, IconExpense, IconReport, IconSettings, IconMenu, IconLogo } from '../icons'
+import { IconDashboard, IconInvoice, IconClient, IconUsers, IconPayables, IconReceivable, IconProvider, IconExpense, IconReport, IconSettings, IconMenu, IconLogo, IconBox } from '../icons'
+import { useI18n } from '../../i18n'
 
-export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuentas' | 'proveedores' | 'gastos' | 'reportes' | 'configuracion' | 'compartir'
+export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuentas' | 'cxc' | 'proveedores' | 'gastos' | 'reportes' | 'configuracion' | 'compartir' | 'inventario'
 
 export interface NavItem { key: NavKey; label: string; Icon: (p: { className?: string }) => ReactNode }
-
-const NAV: NavItem[] = [
-  { key: 'dashboard', label: 'Dashboard', Icon: IconDashboard },
-  { key: 'facturas', label: 'Facturas', Icon: IconInvoice },
-  { key: 'clientes', label: 'Clientes', Icon: IconClient },
-  { key: 'empleados', label: 'Empleados', Icon: IconUsers },
-  { key: 'cuentas', label: 'Cuentas por Pagar', Icon: IconPayables },
-  { key: 'proveedores', label: 'Proveedores', Icon: IconProvider },
-  { key: 'gastos', label: 'Gastos', Icon: IconExpense },
-  { key: 'reportes', label: 'Reportes', Icon: IconReport },
-  { key: 'configuracion', label: 'Configuración', Icon: IconSettings }
-]
 
 export function Layout({ current, onNavigate, children, headerExtra, filterNav, extraItems }: {
   current: NavKey
@@ -27,7 +16,21 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
   filterNav?: (key: NavKey) => boolean
   extraItems?: NavItem[]
 }) {
+  const { t } = useI18n()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const NAV: NavItem[] = [
+    { key: 'dashboard', label: t('nav.dashboard'), Icon: IconDashboard },
+    { key: 'facturas', label: t('nav.facturas'), Icon: IconInvoice },
+    { key: 'clientes', label: t('nav.clientes'), Icon: IconClient },
+    { key: 'empleados', label: t('nav.empleados'), Icon: IconUsers },
+    { key: 'cxc', label: t('nav.cxc'), Icon: IconReceivable },
+    { key: 'cuentas', label: t('nav.cuentas'), Icon: IconPayables },
+    { key: 'proveedores', label: t('nav.proveedores'), Icon: IconProvider },
+    { key: 'inventario', label: t('nav.inventario'), Icon: IconBox },
+    { key: 'gastos', label: t('nav.gastos'), Icon: IconExpense },
+    { key: 'reportes', label: t('nav.reportes'), Icon: IconReport },
+    { key: 'configuracion', label: t('nav.configuracion'), Icon: IconSettings }
+  ]
   const visible = NAV.filter(n => !filterNav || filterNav(n.key))
   const items = extraItems?.length ? [...visible, ...extraItems] : visible
   const nav = (
@@ -36,7 +39,7 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
         <IconLogo className="text-primary w-7 h-7" />
         <div>
           <div className="font-bold text-lg tracking-tight text-gray-900 leading-none">FinanceTracker</div>
-          <div className="text-xs text-muted-foreground mt-0.5">Facturación personal</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{t('nav.facturacionPersonal')}</div>
         </div>
       </div>
       {items.map(n => (

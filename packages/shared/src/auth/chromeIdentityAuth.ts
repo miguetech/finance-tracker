@@ -1,6 +1,6 @@
 import type { AuthProvider } from './types'
 
-export function chromeIdentityAuth(clientId: string): AuthProvider {
+export function chromeIdentityAuth(_clientId: string): AuthProvider {
   const ext = chrome as unknown as {
     identity?: {
       getAuthToken: (opts: { interactive: boolean }, cb: (token: string) => void) => void

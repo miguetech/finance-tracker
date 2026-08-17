@@ -3,10 +3,10 @@ import type { AuthProvider } from './types'
 export function popupOAuth(options: { clientId: string; redirectUri: string }): AuthProvider & { getIdToken: (interactive: boolean) => Promise<string> } {
   const { clientId, redirectUri } = options
   const SCOPE = encodeURIComponent(['openid', 'email', 'https://www.googleapis.com/auth/drive.file'].join(' '))
-  const TOKEN_KEY = 'ft_web_access_token'
-  const ID_TOKEN_KEY = 'ft_web_id_token'
-  const EXPIRES_KEY = 'ft_web_token_expires_at'
   const NONCE_KEY = 'ft_web_oauth_nonce'
+  let memAccess: string | null = null
+  let memIdToken: string | null = null
+  let memExpiresAt = 0
 
   function newNonce(): string {
     try {
@@ -44,35 +44,34 @@ export function popupOAuth(options: { clientId: string; redirectUri: string }): 
       const access = params.get('access_token')
       const idToken = params.get('id_token')
       const expiresIn = Number(params.get('expires_in') ?? '3600')
-      const exp = String(Date.now() + expiresIn * 1000 - 60000)
-      if (access) window.localStorage.setItem(TOKEN_KEY, access)
+      const exp = Date.now() + expiresIn * 1000 - 60000
+      if (access) { memAccess = access; memExpiresAt = exp }
       if (idToken && idTokenNonceMatches(idToken, nonce())) {
-        window.localStorage.setItem(ID_TOKEN_KEY, idToken)
+        memIdToken = idToken
+        memExpiresAt = Math.max(memExpiresAt, exp)
         window.sessionStorage.removeItem(NONCE_KEY)
       } else if (idToken) {
         return { access: null, idToken: null }
       }
-      if (access || idToken) window.localStorage.setItem(EXPIRES_KEY, exp)
       return { access, idToken }
     } catch { return { access: null, idToken: null } }
   }
 
   function storedIdToken(): string | null {
-    try {
-      const t = window.localStorage.getItem(ID_TOKEN_KEY)
-      const exp = Number(window.localStorage.getItem(EXPIRES_KEY) ?? 0)
-      if (t && exp > Date.now()) return t
-    } catch { /* storage no disponible */ }
+    if (memIdToken && memExpiresAt > Date.now()) return memIdToken
     return null
   }
 
   function storedAccessToken(): string | null {
-    try {
-      const t = window.localStorage.getItem(TOKEN_KEY)
-      const exp = Number(window.localStorage.getItem(EXPIRES_KEY) ?? 0)
-      if (t && exp > Date.now()) return t
-    } catch { /* storage no disponible */ }
+    if (memAccess && memExpiresAt > Date.now()) return memAccess
     return null
+  }
+
+  function emailFromIdToken(idToken: string): string | null {
+    try {
+      const payload = JSON.parse(atob(idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+      return typeof payload.email === 'string' && payload.email ? payload.email : null
+    } catch { return null }
   }
 
   function silentRefresh(): Promise<{ access: string | null; idToken: string | null }> {
@@ -132,14 +131,14 @@ export function popupOAuth(options: { clientId: string; redirectUri: string }): 
       return fullRedirect()
     },
     async getSignedInUser(): Promise<{ email: string } | null> {
-      return storedIdToken() ? { email: 'user' } : null
+      const t = storedIdToken()
+      const email = t ? emailFromIdToken(t) : null
+      return email ? { email } : null
     },
     async signOut(): Promise<void> {
-      try {
-        window.localStorage.removeItem(TOKEN_KEY)
-        window.localStorage.removeItem(ID_TOKEN_KEY)
-        window.localStorage.removeItem(EXPIRES_KEY)
-      } catch { /* storage no disponible */ }
+      memAccess = null
+      memIdToken = null
+      memExpiresAt = 0
       window.history.replaceState({}, document.title, window.location.pathname)
     }
   }

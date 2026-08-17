@@ -5,9 +5,9 @@ import { SheetsApi } from '../src/sheets/api'
 import { createInitialSpreadsheet, ensureTables } from '../src/sheets/createSpreadsheet'
 
 describe('tables', () => {
-  it('define esquema de 11 tablas', () => {
+  it('define esquema de 12 tablas', () => {
     const names = Object.keys(TABLES)
-    expect(names).toHaveLength(11)
+    expect(names).toHaveLength(12)
     expect(sheetName('Facturas')).toBe('Facturas')
   })
   it('Factura incluye saldo', () => {
@@ -53,7 +53,7 @@ describe('api', () => {
     vi.unstubAllGlobals()
   })
   it('createSpreadsheet crea con titulo', async () => {
-    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => ({ ok: true, json: async () => ({ spreadsheetId: 'NEWID', spreadsheetUrl: 'http://x' }) }) as Response)
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({ ok: true, json: async () => ({ spreadsheetId: 'NEWID', spreadsheetUrl: 'http://x' }) }) as Response)
     vi.stubGlobal('fetch', fetchMock)
     const api = new SheetsApi(async () => 'T')
     const r = await api.createSpreadsheet('FinanceTracker')
@@ -87,15 +87,15 @@ describe('createInitialSpreadsheet', () => {
 })
 
 describe('ensureTables', () => {
-  it('crea la hoja Empleados faltante con headers', async () => {
+  it('crea las hojas faltantes (Empleados, Productos, Movimientos_Stock) con headers y sin añadir columnas extra', async () => {
     const calls: { url: string; init?: RequestInit }[] = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url: String(url), init: init ?? ({} as RequestInit) })
       const u = String(url)
       if (u.includes('values:batchUpdate')) return { ok: true, json: async () => ({ responses: [] }) } as Response
       if (u.includes(':batchUpdate')) return { ok: true, json: async () => ({ replies: [] }) } as Response
-      const existing = ['Config', 'Clientes', 'Facturas', 'Factura_Items', 'Gastos', 'Proveedores', 'Cuentas_Pagar', 'Pagos', 'Metas', 'Usuarios']
-      return { ok: true, json: async () => ({ sheets: existing.map(title => ({ properties: { title } })) }) } as Response
+      const existing = ['Config', 'Clientes', 'Facturas', 'Factura_Items', 'Gastos', 'Proveedores', 'Cuentas_Pagar', 'Pagos', 'Usuarios']
+      return { ok: true, json: async () => ({ sheets: existing.map((title, i) => ({ properties: { title, sheetId: i, gridProperties: { columnCount: TABLES[title as keyof typeof TABLES]?.length ?? 2 } } })) }) } as Response
     })
     vi.stubGlobal('fetch', fetchMock)
     const api = new SheetsApi(async () => 'T')
@@ -103,10 +103,30 @@ describe('ensureTables', () => {
     const addSheets = calls.filter(c => c.url.includes(':batchUpdate') && !c.url.includes('values:batchUpdate'))
     expect(addSheets.length).toBe(1)
     const body = JSON.parse(String(addSheets[0].init?.body)) as { requests: { addSheet: { properties: { title: string } } }[] }
-    expect(body.requests.map(r => r.addSheet.properties.title)).toEqual(['Empleados'])
+    expect(body.requests.map(r => r.addSheet.properties.title)).toEqual(['Empleados', 'Productos', 'Movimientos_Stock'])
     const headerWrites = calls.filter(c => c.url.includes('values:batchUpdate'))
     expect(headerWrites.length).toBe(1)
     expect(String(headerWrites[0].init?.body)).toContain('id_empleado')
+    vi.unstubAllGlobals()
+  })
+
+  it('añade columnas que faltan a hojas existentes', async () => {
+    const calls: { url: string; init?: RequestInit }[] = []
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url: String(url), init: init ?? ({} as RequestInit) })
+      const u = String(url)
+      if (u.includes('values:batchUpdate')) return { ok: true, json: async () => ({ responses: [] }) } as Response
+      if (u.includes(':batchUpdate')) return { ok: true, json: async () => ({ replies: [] }) } as Response
+      return { ok: true, json: async () => ({ sheets: Object.keys(TABLES).map((title, i) => ({ properties: { title, sheetId: i, gridProperties: { columnCount: 7 } } })) }) } as Response
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const api = new SheetsApi(async () => 'T')
+    await ensureTables(api, 'SID')
+    const grid = calls.find(c => c.url.includes(':batchUpdate') && !c.url.includes('values:batchUpdate'))
+    expect(grid).toBeTruthy()
+    const body = JSON.parse(String(grid?.init?.body)) as { requests: { addDimension: { range: { sheetId: number; startIndex: number; endIndex: number } } }[] }
+    expect(body.requests.length).toBeGreaterThan(0)
+    expect(body.requests[0].addDimension.range.endIndex).toBeGreaterThan(7)
     vi.unstubAllGlobals()
   })
 
@@ -115,12 +135,13 @@ describe('ensureTables', () => {
       const u = String(url)
       if (u.includes('values:batchUpdate')) return { ok: true, json: async () => ({ responses: [] }) } as Response
       if (u.includes(':batchUpdate')) return { ok: true, json: async () => ({ replies: [] }) } as Response
-      return { ok: true, json: async () => ({ sheets: Object.keys(TABLES).map(title => ({ properties: { title } })) }) } as Response
+      return { ok: true, json: async () => ({ sheets: Object.keys(TABLES).map((title, i) => ({ properties: { title, sheetId: i, gridProperties: { columnCount: TABLES[title as keyof typeof TABLES]?.length ?? 2 } } })) }) } as Response
     })
     vi.stubGlobal('fetch', fetchMock)
     const api = new SheetsApi(async () => 'T')
     await ensureTables(api, 'SID')
     expect(fetchMock.mock.calls.some(c => String(c[0]).includes('values:batchUpdate'))).toBe(false)
+    expect(fetchMock.mock.calls.some(c => String(c[0]).includes(':batchUpdate'))).toBe(false)
     vi.unstubAllGlobals()
   })
 })

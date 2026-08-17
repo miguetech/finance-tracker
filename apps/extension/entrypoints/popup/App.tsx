@@ -4,6 +4,7 @@ import { AppProvider, useReportes, useConfig } from '@ft/shared'
 import { createRepository } from '@ft/shared'
 import { formatMoney } from '@ft/shared'
 import { StatCard, Button, IconDashboard } from '@ft/shared'
+import { monthLocal } from '@ft/shared'
 import { getChromeToken } from '../../src/onboarding'
 
 function Repo() {
@@ -29,7 +30,7 @@ function Repo() {
 
 function PopupInner() {
   const { config } = useConfig()
-  const { data: reportes } = useReportes(new Date().toISOString().slice(0, 7))
+  const { data: reportes } = useReportes(monthLocal())
   const moneda = config?.moneda ?? 'USD'
   const k = reportes?.kpis
   return (

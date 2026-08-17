@@ -1,14 +1,16 @@
 import React, { useState } from 'react'
 import { useClientes, useConfig } from '../../store/queries'
-import { Table, Button, Input, Dialog, ConfirmDialog } from '../../ui/components'
+import { Table, Button, Input, ConfirmDialog } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { usePerms } from '../../store/perms'
 import { getDocLabel } from '../../taxid'
+import { useI18n } from '../../i18n'
 import { IconPlus, IconEdit, IconTrash } from '../../ui/icons'
 import { ClienteFormModal } from './ClienteFormModal'
 import type { Cliente } from '../../types/entities'
 
 export function Clientes() {
+  const { t } = useI18n()
   const { clientes, saveCliente, deleteCliente } = useClientes()
   const { canEdit, isAdmin } = usePerms()
   const toast = useToast()
@@ -24,38 +26,38 @@ export function Clientes() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-xl font-bold">Clientes</h1>
+        <h1 className="text-xl font-bold">{t('clientes.title')}</h1>
         <div className="flex gap-2">
-          <Input placeholder={`Buscar nombre o ${docLabel}…`} value={busqueda} onChange={e => setBusqueda(e.target.value)} className="sm:w-64" />
-          {canEdit('clientes') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>Nuevo cliente</Button>)}
+          <Input placeholder={`${t('common.buscar')} ${t('clientes.nombre')} ${t('clientes.o')} ${docLabel}…`} value={busqueda} onChange={e => setBusqueda(e.target.value)} className="sm:w-64" />
+          {canEdit('clientes') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>{t('clientes.nuevo')}</Button>)}
         </div>
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table
           columns={[
-            { key: 'nombre', header: 'Nombre', render: c => String(c.nombre) },
+            { key: 'nombre', header: t('common.nombre'), render: c => String(c.nombre) },
             { key: 'rfc', header: docLabel, render: c => String(c.rfc) },
-            { key: 'email', header: 'Email', render: c => String(c.email) },
-            { key: 'telefono', header: 'Teléfono', render: c => String(c.telefono) },
+            { key: 'email', header: t('common.email'), render: c => String(c.email) },
+            { key: 'telefono', header: t('common.telefono'), render: c => String(c.telefono) },
             { key: 'acciones', header: '', render: c => (
               <div className="flex gap-2">
-                {canEdit('clientes') && (<Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(c as unknown as Cliente); setFormOpen(true) }}>Editar</Button>)}
-                {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId((c as unknown as Cliente).id_cliente)}>Eliminar</Button>)}
+                {canEdit('clientes') && (<Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(c as unknown as Cliente); setFormOpen(true) }}>{t('common.editar')}</Button>)}
+                {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId((c as unknown as Cliente).id_cliente)}>{t('common.eliminar')}</Button>)}
               </div>
             ) }
           ]}
           rows={filtrados as unknown as Record<string, unknown>[]}
         />
-        {filtrados.length === 0 && <p className="p-4 text-sm text-gray-500">Sin clientes</p>}
+        {filtrados.length === 0 && <p className="p-4 text-sm text-gray-500">{t('clientes.sinClientes')}</p>}
       </div>
       <ClienteFormModal open={formOpen} onClose={() => setFormOpen(false)} initial={editando}
         onSave={async c => {
-          try { await saveCliente.mutateAsync(c); toast('Cliente guardado') } catch (e) { toast((e as Error).message, 'error'); throw e }
+          try { await saveCliente.mutateAsync(c); toast(t('clientes.guardado')) } catch (e) { toast((e as Error).message, 'error'); throw e }
         }} />
-      <ConfirmDialog open={deleteId !== null} title="Eliminar cliente" message="¿Eliminar este cliente? Bloqueado si tiene facturas."
+      <ConfirmDialog open={deleteId !== null} title={t('clientes.eliminarTitulo')} message={t('clientes.eliminarMensaje')}
         onConfirm={async () => {
           if (!deleteId) return
-          try { await deleteCliente.mutateAsync(deleteId); toast('Cliente eliminado') } catch (e) { toast((e as Error).message, 'error') }
+          try { await deleteCliente.mutateAsync(deleteId); toast(t('clientes.eliminado')) } catch (e) { toast((e as Error).message, 'error') }
           setDeleteId(null)
         }} onClose={() => setDeleteId(null)} />
     </div>

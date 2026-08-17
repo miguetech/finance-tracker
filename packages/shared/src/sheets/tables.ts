@@ -1,4 +1,4 @@
-export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Metas' | 'Usuarios'
+export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Usuarios' | 'Productos' | 'Movimientos_Stock'
 
 export interface ColumnSpec {
   key: string
@@ -30,6 +30,7 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'rfc', header: 'rfc', type: S },
     { key: 'puesto', header: 'puesto', type: S },
     { key: 'salario', header: 'salario', type: N },
+    { key: 'salario_moneda', header: 'salario_moneda', type: S },
     { key: 'fecha_ingreso', header: 'fecha_ingreso', type: D },
     { key: 'activo', header: 'activo', type: S }
   ],
@@ -45,7 +46,11 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'total', header: 'total', type: N },
     { key: 'saldo', header: 'saldo', type: N },
     { key: 'fecha_pago', header: 'fecha_pago', type: D },
-    { key: 'notas', header: 'notas', type: S }
+    { key: 'notas', header: 'notas', type: S },
+    { key: 'moneda', header: 'moneda', type: S },
+    { key: 'tipo_cambio', header: 'tipo_cambio', type: N },
+    { key: 'editada', header: 'editada', type: S },
+    { key: 'fecha_edicion', header: 'fecha_edicion', type: D }
   ],
   Factura_Items: [
     { key: 'id_factura', header: 'id_factura', type: S },
@@ -61,7 +66,9 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'descripcion', header: 'descripcion', type: S },
     { key: 'monto', header: 'monto', type: N },
     { key: 'metodo_pago', header: 'metodo_pago', type: S },
-    { key: 'proveedor', header: 'proveedor', type: S }
+    { key: 'proveedor', header: 'proveedor', type: S },
+    { key: 'moneda', header: 'moneda', type: S },
+    { key: 'tipo_cambio', header: 'tipo_cambio', type: N }
   ],
   Proveedores: [
     { key: 'id_proveedor', header: 'id_proveedor', type: S },
@@ -84,7 +91,9 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'monto_total', header: 'monto_total', type: N },
     { key: 'saldo', header: 'saldo', type: N },
     { key: 'estado', header: 'estado', type: S },
-    { key: 'notas', header: 'notas', type: S }
+    { key: 'notas', header: 'notas', type: S },
+    { key: 'moneda', header: 'moneda', type: S },
+    { key: 'tipo_cambio', header: 'tipo_cambio', type: N }
   ],
   Pagos: [
     { key: 'id_pago', header: 'id_pago', type: S },
@@ -93,14 +102,39 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'fecha', header: 'fecha', type: D },
     { key: 'monto', header: 'monto', type: N },
     { key: 'metodo_pago', header: 'metodo_pago', type: S },
-    { key: 'notas', header: 'notas', type: S }
+    { key: 'notas', header: 'notas', type: S },
+    { key: 'moneda', header: 'moneda', type: S },
+    { key: 'tipo_cambio', header: 'tipo_cambio', type: N }
   ],
-  Metas: [{ key: 'placeholder', header: 'placeholder', type: S }],
   Usuarios: [
     { key: 'email', header: 'email', type: S },
     { key: 'rol', header: 'rol', type: S },
     { key: 'modulos_ver', header: 'modulos_ver', type: S },
     { key: 'modulos_editar', header: 'modulos_editar', type: S }
+  ],
+  Productos: [
+    { key: 'id_producto', header: 'id_producto', type: S },
+    { key: 'nombre', header: 'nombre', type: S },
+    { key: 'categoria', header: 'categoria', type: S },
+    { key: 'unidad', header: 'unidad', type: S },
+    { key: 'stock', header: 'stock', type: N },
+    { key: 'stock_minimo', header: 'stock_minimo', type: N },
+    { key: 'precio_costo', header: 'precio_costo', type: N },
+    { key: 'precio_venta', header: 'precio_venta', type: N },
+    { key: 'id_proveedor', header: 'id_proveedor', type: S },
+    { key: 'nombre_proveedor', header: 'nombre_proveedor', type: S },
+    { key: 'notas', header: 'notas', type: S },
+    { key: 'activo', header: 'activo', type: S },
+    { key: 'fecha_registro', header: 'fecha_registro', type: D }
+  ],
+  Movimientos_Stock: [
+    { key: 'id_movimiento', header: 'id_movimiento', type: S },
+    { key: 'id_producto', header: 'id_producto', type: S },
+    { key: 'tipo', header: 'tipo', type: S },
+    { key: 'cantidad', header: 'cantidad', type: N },
+    { key: 'motivo', header: 'motivo', type: S },
+    { key: 'id_proveedor', header: 'id_proveedor', type: S },
+    { key: 'fecha', header: 'fecha', type: D }
   ]
 }
 

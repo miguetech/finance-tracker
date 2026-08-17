@@ -3,20 +3,23 @@ import { useUsuarios, useConfig } from '../../store/queries'
 import { Table, Button, Input, Select, ConfirmDialog, Dialog, cx } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { IconPlus, IconTrash } from '../../ui/icons'
+import { useI18n } from '../../i18n'
 import { MODULE_KEYS, type ModuleKey, type Usuario, type UserRole } from '../../roles/roles'
+import type { MessageKey } from '../../i18n/locales/types'
 
-const EDIT_MODULES: readonly ModuleKey[] = ['clientes', 'gastos', 'facturas']
+const EDIT_MODULES: readonly ModuleKey[] = ['clientes', 'gastos', 'facturas', 'inventario']
 
-const ROLES: { value: UserRole; label: string }[] = [
-  { value: 'solo_lectura', label: 'Solo lectura (todo)' },
-  { value: 'ver_facturas', label: 'Ver facturas' },
-  { value: 'ver_reportes', label: 'Ver reportes' },
-  { value: 'ver_gastos', label: 'Ver gastos' },
-  { value: 'ver_empleados', label: 'Ver empleados' },
-  { value: 'ver_cuentas', label: 'Ver cuentas por pagar' },
-  { value: 'asistente', label: 'Asistente (edita módulos)' },
-  { value: 'personalizado', label: 'Personalizado' }
-]
+const ROLE_KEYS: Record<UserRole, string> = {
+  solo_lectura: 'compartir.soloLectura',
+  ver_facturas: 'compartir.verFacturas',
+  ver_reportes: 'compartir.verReportes',
+  ver_gastos: 'compartir.verGastos',
+  ver_empleados: 'compartir.verEmpleados',
+  ver_cuentas: 'compartir.verCuentas',
+  asistente: 'compartir.asistente',
+  personalizado: 'compartir.personalizado',
+  admin: 'compartir.admin'
+}
 
 function copyToClipboard(text: string) { navigator.clipboard?.writeText(text) }
 
@@ -39,9 +42,14 @@ function ModulePicker({ value, onChange, allowed = MODULE_KEYS }: { value: strin
   )
 }
 
+function rolLabel(t: (k: MessageKey) => string, rol: UserRole): string {
+  return t(ROLE_KEYS[rol] as MessageKey)
+}
+
 function AddUserForm({ onClose }: { onClose: () => void }) {
   const { saveUsuario } = useUsuarios()
   const toast = useToast()
+  const { t } = useI18n()
   const [email, setEmail] = useState('')
   const [rol, setRol] = useState<UserRole>('solo_lectura')
   const [ver, setVer] = useState('')
@@ -49,22 +57,22 @@ function AddUserForm({ onClose }: { onClose: () => void }) {
   const submit = async () => {
     try {
       await saveUsuario.mutateAsync({ email, rol, modulos_ver: ver, modulos_editar: editar } as Usuario)
-      toast('Usuario guardado')
+      toast(t('compartir.usuarioGuardado'))
       onClose()
     } catch (e) { toast((e as Error).message, 'error') }
   }
   const showModules = rol === 'personalizado' || rol === 'asistente'
   return (
-    <Dialog open onClose={onClose} title="Agregar usuario"
-      footer={<><Button variant="outline" onClick={onClose}>Cancelar</Button><Button onClick={submit}>Guardar</Button></>}>
+    <Dialog open onClose={onClose} title={t('compartir.agregarUsuario')}
+      footer={<><Button variant="outline" onClick={onClose}>{t('common.cancelar')}</Button><Button onClick={submit}>{t('common.guardar')}</Button></>}>
       <div className="space-y-3">
         <Input value={email} onChange={e => setEmail(e.target.value)} placeholder="email@ejemplo.com" />
-        <Select value={rol} onChange={setRol as (v: string) => void} options={ROLES} />
+        <Select value={rol} onChange={setRol as (v: string) => void} options={(Object.keys(ROLE_KEYS) as UserRole[]).filter(r => r !== 'admin').map(r => ({ value: r, label: rolLabel(t, r) }))} />
         {showModules && (
           <div className="space-y-2">
-            <div><div className="text-xs font-semibold mb-1">Ver</div><ModulePicker value={ver} onChange={setVer} /></div>
+            <div><div className="text-xs font-semibold mb-1">{t('compartir.ver')}</div><ModulePicker value={ver} onChange={setVer} /></div>
             {rol === 'asistente' && (
-              <div><div className="text-xs font-semibold mb-1">Editar</div><ModulePicker value={editar} onChange={setEditar} allowed={EDIT_MODULES} /></div>
+              <div><div className="text-xs font-semibold mb-1">{t('compartir.editar')}</div><ModulePicker value={editar} onChange={setEditar} allowed={EDIT_MODULES} /></div>
             )}
           </div>
         )}
@@ -73,11 +81,8 @@ function AddUserForm({ onClose }: { onClose: () => void }) {
   )
 }
 
-function rolLabel(rol: UserRole): string {
-  return ROLES.find(r => r.value === rol)?.label ?? rol
-}
-
 export function Compartir() {
+  const { t } = useI18n()
   const { usuarios, deleteUsuario } = useUsuarios()
   const { config, saveConfig } = useConfig()
   const toast = useToast()
@@ -92,50 +97,50 @@ export function Compartir() {
   const saveBackendUrl = async () => {
     try {
       await saveConfig.mutateAsync({ ...config!, share_backend_url: backendUrl.trim() })
-      toast('URL guardada')
+      toast(t('compartir.urlGuardada'))
     } catch (e) { toast((e as Error).message, 'error') }
   }
 
   const copyLink = () => {
     const url = backendUrl.trim()
-    if (!url) { toast('Primero guarda la URL del backend', 'error'); return }
+    if (!url) { toast(t('compartir.primeroGuarda'), 'error'); return }
     const link = `${window.location.origin}${window.location.pathname}?vista=1&api=${encodeURIComponent(url)}`
     copyToClipboard(link)
-    toast('Link copiado')
+    toast(t('compartir.linkCopiado'))
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold">Compartir</h1>
-        <p className="text-sm text-gray-500">Configura el backend y decide quién ve qué. La hoja queda privada.</p>
+        <h1 className="text-xl font-bold">{t('compartir.title')}</h1>
+        <p className="text-sm text-gray-500">{t('compartir.subtitulo')}</p>
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card p-4 space-y-3">
-        <div className="text-sm font-semibold">URL del backend</div>
+        <div className="text-sm font-semibold">{t('compartir.backendUrl')}</div>
         <div className="flex gap-2">
           <Input value={backendUrl} onChange={e => setBackendUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" />
-          <Button onClick={saveBackendUrl}>Guardar</Button>
-          <Button variant="outline" onClick={copyLink}>Copiar link</Button>
+          <Button onClick={saveBackendUrl}>{t('common.guardar')}</Button>
+          <Button variant="outline" onClick={copyLink}>{t('compartir.copiarLink')}</Button>
         </div>
-        <p className="text-xs text-gray-500">El link que compartas será: tu-app.com/?vista=1&api=...</p>
+        <p className="text-xs text-gray-500">{t('compartir.linkInfo')}</p>
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <div className="text-sm font-semibold">Usuarios con acceso</div>
-          <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setAddOpen(true)}>Agregar</Button>
+          <div className="text-sm font-semibold">{t('compartir.usuarios')}</div>
+          <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setAddOpen(true)}>{t('common.agregar')}</Button>
         </div>
         <Table columns={[
-          { key: 'email', header: 'Email', render: r => String(r.email) },
-          { key: 'rol', header: 'Rol', render: r => rolLabel(String(r.rol) as UserRole) },
-          { key: 'modulos', header: 'Módulos', render: r => { const v = String(r.modulos_ver || ''); const e = String(r.modulos_editar || ''); return <span className="text-xs text-gray-600">{[v, e && `edita: ${e}`].filter(Boolean).join(' · ') || '—'}</span> } },
+          { key: 'email', header: t('common.email'), render: r => String(r.email) },
+          { key: 'rol', header: t('compartir.roles'), render: r => rolLabel(t, String(r.rol) as UserRole) },
+          { key: 'modulos', header: t('compartir.modulos'), render: r => { const v = String(r.modulos_ver || ''); const e = String(r.modulos_editar || ''); return <span className="text-xs text-gray-600">{[v, e && t('compartir.edita', { modulos: e })].filter(Boolean).join(' · ') || '—'}</span> } },
           { key: 'acciones', header: '', render: r => (
-            <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteEmail(String(r.email))}>Eliminar</Button>
+            <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteEmail(String(r.email))}>{t('common.eliminar')}</Button>
           ) }
         ]} rows={usuarios as unknown as Record<string, unknown>[]} />
       </div>
       {addOpen && <AddUserForm onClose={() => setAddOpen(false)} />}
-      <ConfirmDialog open={deleteEmail !== null} title="Eliminar acceso" message="Este usuario perderá el acceso de inmediato. ¿Continuar?"
-        onConfirm={async () => { if (deleteEmail) { try { await deleteUsuario.mutateAsync(deleteEmail); toast('Acceso eliminado') } catch (e) { toast((e as Error).message, 'error') } } setDeleteEmail(null) }}
+      <ConfirmDialog open={deleteEmail !== null} title={t('compartir.eliminarTitulo')} message={t('compartir.eliminarMensaje')}
+        onConfirm={async () => { if (deleteEmail) { try { await deleteUsuario.mutateAsync(deleteEmail); toast(t('compartir.accesoEliminado')) } catch (e) { toast((e as Error).message, 'error') } } setDeleteEmail(null) }}
         onClose={() => setDeleteEmail(null)} />
     </div>
   )

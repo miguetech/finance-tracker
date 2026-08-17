@@ -6,11 +6,13 @@ import { usePerms } from '../../store/perms'
 import { formatMoney } from '../../currency'
 import { getDocLabel } from '../../taxid'
 import { IconPlus, IconEdit, IconTrash } from '../../ui/icons'
+import { useI18n } from '../../i18n'
 import { EmpleadoFormModal } from './EmpleadoFormModal'
 import { NominaModal } from './NominaModal'
 import type { Empleado } from '../../types/entities'
 
 export function Empleados() {
+  const { t } = useI18n()
   const { empleados, saveEmpleado, deleteEmpleado } = useEmpleados()
   const registerNomina = useRegisterNomina()
   const { gastos } = useGastos({})
@@ -31,43 +33,43 @@ export function Empleados() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold">Empleados</h1>
-          <p className="text-sm text-muted-foreground">Personas que trabajan contigo. Su salario se registra como gasto de nómina.</p>
+          <h1 className="text-xl font-bold">{t('empleados.title')}</h1>
+          <p className="text-sm text-muted-foreground">{t('empleados.subtitulo')}</p>
         </div>
-        {isAdmin && <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>Nuevo empleado</Button>}
+        {isAdmin && <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>{t('empleados.nuevo')}</Button>}
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table columns={[
-          { key: 'nombre', header: 'Nombre', render: r => String(r.nombre) },
+          { key: 'nombre', header: t('common.nombre'), render: r => String(r.nombre) },
           { key: 'rfc', header: docLabel, render: r => String(r.rfc) },
-          { key: 'puesto', header: 'Puesto', render: r => String(r.puesto) },
-          { key: 'salario', header: 'Salario', render: r => formatMoney(Number(r.salario), moneda) },
-          { key: 'ingreso', header: 'Ingreso', render: r => String(r.fecha_ingreso) },
-          { key: 'activo', header: 'Estado', render: r => <Badge tone={String(r.activo) === 'true' ? 'green' : 'gray'}>{String(r.activo) === 'true' ? 'Activo' : 'Inactivo'}</Badge> },
-          { key: 'total', header: 'Total pagado', render: r => formatMoney(totalPagado(String(r.nombre)), moneda) },
+          { key: 'puesto', header: t('empleados.puesto'), render: r => String(r.puesto) },
+          { key: 'salario', header: t('empleados.salario'), render: r => formatMoney(Number(r.salario), String(r.salario_moneda) || moneda) },
+          { key: 'ingreso', header: t('empleados.ingreso'), render: r => String(r.fecha_ingreso) },
+          { key: 'activo', header: t('common.estado'), render: r => <Badge tone={String(r.activo) === 'true' ? 'green' : 'gray'}>{String(r.activo) === 'true' ? t('empleados.activo') : t('empleados.inactivo')}</Badge> },
+          { key: 'total', header: t('empleados.totalPagado'), render: r => formatMoney(totalPagado(String(r.nombre)), moneda) },
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
-              {isAdmin && <Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(r as unknown as Empleado); setFormOpen(true) }}>Editar</Button>}
-              {isAdmin && <Button variant="outline" onClick={() => setNominaDe(r as unknown as Empleado)}>Nómina</Button>}
-              {isAdmin && <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_empleado))}>Eliminar</Button>}
+              {isAdmin && <Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(r as unknown as Empleado); setFormOpen(true) }}>{t('common.editar')}</Button>}
+              {isAdmin && <Button variant="outline" onClick={() => setNominaDe(r as unknown as Empleado)}>{t('empleados.nomina')}</Button>}
+              {isAdmin && <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_empleado))}>{t('common.eliminar')}</Button>}
             </div>
           ) }
         ]} rows={empleados as unknown as Record<string, unknown>[]} />
-        {empleados.length === 0 && <p className="p-4 text-sm text-muted-foreground">Sin empleados</p>}
+        {empleados.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('empleados.sinEmpleados')}</p>}
       </div>
       <EmpleadoFormModal open={formOpen} onClose={() => setFormOpen(false)} initial={editando}
-        onSave={async e => { try { await saveEmpleado.mutateAsync(e); toast('Empleado guardado') } catch (err) { toast((err as Error).message, 'error'); throw err } }} />
+        onSave={async e => { try { await saveEmpleado.mutateAsync(e); toast(t('empleados.guardado')) } catch (err) { toast((err as Error).message, 'error'); throw err } }} />
       {nominaDe && (
         <NominaModal empleado={nominaDe} onClose={() => setNominaDe(null)}
           onSave={async i => {
             try {
               await registerNomina.mutateAsync({ id_empleado: nominaDe.id_empleado, ...i })
-              toast('Nómina registrada como gasto')
+              toast(t('empleados.nominaRegistrada'))
             } catch (err) { toast((err as Error).message, 'error') }
           }} />
       )}
-      <ConfirmDialog open={deleteId !== null} title="Eliminar empleado" message="Bloqueado si tiene nómina registrada. ¿Continuar?"
-        onConfirm={async () => { if (deleteId) { try { await deleteEmpleado.mutateAsync(deleteId); toast('Empleado eliminado') } catch (err) { toast((err as Error).message, 'error') } } setDeleteId(null) }}
+      <ConfirmDialog open={deleteId !== null} title={t('empleados.eliminarTitulo')} message={t('empleados.eliminarMensaje')}
+        onConfirm={async () => { if (deleteId) { try { await deleteEmpleado.mutateAsync(deleteId); toast(t('empleados.eliminado')) } catch (err) { toast((err as Error).message, 'error') } } setDeleteId(null) }}
         onClose={() => setDeleteId(null)} />
     </div>
   )

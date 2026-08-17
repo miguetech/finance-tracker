@@ -1,6 +1,7 @@
 {
   "name": "finance-tracker",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@11.1.2",
   "scripts": {
     "dev:extension": "pnpm --filter @ft/extension dev",
@@ -8,11 +9,16 @@
     "build:script": "pnpm --filter @ft/script build",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "test:e2e": "pnpm --filter @ft/web test:e2e"
+    "test:e2e": "pnpm --filter @ft/web test:e2e",
+    "lint": "eslint ."
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/chrome": "^0.2.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.67.0",
     "vitest": "^3.2.7"
   }
 }

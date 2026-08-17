@@ -2,7 +2,7 @@ import { SheetsApi } from './api'
 import { TABLES, sheetName, HEADER_ROWS } from './tables'
 import { serializeRow } from './rows'
 import type { Config } from '../types/entities'
-import { CURRENCIES, DEFAULT_CURRENCY } from '../currency'
+import { DEFAULT_CURRENCY } from '../currency'
 
 const ALL_TABLES = Object.keys(TABLES) as (keyof typeof TABLES)[]
 
@@ -22,6 +22,11 @@ const DEFAULT_CONFIG: Config = {
   iva_porcentaje: 16,
   categorias_gastos: 'Renta,Internet,Papelería,Servicios',
   categorias_cxp: 'Materiales,Servicios,Impuestos,Otros',
+  categorias_inventario: 'Frutas,Verduras,Materiales,Limpieza',
+  monedas_activas: '',
+  monedas_custom: '',
+  tasas_cambio: '',
+  metodos_pago: 'Efectivo,Transferencia,Tarjeta',
   tipo_doc: 'RFC' as const,
   tipo_doc_etiqueta: '',
   share_backend_url: ''
@@ -54,19 +59,44 @@ function writeAllHeaders(api: SheetsApi, spreadsheetId: string, tables: (keyof t
 
 export async function ensureTables(api: SheetsApi, spreadsheetId: string): Promise<void> {
   const res = await api.getSpreadsheet(spreadsheetId)
-  const existing = new Set(res.sheets.map(s => s.properties.title))
+  const existing = new Map(res.sheets.map(s => [s.properties.title, { columnCount: s.properties.gridProperties?.columnCount ?? 0, sheetId: s.properties.sheetId }]))
   const missing = ALL_TABLES.filter(t => !existing.has(sheetName(t)))
-  if (missing.length === 0) return
-  await api.addSheets(spreadsheetId, missing.map(sheetName))
-  await writeAllHeaders(api, spreadsheetId, missing)
+  if (missing.length > 0) {
+    await api.addSheets(spreadsheetId, missing.map(sheetName))
+    await writeAllHeaders(api, spreadsheetId, missing)
+  }
+  const skip = new Set(missing.map(sheetName))
+  await ensureColumns(api, spreadsheetId, existing, skip)
+}
+
+/** Añade columnas que falten en hojas existentes (migración de hojas creadas antes de nuevas columnas). */
+async function ensureColumns(api: SheetsApi, spreadsheetId: string, existing: Map<string, { columnCount: number; sheetId: number }>, skip: Set<string>): Promise<void> {
+  const requests: unknown[] = []
+  for (const t of ALL_TABLES) {
+    if (t === 'Config') continue
+    const name = sheetName(t)
+    if (skip.has(name)) continue
+    const meta = existing.get(name)
+    const needed = TABLES[t].length
+    if (!meta || meta.columnCount < needed) {
+      requests.push({ addDimension: { range: { sheetId: meta?.sheetId ?? 0, dimension: 'COLUMNS', startIndex: meta?.columnCount ?? 0, endIndex: needed } } })
+    }
+  }
+  if (requests.length === 0) return
+  await api.gridBatchUpdate(spreadsheetId, requests)
 }
 
 export function configFromRows(rows: (string | number)[][]): Config {
   const map = new Map<string, string>()
   for (const [clave, valor] of rows) if (clave) map.set(String(clave), String(valor ?? ''))
   const num = (k: string) => {
+    if (!map.has(k)) return null
     const v = map.get(k) ?? ''
-    return v === '' ? 0 : Number(v)
+    return v === '' ? null : Number(v)
+  }
+  const numOr = (k: string, def: number) => {
+    const n = num(k)
+    return n === null || Number.isNaN(n) ? def : n
   }
   return {
     ...DEFAULT_CONFIG,
@@ -80,11 +110,16 @@ export function configFromRows(rows: (string | number)[][]): Config {
     empresa_ciudad: map.get('empresa_ciudad') ?? '',
     empresa_pais: map.get('empresa_pais') ?? '',
     prefijo_folio: map.get('prefijo_folio') ?? DEFAULT_CONFIG.prefijo_folio,
-    contador_folio: num('contador_folio') || DEFAULT_CONFIG.contador_folio,
+    contador_folio: numOr('contador_folio', DEFAULT_CONFIG.contador_folio),
     moneda: map.get('moneda') || DEFAULT_CURRENCY,
-    iva_porcentaje: num('iva_porcentaje') || DEFAULT_CONFIG.iva_porcentaje,
+    iva_porcentaje: numOr('iva_porcentaje', DEFAULT_CONFIG.iva_porcentaje),
     categorias_gastos: map.get('categorias_gastos') ?? DEFAULT_CONFIG.categorias_gastos,
     categorias_cxp: map.get('categorias_cxp') ?? DEFAULT_CONFIG.categorias_cxp,
+    categorias_inventario: map.get('categorias_inventario') ?? DEFAULT_CONFIG.categorias_inventario,
+    monedas_activas: map.get('monedas_activas') ?? '',
+    monedas_custom: map.get('monedas_custom') ?? '',
+    tasas_cambio: map.get('tasas_cambio') ?? '',
+    metodos_pago: map.get('metodos_pago') ?? DEFAULT_CONFIG.metodos_pago,
     tipo_doc: (map.get('tipo_doc') as Config['tipo_doc']) || DEFAULT_CONFIG.tipo_doc,
     tipo_doc_etiqueta: map.get('tipo_doc_etiqueta') ?? DEFAULT_CONFIG.tipo_doc_etiqueta,
     share_backend_url: map.get('share_backend_url') ?? ''
@@ -94,5 +129,3 @@ export function configFromRows(rows: (string | number)[][]): Config {
 export function configToRows(config: Config): (string | number)[][] {
   return (Object.entries(config) as [string, unknown][]).map(([clave, valor]) => serializeRow(TABLES.Config, { clave, valor: String(valor) }))
 }
-
-export const _internals = { DEFAULT_CONFIG, CURRENCIES }

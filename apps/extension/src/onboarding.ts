@@ -24,7 +24,7 @@ export function getChromeToken(interactive: boolean): Promise<string> {
   })
 }
 
-export async function ensureSheet(clientId: string): Promise<{ spreadsheetId: string; url: string } | null> {
+export async function ensureSheet(): Promise<{ spreadsheetId: string; url: string } | null> {
   const existing = await chromeStorageAdapter.get(KEYS.spreadsheetId)
   if (existing) {
     const token = await getChromeToken(false)
