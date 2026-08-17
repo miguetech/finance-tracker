@@ -1,0 +1,20 @@
+{
+  "name": "@ft/backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "deploy": "vercel"
+  },
+  "dependencies": {
+    "@ft/shared": "workspace:*",
+    "hono": "^4",
+    "jose": "^6"
+  },
+  "devDependencies": {
+    "tsx": "^4",
+    "typescript": "^5.9.3"
+  }
+}
