@@ -4,12 +4,15 @@ import type { PermsInfo } from '../roles/roles'
 export interface RemoteRepositoryCtx {
   apiUrl: string
   getIdToken: () => Promise<string>
+  getSessionToken?: () => Promise<string | null>
 }
 
 export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & { getPerms(): Promise<PermsInfo> } {
   async function call<T>(action: string, payload: unknown = {}): Promise<T> {
-    const idToken = await ctx.getIdToken()
-    const qs = new URLSearchParams({ id_token: idToken, action, payload: JSON.stringify(payload) })
+    const token = ctx.getSessionToken ? await ctx.getSessionToken() : null
+    const qs = token
+      ? new URLSearchParams({ token, action, payload: JSON.stringify(payload) })
+      : new URLSearchParams({ id_token: await ctx.getIdToken(), action, payload: JSON.stringify(payload) })
     const res = await fetch(`${ctx.apiUrl}?${qs.toString()}`, { method: 'GET' })
     const data = (await res.json()) as { ok: boolean; data?: T; error?: string }
     if (!data.ok) throw new Error(data.error ?? 'Error')

@@ -85,6 +85,12 @@ const ca: Partial<Dict> = {
     eliminarCodigoMensaje: 'Aquest codi deixarà de funcionar de seguida. Continuar?'
   },
   auth: {
+    loginTitle: 'Accés al panell',
+    conGoogle: 'Entra amb Google',
+    conCodigo: 'Entra amb codi d\'accés',
+    codigo: 'Codi d\'accés',
+    entrar: 'Entra',
+    codigoInvalido: 'Codi invàlid o caducat',
     sinAcceso: 'No tens accés a aquest panell. Demana accés a l\'administrador.',
     conectando: 'Connectant…', conectandoSheets: 'Connectant a Google Sheets…',
     sesionRequerida: 'Sessió obligatòria', sesionInvalida: 'Sessió invàlida'

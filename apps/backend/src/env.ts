@@ -6,13 +6,13 @@ export interface ServiceAccountJson {
 export interface Env {
   OAUTH_CLIENT_ID: string
   SERVICE_ACCOUNT_JSON: ServiceAccountJson
-  /** Usado en fases posteriores (códigos de acceso). Opcional en fase 1. */
-  SECRET_JWT?: string
+  /** Firma de JWTs de sesión para códigos de acceso (HS256). Obligatorio. */
+  SECRET_JWT: string
   SPREADSHEET_ID: string
   OWNER_EMAIL: string
 }
 
-const REQUIRED = ['OAUTH_CLIENT_ID', 'SERVICE_ACCOUNT_JSON', 'SPREADSHEET_ID', 'OWNER_EMAIL'] as const
+const REQUIRED = ['OAUTH_CLIENT_ID', 'SERVICE_ACCOUNT_JSON', 'SECRET_JWT', 'SPREADSHEET_ID', 'OWNER_EMAIL'] as const
 
 export function loadEnv(source: Record<string, string | undefined> = process.env): Env {
   const missing = REQUIRED.filter(k => !source[k])
@@ -31,7 +31,7 @@ export function loadEnv(source: Record<string, string | undefined> = process.env
   return {
     OAUTH_CLIENT_ID: source.OAUTH_CLIENT_ID!,
     SERVICE_ACCOUNT_JSON: saJson,
-    SECRET_JWT: source.SECRET_JWT,
+    SECRET_JWT: source.SECRET_JWT!,
     SPREADSHEET_ID: source.SPREADSHEET_ID!,
     OWNER_EMAIL: source.OWNER_EMAIL!
   }

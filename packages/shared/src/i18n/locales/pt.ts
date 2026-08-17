@@ -86,6 +86,12 @@ const pt: Partial<Dict> = {
     eliminarCodigoMensaje: 'Este código deixará de funcionar imediatamente. Continuar?'
   },
   auth: {
+    loginTitle: 'Acesso ao painel',
+    conGoogle: 'Entrar com o Google',
+    conCodigo: 'Entrar com código de acesso',
+    codigo: 'Código de acesso',
+    entrar: 'Entrar',
+    codigoInvalido: 'Código inválido ou expirado',
     sinAcceso: 'Você não tem acesso a este painel. Peça acesso ao administrador.',
     conectando: 'Conectando…', conectandoSheets: 'Conectando ao Google Sheets…',
     sesionRequerida: 'Sessão obrigatória', sesionInvalida: 'Sessão inválida'

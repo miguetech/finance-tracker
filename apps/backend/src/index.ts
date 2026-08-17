@@ -3,8 +3,9 @@ import { Hono, type Context } from 'hono'
 import { createRepository, type StorageAdapter } from '@ft/shared'
 import { loadEnv, type Env } from './env'
 import { createSheetsApi, verifyGoogleIdToken } from './google'
-import { permsForRequest } from './roles'
+import { permsForRequest, permsFromSession } from './roles'
 import { route } from './actions'
+import { verificarSessionJwt, intercambiarCodigo } from './auth/codigos'
 
 const app = new Hono()
 
@@ -25,6 +26,7 @@ function makeRepo(env: Env) {
 interface ProxyInput {
   action?: string
   id_token?: string
+  token?: string
   payload?: unknown
 }
 
@@ -32,8 +34,14 @@ async function proxy(c: Context, input: ProxyInput): Promise<Response> {
   try {
     if (!input.action) return c.json({ ok: true, service: 'ft-backend' })
     const env = loadEnv()
-    const email = await verifyGoogleIdToken(env.OAUTH_CLIENT_ID, String(input.id_token ?? ''))
     const repo = makeRepo(env)
+    if (input.token) {
+      const claims = await verificarSessionJwt(env.SECRET_JWT, String(input.token))
+      const p = permsFromSession(claims)
+      const data = await route(repo, input.action, input.payload, p)
+      return c.json({ ok: true, data })
+    }
+    const email = await verifyGoogleIdToken(env.OAUTH_CLIENT_ID, String(input.id_token ?? ''))
     const p = await permsForRequest(repo, env.OWNER_EMAIL, email)
     const data = await route(repo, input.action, input.payload, p)
     return c.json({ ok: true, data })
@@ -54,9 +62,24 @@ function parsePayload(raw: string | undefined): unknown {
 
 app.get('/api/health', c => c.json({ ok: true }))
 
+app.post('/api/auth/codigo', async c => {
+  const body = await c.req.json().catch(() => null) as { codigo?: string } | null
+  if (!body?.codigo) return c.json({ ok: false, error: 'Código requerido' })
+  try {
+    const env = loadEnv()
+    const repo = makeRepo(env)
+    const hoy = new Date().toISOString().slice(0, 10)
+    const { token } = await intercambiarCodigo(repo, String(body.codigo).trim().toUpperCase(), env.SECRET_JWT, hoy, env.OWNER_EMAIL)
+    return c.json({ ok: true, data: { token } })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error interno'
+    return c.json({ ok: false, error: message })
+  }
+})
+
 app.get('/', c => {
   const q = c.req.query()
-  return proxy(c, { action: q.action, id_token: q.id_token, payload: parsePayload(q.payload) })
+  return proxy(c, { action: q.action, id_token: q.id_token, token: q.token, payload: parsePayload(q.payload) })
 })
 
 app.post('/', async c => {

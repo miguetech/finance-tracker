@@ -102,6 +102,33 @@ describe('route', () => {
     expect(res).toEqual([])
   })
 
+  it('acciones de códigos solo admin', async () => {
+    const noAdmin = permsFor('user@ft.com', OWNER, usuario({ rol: 'asistente', modulos_ver: '', modulos_editar: '' }))
+    await expect(route(fakeRepo(), 'listCodigos', {}, noAdmin)).rejects.toThrow('No tienes permiso')
+    await expect(route(fakeRepo(), 'saveCodigo', {}, noAdmin)).rejects.toThrow('No tienes permiso')
+    await expect(route(fakeRepo(), 'renovarCodigo', {}, noAdmin)).rejects.toThrow('No tienes permiso')
+    await expect(route(fakeRepo(), 'deleteCodigo', 'FT-2026-ABCD', noAdmin)).rejects.toThrow('No tienes permiso')
+
+    const admin = permsFor(OWNER, OWNER, null)
+    const listCodigos = vi.fn(async () => [])
+    const saveCodigo = vi.fn(async (c: never) => c)
+    const renovarCodigo = vi.fn(async () => ({} as never))
+    const deleteCodigo = vi.fn(async () => {})
+    const repo = fakeRepo({ listCodigos, saveCodigo, renovarCodigo, deleteCodigo })
+
+    await route(repo, 'listCodigos', {}, admin)
+    expect(listCodigos).toHaveBeenCalled()
+
+    await route(repo, 'saveCodigo', { codigo: 'FT-2026-ABCD' }, admin)
+    expect(saveCodigo).toHaveBeenCalledWith({ codigo: 'FT-2026-ABCD' })
+
+    await route(repo, 'renovarCodigo', { codigo: 'FT-2026-ABCD', nuevaExpira: '2027-01-01' }, admin)
+    expect(renovarCodigo).toHaveBeenCalledWith('FT-2026-ABCD', '2027-01-01')
+
+    await route(repo, 'deleteCodigo', 'FT-2026-ABCD', admin)
+    expect(deleteCodigo).toHaveBeenCalledWith('FT-2026-ABCD')
+  })
+
   it('getReportes pasa el mes como string', async () => {
     const getReportes = vi.fn(async (mes: string) => ({ kpis: {} as Kpis, categorias: [], top: [] }))
     const repo = fakeRepo({ getReportes })

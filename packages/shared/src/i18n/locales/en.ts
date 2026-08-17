@@ -223,6 +223,12 @@ const en: Partial<Dict> = {
     eliminarCodigoMensaje: 'This code will stop working immediately. Continue?'
   },
   auth: {
+    loginTitle: 'Panel access',
+    conGoogle: 'Sign in with Google',
+    conCodigo: 'Sign in with access code',
+    codigo: 'Access code',
+    entrar: 'Sign in',
+    codigoInvalido: 'Invalid or expired code',
     sinAcceso: 'You do not have access to this panel. Ask the administrator for access.',
     conectando: 'Connecting…', conectandoSheets: 'Connecting to Google Sheets…',
     sesionRequerida: 'Session required', sesionInvalida: 'Invalid session'

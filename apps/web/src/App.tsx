@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, createInitialSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider } from '@ft/shared'
-import type { NavKey, NavItem, ModuleKey } from '@ft/shared'
+import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, createInitialSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input } from '@ft/shared'
+import type { NavKey, NavItem, ModuleKey, PermsInfo } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
-import { loadShareParams, saveShareParams, clearShareParams } from './mode'
+import { loadShareParams, saveShareParams, clearShareParams, loadSessionToken, saveSessionToken, clearSessionToken } from './mode'
 
 const NAV_MODULE: Partial<Record<NavKey, ModuleKey>> = {
   dashboard: 'dashboard', facturas: 'facturas', clientes: 'clientes', empleados: 'empleados',
@@ -80,7 +80,11 @@ function VisitorInner({ apiUrl }: { apiUrl: string }) {
   const [mes, setMes] = useState(() => monthLocal())
   const navigate = (k: NavKey) => setNav(k)
   const cambiarMes = (m: string) => setMes(m)
-  const repo = useMemo(() => createRemoteRepository({ apiUrl, getIdToken: async () => { try { return await webAuth.getIdToken(false) } catch { return await webAuth.getIdToken(true) } } }), [apiUrl])
+  const repo = useMemo(() => createRemoteRepository({
+    apiUrl,
+    getIdToken: async () => { try { return await webAuth.getIdToken(false) } catch { return await webAuth.getIdToken(true) } },
+    getSessionToken: async () => loadSessionToken()
+  }), [apiUrl])
   const filterNav = (k: NavKey) => k === 'configuracion' ? false : (NAV_MODULE[k] ? canView(NAV_MODULE[k]!) : true)
   return (
     <AppProvider repo={repo}>
@@ -103,27 +107,86 @@ function VisitorInner({ apiUrl }: { apiUrl: string }) {
 }
 
 function VisitorShell({ apiUrl }: { apiUrl: string }) {
-  const [state, setState] = useState<'boot' | 'ready' | 'denied' | 'error'>('boot')
-  const [perms, setPerms] = useState<ReturnType<typeof permsFromInfo> | null>(null)
+  const { t } = useI18n()
+  const [state, setState] = useState<'boot' | 'login' | 'ready' | 'denied' | 'error'>('boot')
+  const [session, setSession] = useState<ReturnType<typeof permsFromInfo> | null>(null)
+  const [codigo, setCodigo] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [entrando, setEntrando] = useState(false)
+  const repo = useMemo(() => createRemoteRepository({
+    apiUrl,
+    getIdToken: async () => { try { return await webAuth.getIdToken(false) } catch { return await webAuth.getIdToken(true) } },
+    getSessionToken: async () => loadSessionToken()
+  }), [apiUrl])
+
+  const entrarConPermisos = (info: PermsInfo) => {
+    const p = permsFromInfo(info)
+    if (!p.isAdmin && info.view.length === 0) { setState('denied'); return }
+    setSession(p)
+    setState('ready')
+  }
+
+  const iniciarConGoogle = async () => {
+    saveShareParams(apiUrl)
+    await webAuth.getIdToken(true)
+  }
+
+  const entrarConCodigo = async () => {
+    if (!codigo.trim() || entrando) return
+    setEntrando(true)
+    setLoginError('')
+    try {
+      const res = await fetch(`${apiUrl}/api/auth/codigo`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codigo: codigo.trim() })
+      })
+      const data = await res.json() as { ok?: boolean; data?: { token?: string }; error?: string }
+      if (!data.ok || !data.data?.token) throw new Error(data.error ?? '')
+      saveSessionToken(data.data.token)
+      entrarConPermisos(await repo.getPerms())
+    } catch {
+      setLoginError(t('auth.codigoInvalido'))
+    } finally {
+      setEntrando(false)
+    }
+  }
+
   useEffect(() => {
     if (window.self !== window.top) return
     (async () => {
       try {
-        let token = ''
-        try { token = await webAuth.getIdToken(false) } catch { saveShareParams(apiUrl); await webAuth.getIdToken(true); return }
-        const repo = createRemoteRepository({ apiUrl, getIdToken: async () => token })
-        const info = await repo.getPerms()
-        const p = permsFromInfo(info)
-        if (!p.isAdmin && info.view.length === 0) { setState('denied'); return }
-        setPerms(p)
-        setState('ready')
+        if (loadSessionToken()) {
+          try {
+            entrarConPermisos(await repo.getPerms())
+            return
+          } catch { clearSessionToken() }
+        }
+        try {
+          entrarConPermisos(await repo.getPerms())
+        } catch { setState('login') }
       } catch { setState('error') }
     })()
-  }, [apiUrl])
-  if (state === 'boot') return <div className="p-8">Conectando…</div>
-  if (state === 'denied') return <div className="p-8 text-center text-gray-600">No tienes acceso a este panel. Pide acceso al administrador.</div>
-  if (state === 'error') return <div className="p-8 text-red-600">Error de conexión</div>
-  return <PermsProvider perms={perms!}><VisitorInner apiUrl={apiUrl} /></PermsProvider>
+  }, [apiUrl, repo])
+
+  if (state === 'boot') return <div className="p-8">{t('auth.conectando')}</div>
+  if (state === 'login') return (
+    <div className="flex min-h-screen items-center justify-center p-6">
+      <div className="w-full max-w-sm space-y-4">
+        <h1 className="text-xl font-semibold text-center">{t('auth.loginTitle')}</h1>
+        <Button className="w-full" onClick={iniciarConGoogle}>{t('auth.conGoogle')}</Button>
+        <div className="text-sm text-gray-500">{t('auth.conCodigo')}</div>
+        <form className="space-y-2" onSubmit={e => { e.preventDefault(); entrarConCodigo() }}>
+          <Input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder={t('auth.codigo')} autoCapitalize="characters" />
+          <Button type="submit" className="w-full" disabled={entrando}>{t('auth.entrar')}</Button>
+        </form>
+        {loginError && <div className="text-sm text-red-600">{loginError}</div>}
+      </div>
+    </div>
+  )
+  if (state === 'denied') return <div className="p-8 text-center text-gray-600">{t('auth.sinAcceso')}</div>
+  if (state === 'error') return <div className="p-8 text-red-600">{t('common.errorConexion')}</div>
+  return <PermsProvider perms={session!}><VisitorInner apiUrl={apiUrl} /></PermsProvider>
 }
 
 export function App() {

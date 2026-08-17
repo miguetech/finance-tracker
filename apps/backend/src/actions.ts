@@ -137,6 +137,21 @@ export async function route(repo: Repository, action: string, payload: Payload, 
       if (!p.isAdmin) return denied()
       await repo.deleteUsuario(String(payload))
       return { ok: true }
+    case 'listCodigos':
+      if (!p.isAdmin) return denied()
+      return repo.listCodigos()
+    case 'saveCodigo':
+      if (!p.isAdmin) return denied()
+      return repo.saveCodigo(payload as Parameters<Repository['saveCodigo']>[0])
+    case 'renovarCodigo': {
+      if (!p.isAdmin) return denied()
+      const input = payload as { codigo?: string; nuevaExpira?: string } | null
+      return repo.renovarCodigo(String(input?.codigo ?? ''), String(input?.nuevaExpira ?? ''))
+    }
+    case 'deleteCodigo':
+      if (!p.isAdmin) return denied()
+      await repo.deleteCodigo(String(payload))
+      return { ok: true }
     case 'saveConfig':
       if (!p.isAdmin) return denied()
       await repo.saveConfig(payload as Parameters<Repository['saveConfig']>[0])

@@ -456,6 +456,12 @@ export const messages = {
     eliminarCodigoMensaje: 'Este código dejará de funcionar de inmediato. ¿Continuar?'
   },
   auth: {
+    loginTitle: 'Acceso al panel',
+    conGoogle: 'Entrar con Google',
+    conCodigo: 'Entrar con código de acceso',
+    codigo: 'Código de acceso',
+    entrar: 'Entrar',
+    codigoInvalido: 'Código inválido o expirado',
     sinAcceso: 'No tienes acceso a este panel. Pide acceso al administrador.',
     conectando: 'Conectando…',
     conectandoSheets: 'Conectando a Google Sheets…',
