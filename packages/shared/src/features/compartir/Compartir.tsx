@@ -1,12 +1,12 @@
 import React, { useState } from 'react'
-import { useUsuarios, useCodigos, useConfig } from '../../store/queries'
+import { useUsuarios, useCodigos, useDispositivos, useConfig } from '../../store/queries'
 import { Table, Button, Input, Select, ConfirmDialog, Dialog, cx } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { IconPlus, IconTrash } from '../../ui/icons'
 import { useI18n } from '../../i18n'
 import { MODULE_KEYS, type ModuleKey, type Usuario, type UserRole } from '../../roles/roles'
 import type { MessageKey } from '../../i18n/locales/types'
-import type { CodigoAcceso } from '../../types/entities'
+import type { CodigoAcceso, Dispositivo } from '../../types/entities'
 import { usosRestantes } from '../../lib/codigos'
 import { todayLocal } from '../../lib/date'
 
@@ -164,6 +164,7 @@ export function Compartir() {
   const { t } = useI18n()
   const { usuarios, deleteUsuario } = useUsuarios()
   const { codigos, deleteCodigo, renovarCodigo } = useCodigos()
+  const { dispositivos, removerDispositivo } = useDispositivos()
   const { config, saveConfig } = useConfig()
   const toast = useToast()
   const [backendUrl, setBackendUrl] = useState('')
@@ -171,6 +172,7 @@ export function Compartir() {
   const [deleteEmail, setDeleteEmail] = useState<string | null>(null)
   const [codeOpen, setCodeOpen] = useState(false)
   const [deleteCode, setDeleteCode] = useState<string | null>(null)
+  const [deleteDispositivo, setDeleteDispositivo] = useState<string | null>(null)
 
   React.useEffect(() => {
     if (config) setBackendUrl(config.share_backend_url ?? '')
@@ -252,6 +254,29 @@ export function Compartir() {
           } }
         ]} rows={codigos as unknown as Record<string, unknown>[]} />
       </div>
+      <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div className="text-sm font-semibold">{t('compartir.dispositivos')}</div>
+        </div>
+        <p className="px-4 py-2 text-xs text-gray-500 border-b border-gray-100">{t('compartir.dispositivosInfo')}</p>
+        {dispositivos.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-gray-500">{t('compartir.sinDispositivos')}</div>
+        ) : (
+          <Table columns={[
+            { key: 'codigo', header: t('compartir.codigos'), render: r => {
+              const c = r as unknown as Dispositivo
+              const conocido = codigos.find(k => k.codigo === c.codigo)
+              return <span className="font-mono text-xs">{String(conocido?.codigo ?? c.codigo)}</span>
+            } },
+            { key: 'dispositivo', header: t('compartir.dispositivo'), render: r => <span className="font-mono text-xs truncate max-w-40 block" title={String(r.dispositivo)}>{String(r.dispositivo)}</span> },
+            { key: 'ip_info', header: t('compartir.ipInfo'), render: r => String(r.ip_info || '—') },
+            { key: 'registrado_en', header: t('compartir.registradoEn'), render: r => String(r.registrado_en || '—') },
+            { key: 'acciones', header: '', render: r => (
+              <Button size="sm" variant="danger" icon={<IconTrash className="w-3 h-3" />} onClick={() => setDeleteDispositivo(String((r as unknown as Dispositivo).dispositivo))}>{t('compartir.removerDispositivo')}</Button>
+            ) }
+          ]} rows={dispositivos as unknown as Record<string, unknown>[]} />
+        )}
+      </div>
       {addOpen && <AddUserForm onClose={() => setAddOpen(false)} />}
       {codeOpen && <CodigoFormModal onClose={() => setCodeOpen(false)} />}
       <ConfirmDialog open={deleteEmail !== null} title={t('compartir.eliminarTitulo')} message={t('compartir.eliminarMensaje')}
@@ -260,6 +285,9 @@ export function Compartir() {
       <ConfirmDialog open={deleteCode !== null} title={t('compartir.eliminarCodigoTitulo')} message={t('compartir.eliminarCodigoMensaje')}
         onConfirm={async () => { if (deleteCode) { try { await deleteCodigo.mutateAsync(deleteCode); toast(t('compartir.codigoRevocado')) } catch (e) { toast((e as Error).message, 'error') } } setDeleteCode(null) }}
         onClose={() => setDeleteCode(null)} />
+      <ConfirmDialog open={deleteDispositivo !== null} title={t('compartir.removerDispositivoTitulo')} message={t('compartir.removerDispositivoMensaje')}
+        onConfirm={async () => { if (deleteDispositivo) { try { await removerDispositivo.mutateAsync(deleteDispositivo); toast(t('compartir.dispositivoRemovido')) } catch (e) { toast((e as Error).message, 'error') } } setDeleteDispositivo(null) }}
+        onClose={() => setDeleteDispositivo(null)} />
     </div>
   )
 }

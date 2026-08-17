@@ -176,3 +176,10 @@ export interface CodigoAcceso {
   creado: string
   activo: string
 }
+
+export interface Dispositivo {
+  codigo: string
+  dispositivo: string
+  ip_info: string
+  registrado_en: string
+}

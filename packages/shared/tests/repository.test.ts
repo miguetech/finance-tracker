@@ -332,3 +332,45 @@ describe('códigos de acceso', () => {
   })
 })
 
+describe('dispositivos', () => {
+  it('listDispositivos lee las filas de la hoja', async () => {
+    const { repo, grid } = setup()
+    grid.set('Dispositivos', [
+      ['', '', '', ''],
+      ['ANA-2026-XK3Q', 'chrome-desktop-abc123', '200.1.2.3', '2026-08-17'],
+      ['BET-2026-2B7D', 'safari-mobile-def456', '190.4.5.6', '2026-08-18']
+    ])
+    const list = await repo.listDispositivos()
+    expect(list).toHaveLength(2)
+    expect(list[0]).toMatchObject({ codigo: 'ANA-2026-XK3Q', dispositivo: 'chrome-desktop-abc123', ip_info: '200.1.2.3', registrado_en: '2026-08-17' })
+  })
+
+  it('listDispositivos devuelve [] sin filas', async () => {
+    const { repo } = setup()
+    expect(await repo.listDispositivos()).toEqual([])
+  })
+
+  it('removerDispositivo elimina la fila del dispositivo y deja el resto', async () => {
+    const { repo, grid } = setup()
+    grid.set('Dispositivos', [
+      ['', '', '', ''],
+      ['ANA-2026-XK3Q', 'chrome-desktop-abc123', '200.1.2.3', '2026-08-17'],
+      ['BET-2026-2B7D', 'safari-mobile-def456', '190.4.5.6', '2026-08-18']
+    ])
+    await repo.removerDispositivo('chrome-desktop-abc123')
+    const list = await repo.listDispositivos()
+    expect(list).toHaveLength(1)
+    expect(list[0].dispositivo).toBe('safari-mobile-def456')
+  })
+
+  it('removerDispositivo con id inexistente no borra nada', async () => {
+    const { repo, grid } = setup()
+    grid.set('Dispositivos', [
+      ['', '', '', ''],
+      ['ANA-2026-XK3Q', 'chrome-desktop-abc123', '200.1.2.3', '2026-08-17']
+    ])
+    await repo.removerDispositivo('nope')
+    expect(await repo.listDispositivos()).toHaveLength(1)
+  })
+})
+

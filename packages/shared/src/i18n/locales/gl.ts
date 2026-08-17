@@ -82,7 +82,17 @@ const gl: Partial<Dict> = {
     rol: 'Rol',
     modulosCodigo: 'Módulos',
     eliminarCodigoTitulo: 'Revogar código',
-    eliminarCodigoMensaje: 'Este código deixará de funcionar de inmediato. Continuar?'
+    eliminarCodigoMensaje: 'Este código deixará de funcionar de inmediato. Continuar?',
+    dispositivos: 'Dispositivos',
+    dispositivo: 'Dispositivo',
+    ipInfo: 'IP',
+    registradoEn: 'Rexistrado',
+    sinDispositivos: 'Sen dispositivos rexistrados',
+    removerDispositivo: 'Quitar dispositivo',
+    removerDispositivoTitulo: 'Quitar dispositivo',
+    removerDispositivoMensaje: 'Este navegador perderá o acceso de inmediato. Continuar?',
+    dispositivoRemovido: 'Dispositivo quitado',
+    dispositivosInfo: 'Cada fila é un navegador autorizado cun código. Quitalo pecha esa sesión.'
   },
   auth: {
     loginTitle: 'Acceso ao panel',

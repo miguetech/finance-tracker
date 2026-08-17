@@ -12,7 +12,7 @@ import { parseRates } from '../currency/rates'
 import { buildFactura, estadoDesdeSaldo, round2 } from '../calc/invoice'
 import { kpisForMonth, topClientes, gastosPorCategoria, type Kpis } from '../calc/kpis'
 import { expandFolioTemplate } from '../calc/folio'
-import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago, Producto, MovimientoStock, TipoMovimiento, CodigoAcceso } from '../types/entities'
+import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago, Producto, MovimientoStock, TipoMovimiento, CodigoAcceso, Dispositivo } from '../types/entities'
 import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema, EmpleadoSchema, NominaInputSchema, UsuarioSchema, ProductoSchema, MovimientoStockSchema } from '../types/schemas'
 import type { Usuario, UserRole } from '../roles/roles'
 import { assertClienteSinFacturas, assertProveedorSinCxp, enrichNombreProveedor, emailIgual } from './guards'
@@ -169,6 +169,14 @@ export function createRepository(ctx: RepoContext) {
 
     async deleteCodigo(codigo: string): Promise<void> {
       await replaceTable('Codigos_Acceso', (await readTable('Codigos_Acceso')).filter(r => r.codigo !== codigo))
+    },
+
+    async listDispositivos(): Promise<Dispositivo[]> {
+      return readTable<Dispositivo>('Dispositivos')
+    },
+
+    async removerDispositivo(dispositivo: string): Promise<void> {
+      await replaceTable('Dispositivos', (await readTable('Dispositivos')).filter(r => r.dispositivo !== dispositivo))
     },
 
     async createFactura(input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }): Promise<Factura> {

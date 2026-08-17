@@ -220,7 +220,17 @@ const en: Partial<Dict> = {
     rol: 'Role',
     modulosCodigo: 'Modules',
     eliminarCodigoTitulo: 'Revoke code',
-    eliminarCodigoMensaje: 'This code will stop working immediately. Continue?'
+    eliminarCodigoMensaje: 'This code will stop working immediately. Continue?',
+    dispositivos: 'Devices',
+    dispositivo: 'Device',
+    ipInfo: 'IP',
+    registradoEn: 'Registered',
+    sinDispositivos: 'No registered devices',
+    removerDispositivo: 'Remove device',
+    removerDispositivoTitulo: 'Remove device',
+    removerDispositivoMensaje: 'This browser will lose access immediately. Continue?',
+    dispositivoRemovido: 'Device removed',
+    dispositivosInfo: 'Each row is a browser authorized with a code. Removing it closes that session.'
   },
   auth: {
     loginTitle: 'Panel access',

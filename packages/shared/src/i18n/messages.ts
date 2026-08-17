@@ -453,7 +453,17 @@ export const messages = {
     rol: 'Rol',
     modulosCodigo: 'Módulos',
     eliminarCodigoTitulo: 'Revocar código',
-    eliminarCodigoMensaje: 'Este código dejará de funcionar de inmediato. ¿Continuar?'
+    eliminarCodigoMensaje: 'Este código dejará de funcionar de inmediato. ¿Continuar?',
+    dispositivos: 'Dispositivos',
+    dispositivo: 'Dispositivo',
+    ipInfo: 'IP',
+    registradoEn: 'Registrado',
+    sinDispositivos: 'Sin dispositivos registrados',
+    removerDispositivo: 'Remover dispositivo',
+    removerDispositivoTitulo: 'Remover dispositivo',
+    removerDispositivoMensaje: 'Este navegador perderá el acceso de inmediato. ¿Continuar?',
+    dispositivoRemovido: 'Dispositivo removido',
+    dispositivosInfo: 'Cada fila es un navegador autorizado con un código. Removerlo cierra esa sesión.'
   },
   auth: {
     loginTitle: 'Acceso al panel',

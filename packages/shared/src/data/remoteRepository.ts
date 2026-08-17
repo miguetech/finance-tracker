@@ -58,6 +58,8 @@ export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & {
     listCodigos: () => call('listCodigos'),
     saveCodigo: c => call('saveCodigo', c),
     renovarCodigo: (codigo, nuevaExpira) => call('renovarCodigo', { codigo, nuevaExpira }),
-    deleteCodigo: codigo => call('deleteCodigo', codigo)
+    deleteCodigo: codigo => call('deleteCodigo', codigo),
+    listDispositivos: () => call('listDispositivos'),
+    removerDispositivo: dispositivo => call('removerDispositivo', dispositivo)
   }
 }

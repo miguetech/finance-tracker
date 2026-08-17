@@ -82,7 +82,17 @@ const ca: Partial<Dict> = {
     rol: 'Rol',
     modulosCodigo: 'Mòduls',
     eliminarCodigoTitulo: 'Revoca el codi',
-    eliminarCodigoMensaje: 'Aquest codi deixarà de funcionar de seguida. Continuar?'
+    eliminarCodigoMensaje: 'Aquest codi deixarà de funcionar de seguida. Continuar?',
+    dispositivos: 'Dispositius',
+    dispositivo: 'Dispositiu',
+    ipInfo: 'IP',
+    registradoEn: 'Registrat',
+    sinDispositivos: 'Sense dispositius registrats',
+    removerDispositivo: 'Treure dispositiu',
+    removerDispositivoTitulo: 'Treure dispositiu',
+    removerDispositivoMensaje: 'Aquest navegador perdrà l\'accés de seguida. Continuar?',
+    dispositivoRemovido: 'Dispositiu tret',
+    dispositivosInfo: 'Cada fila és un navegador autoritzat amb un codi. Treure\'l tanca aquesta sessió.'
   },
   auth: {
     loginTitle: 'Accés al panell',
