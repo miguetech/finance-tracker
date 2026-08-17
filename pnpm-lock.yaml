@@ -42,6 +42,9 @@ importers:
         specifier: ^6
         version: 6.2.9
     devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
       tsx:
         specifier: ^4
         version: 4.23.12
