@@ -1,4 +1,5 @@
 import type { TipoDoc } from '../taxid'
+import type { UserRole } from '../roles/roles'
 
 export type MetodoPago = string
 export type TipoPago = 'cobro' | 'abono'
@@ -160,4 +161,18 @@ export interface InvoiceTotals {
   subtotal: number
   iva: number
   total: number
+}
+
+export interface CodigoAcceso {
+  codigo: string
+  rol: UserRole
+  modulos_ver: string
+  modulos_editar: string
+  expira_en: string
+  usos_max: string
+  usos: string
+  responsable: string
+  email: string
+  creado: string
+  activo: string
 }

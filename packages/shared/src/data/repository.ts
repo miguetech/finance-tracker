@@ -12,10 +12,11 @@ import { parseRates } from '../currency/rates'
 import { buildFactura, estadoDesdeSaldo, round2 } from '../calc/invoice'
 import { kpisForMonth, topClientes, gastosPorCategoria, type Kpis } from '../calc/kpis'
 import { expandFolioTemplate } from '../calc/folio'
-import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago, Producto, MovimientoStock, TipoMovimiento } from '../types/entities'
+import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago, Producto, MovimientoStock, TipoMovimiento, CodigoAcceso } from '../types/entities'
 import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema, EmpleadoSchema, NominaInputSchema, UsuarioSchema, ProductoSchema, MovimientoStockSchema } from '../types/schemas'
-import type { Usuario } from '../roles/roles'
+import type { Usuario, UserRole } from '../roles/roles'
 import { assertClienteSinFacturas, assertProveedorSinCxp, enrichNombreProveedor, emailIgual } from './guards'
+import { generarCodigo, prefijoDesdeNombre, CODIGO_ROLES_SIN_ADMIN } from '../lib/codigos'
 
 export interface RepoContext {
   api: SheetsApi
@@ -125,6 +126,49 @@ export function createRepository(ctx: RepoContext) {
     async deleteUsuario(email: string): Promise<void> {
       const all = (await readTable('Usuarios')).filter(r => !emailIgual(r.email, email))
       await replaceTable('Usuarios', all)
+    },
+
+    async listCodigos(): Promise<CodigoAcceso[]> {
+      return readTable<CodigoAcceso>('Codigos_Acceso')
+    },
+
+    async saveCodigo(input: Partial<CodigoAcceso>): Promise<CodigoAcceso> {
+      const existentes = await readTable<CodigoAcceso>('Codigos_Acceso')
+      const codigo = input.codigo || generarCodigo(prefijoDesdeNombre((await readConfig()).empresa_nombre), new Date().getFullYear(), existentes.map(c => String(c.codigo)))
+      const rol = (input.rol ?? 'solo_lectura') as UserRole
+      if (rol === 'admin' || !(CODIGO_ROLES_SIN_ADMIN as readonly string[]).includes(rol)) throw new Error('Rol inválido')
+      const expiraEn = input.expira_en ?? ''
+      if (expiraEn && !/^\d{4}-\d{2}-\d{2}$/.test(expiraEn)) throw new Error('Fecha de expiración inválida')
+      const usosMax = input.usos_max ?? ''
+      if (usosMax !== '' && !/^\d+$/.test(usosMax)) throw new Error('Usos máximos inválido')
+      const parsed: CodigoAcceso = {
+        codigo,
+        rol,
+        modulos_ver: input.modulos_ver ?? '',
+        modulos_editar: input.modulos_editar ?? '',
+        expira_en: expiraEn,
+        usos_max: usosMax,
+        usos: input.usos ?? usosMax,
+        responsable: input.responsable ?? '',
+        email: input.email ?? '',
+        creado: input.creado ?? todayLocal(),
+        activo: input.activo ?? 'true'
+      }
+      await insertOrReplace('Codigos_Acceso', 'codigo', parsed)
+      return parsed
+    },
+
+    async renovarCodigo(codigo: string, nuevaExpira: string): Promise<CodigoAcceso> {
+      const all = await readTable<CodigoAcceso>('Codigos_Acceso')
+      const actual = all.find(c => c.codigo === codigo)
+      if (!actual) throw new Error('Código no existe')
+      const updated: CodigoAcceso = { ...actual, expira_en: nuevaExpira, activo: 'true', usos: actual.usos_max }
+      await insertOrReplace('Codigos_Acceso', 'codigo', updated)
+      return updated
+    },
+
+    async deleteCodigo(codigo: string): Promise<void> {
+      await replaceTable('Codigos_Acceso', (await readTable('Codigos_Acceso')).filter(r => r.codigo !== codigo))
     },
 
     async createFactura(input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }): Promise<Factura> {

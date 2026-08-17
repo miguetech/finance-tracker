@@ -5,9 +5,9 @@ import { SheetsApi } from '../src/sheets/api'
 import { createInitialSpreadsheet, ensureTables } from '../src/sheets/createSpreadsheet'
 
 describe('tables', () => {
-  it('define esquema de 12 tablas', () => {
+  it('define esquema de 13 tablas', () => {
     const names = Object.keys(TABLES)
-    expect(names).toHaveLength(12)
+    expect(names).toHaveLength(13)
     expect(sheetName('Facturas')).toBe('Facturas')
   })
   it('Factura incluye saldo', () => {
@@ -87,7 +87,7 @@ describe('createInitialSpreadsheet', () => {
 })
 
 describe('ensureTables', () => {
-  it('crea las hojas faltantes (Empleados, Productos, Movimientos_Stock) con headers y sin añadir columnas extra', async () => {
+  it('crea las hojas faltantes (Codigos_Acceso, Empleados, Productos, Movimientos_Stock) con headers y sin añadir columnas extra', async () => {
     const calls: { url: string; init?: RequestInit }[] = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url: String(url), init: init ?? ({} as RequestInit) })
@@ -103,7 +103,7 @@ describe('ensureTables', () => {
     const addSheets = calls.filter(c => c.url.includes(':batchUpdate') && !c.url.includes('values:batchUpdate'))
     expect(addSheets.length).toBe(1)
     const body = JSON.parse(String(addSheets[0].init?.body)) as { requests: { addSheet: { properties: { title: string } } }[] }
-    expect(body.requests.map(r => r.addSheet.properties.title)).toEqual(['Empleados', 'Productos', 'Movimientos_Stock'])
+    expect(body.requests.map(r => r.addSheet.properties.title)).toEqual(['Empleados', 'Productos', 'Movimientos_Stock', 'Codigos_Acceso'])
     const headerWrites = calls.filter(c => c.url.includes('values:batchUpdate'))
     expect(headerWrites.length).toBe(1)
     expect(String(headerWrites[0].init?.body)).toContain('id_empleado')

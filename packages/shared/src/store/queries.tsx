@@ -2,7 +2,7 @@ import React, { createContext, useContext } from 'react'
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Repository } from '../data/repository'
 import { useAppStore } from './appStore'
-import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, MetodoPago, Producto, TipoMovimiento } from '../types/entities'
+import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, MetodoPago, Producto, TipoMovimiento, CodigoAcceso } from '../types/entities'
 import type { Usuario } from '../roles/roles'
 import { DEFAULT_METODOS_PAGO } from '../types/schemas'
 import { getCurrency, registerCurrency, parseCustomCurrencies, type Currency } from '../currency'
@@ -149,6 +149,17 @@ export function useUsuarios() {
   const save = useMutation({ mutationFn: (u: Usuario) => repo.saveUsuario(u), onSuccess: invalidate })
   const del = useMutation({ mutationFn: (email: string) => repo.deleteUsuario(email), onSuccess: invalidate })
   return { usuarios: q.data ?? [], isLoading: q.isLoading, saveUsuario: save, deleteUsuario: del }
+}
+
+export function useCodigos() {
+  const repo = useRepo()
+  const qc = useQueryClient()
+  const q = useQuery({ queryKey: ['codigos'], queryFn: () => repo.listCodigos() })
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['codigos'] })
+  const save = useMutation({ mutationFn: (c: Partial<CodigoAcceso>) => repo.saveCodigo(c), onSuccess: invalidate })
+  const renovar = useMutation({ mutationFn: ({ codigo, nuevaExpira }: { codigo: string; nuevaExpira: string }) => repo.renovarCodigo(codigo, nuevaExpira), onSuccess: invalidate })
+  const del = useMutation({ mutationFn: (codigo: string) => repo.deleteCodigo(codigo), onSuccess: invalidate })
+  return { codigos: q.data ?? [], isLoading: q.isLoading, saveCodigo: save, renovarCodigo: renovar, deleteCodigo: del }
 }
 
 export function useCategorias(kind: 'gastos' | 'cxp') {

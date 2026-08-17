@@ -1,4 +1,4 @@
-export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Usuarios' | 'Productos' | 'Movimientos_Stock'
+export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Usuarios' | 'Productos' | 'Movimientos_Stock' | 'Codigos_Acceso'
 
 export interface ColumnSpec {
   key: string
@@ -135,6 +135,19 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'motivo', header: 'motivo', type: S },
     { key: 'id_proveedor', header: 'id_proveedor', type: S },
     { key: 'fecha', header: 'fecha', type: D }
+  ],
+  Codigos_Acceso: [
+    { key: 'codigo', header: 'codigo', type: S },
+    { key: 'rol', header: 'rol', type: S },
+    { key: 'modulos_ver', header: 'modulos_ver', type: S },
+    { key: 'modulos_editar', header: 'modulos_editar', type: S },
+    { key: 'expira_en', header: 'expira_en', type: S },
+    { key: 'usos_max', header: 'usos_max', type: S },
+    { key: 'usos', header: 'usos', type: S },
+    { key: 'responsable', header: 'responsable', type: S },
+    { key: 'email', header: 'email', type: S },
+    { key: 'creado', header: 'creado', type: S },
+    { key: 'activo', header: 'activo', type: S }
   ]
 }
 

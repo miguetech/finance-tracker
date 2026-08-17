@@ -280,3 +280,55 @@ describe('integridad FK', () => {
   })
 })
 
+describe('códigos de acceso', () => {
+  it('saveCodigo genera código con prefijo de la empresa y lo lista', async () => {
+    const { repo } = setup()
+    const cfg = await repo.getConfig()
+    await repo.saveConfig({ ...cfg, empresa_nombre: 'Mi Empresa S.A.' })
+    const c = await repo.saveCodigo({ rol: 'solo_lectura', responsable: 'Jefe' })
+    expect(c.codigo).toMatch(/^MIE-\d{4}-[A-Z0-9]{4}$/)
+    expect(c.activo).toBe('true')
+    expect(c.usos).toBe('')
+    expect(c.creado).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    const list = await repo.listCodigos()
+    expect(list.some(x => x.codigo === c.codigo)).toBe(true)
+  })
+
+  it('saveCodigo respeta código, usos_max y expira_en dados', async () => {
+    const { repo } = setup()
+    const c = await repo.saveCodigo({ codigo: 'ANA-2026-XK3Q', rol: 'asistente', modulos_ver: 'facturas', modulos_editar: 'gastos', expira_en: '2026-12-31', usos_max: '5', responsable: 'Ana' })
+    expect(c).toMatchObject({ codigo: 'ANA-2026-XK3Q', rol: 'asistente', usos: '5', expira_en: '2026-12-31', activo: 'true' })
+  })
+
+  it('saveCodigo rechaza rol admin y formatos inválidos', async () => {
+    const { repo } = setup()
+    await expect(repo.saveCodigo({ codigo: 'X', rol: 'admin' })).rejects.toThrow(/Rol inválido/)
+    await expect(repo.saveCodigo({ codigo: 'X', rol: 'solo_lectura', expira_en: '31/12/2026' })).rejects.toThrow(/expira/i)
+    await expect(repo.saveCodigo({ codigo: 'X', rol: 'solo_lectura', usos_max: 'muchos' })).rejects.toThrow(/usos/i)
+  })
+
+  it('renovarCodigo renueva expira y reactiva', async () => {
+    const { repo } = setup()
+    await repo.saveCodigo({ codigo: 'ANA-2026-XK3Q', rol: 'solo_lectura', usos_max: '5', expira_en: '2026-01-01', activo: 'false' })
+    const c = await repo.renovarCodigo('ANA-2026-XK3Q', '2026-12-31')
+    expect(c.expira_en).toBe('2026-12-31')
+    expect(c.activo).toBe('true')
+    expect(c.usos).toBe('5')
+  })
+
+  it('renovarCodigo falla si el código no existe', async () => {
+    const { repo } = setup()
+    await expect(repo.renovarCodigo('NOPE-2026-AAAA', '2026-12-31')).rejects.toThrow('Código no existe')
+  })
+
+  it('deleteCodigo elimina el código de la hoja', async () => {
+    const { repo } = setup()
+    await repo.saveCodigo({ codigo: 'ANA-2026-XK3Q', rol: 'solo_lectura' })
+    await repo.saveCodigo({ codigo: 'BET-2026-2B7D', rol: 'solo_lectura' })
+    await repo.deleteCodigo('ANA-2026-XK3Q')
+    const list = await repo.listCodigos()
+    expect(list).toHaveLength(1)
+    expect(list[0].codigo).toBe('BET-2026-2B7D')
+  })
+})
+
