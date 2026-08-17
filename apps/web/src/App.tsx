@@ -128,7 +128,9 @@ function VisitorShell({ apiUrl }: { apiUrl: string }) {
 
   const iniciarConGoogle = async () => {
     saveShareParams(apiUrl)
-    await webAuth.getIdToken(true)
+    try {
+      await webAuth.getIdToken(true)
+    } catch {}
   }
 
   const entrarConCodigo = async () => {
@@ -163,6 +165,7 @@ function VisitorShell({ apiUrl }: { apiUrl: string }) {
           } catch { clearSessionToken() }
         }
         try {
+          await webAuth.getIdToken(false)
           entrarConPermisos(await repo.getPerms())
         } catch { setState('login') }
       } catch { setState('error') }
