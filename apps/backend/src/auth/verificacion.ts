@@ -13,6 +13,7 @@ export type EnviarVerificacion = (email: string, codigo: string) => void
 export interface Verificador {
   iniciar(intento: Omit<IntentoVerificacion, 'verif' | 'exp'>): { intentoId: string }
   validar(intentoId: string, codigoIngresado: string): IntentoVerificacion | null
+  peek(intentoId: string): IntentoVerificacion | null
 }
 
 const TTL_MS = 10 * 60 * 1000
@@ -44,11 +45,17 @@ export function createVerificador(opts: { store: Map<string, IntentoVerificacion
     validar(intentoId, codigoIngresado) {
       const intento = opts.store.get(intentoId)
       if (!intento) return null
-      if (intento.exp < Date.now() || intento.verif !== codigoIngresado) {
+      if (intento.exp < Date.now()) {
         opts.store.delete(intentoId)
         return null
       }
+      if (intento.verif !== codigoIngresado) return null // no se borra: los fallos acumulan rate limit sobre el mismo intento
       opts.store.delete(intentoId)
+      return intento
+    },
+    peek(intentoId) {
+      const intento = opts.store.get(intentoId)
+      if (!intento || intento.exp < Date.now()) return null
       return intento
     }
   }

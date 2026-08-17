@@ -116,6 +116,62 @@ describe('flujo de login por código con dispositivos y 2FA', () => {
     expect(r2.error).toContain('verificación')
   })
 
+  it('fallos repetidos de 2FA cuentan contra el rate limit (misma clave IP|codigo|2fa)', async () => {
+    vi.useFakeTimers()
+    try {
+      const { app, enviar } = makeHarness([codigo({ usos_max: '', usos: '' })])
+      const r1 = await postJson(app, '/api/auth/codigo', { codigo: 'ANA-2026-ABCD' })
+      const id = r1.data.intentoId
+      const backoffs = [1, 2, 4, 8] // s
+      for (let i = 0; i < 4; i++) {
+        const r = await postJson(app, '/api/auth/verificar', { intentoId: id, codigo: '000000' })
+        expect(r.ok).toBe(false)
+        expect(r.error).toContain('verificación')
+        vi.advanceTimersByTime((backoffs[i] + 1) * 1000)
+      }
+      const quinto = await postJson(app, '/api/auth/verificar', { intentoId: id, codigo: '000000' })
+      expect(quinto.error).toContain('verificación')
+      const blocked = await postJson(app, '/api/auth/verificar', { intentoId: id, codigo: '000000' })
+      expect(blocked.ok).toBe(false)
+      expect(blocked.error).toContain('Demasiados intentos')
+      expect(enviar).toHaveBeenCalledTimes(1) // no se crean nuevos intentos
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('creación de intentos 2FA (código ∞) también está rate-limiteada', async () => {
+    vi.useFakeTimers()
+    try {
+      const { app, enviar } = makeHarness([codigo({ usos_max: '', usos: '' })])
+      const backoffs = [1, 2, 4, 8]
+      for (let i = 0; i < 4; i++) {
+        const r = await postJson(app, '/api/auth/codigo', { codigo: 'ANA-2026-ABCD' })
+        expect(r.ok).toBe(true)
+        expect(r.data.necesitaVerificacion).toBe(true)
+        vi.advanceTimersByTime((backoffs[i] + 1) * 1000)
+      }
+      const quinto = await postJson(app, '/api/auth/codigo', { codigo: 'ANA-2026-ABCD' })
+      expect(quinto.ok).toBe(true) // 5º intento: count 5 → bloqueado 30s, pero el check previo aún permite (bloqueo inicia tras 5º fallo de codigo? no — ver nota)
+      // El límite de creación de intentos comparte clave con verificar: tras 5 fallos de verificación, crear intento también se bloquea.
+      // Simular 5 fallos de verificación primero (los 4 primeros con backoff, el 5º deja bloqueo 30s vigente).
+      const r1 = await postJson(app, '/api/auth/codigo', { codigo: 'ANA-2026-ABCD' })
+      const id = r1.data.intentoId
+      const vBackoffs = [1, 2, 4, 8]
+      for (let i = 0; i < 4; i++) {
+        await postJson(app, '/api/auth/verificar', { intentoId: id, codigo: '000000' })
+        vi.advanceTimersByTime((vBackoffs[i] + 1) * 1000)
+      }
+      await postJson(app, '/api/auth/verificar', { intentoId: id, codigo: '000000' }) // 5º fallo → bloqueo 30s
+      // ahora el check de creación de intento usa la misma clave → bloqueado
+      const blocked = await postJson(app, '/api/auth/codigo', { codigo: 'ANA-2026-ABCD' })
+      expect(blocked.ok).toBe(false)
+      expect(blocked.error).toContain('Demasiados intentos')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('código inexistente cuenta fallo; tras 5 fallos bloquea (backoff respetado)', async () => {
     vi.useFakeTimers()
     try {

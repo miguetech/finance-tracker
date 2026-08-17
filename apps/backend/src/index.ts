@@ -130,6 +130,9 @@ export function createApp(deps: AppDeps) {
         return c.json({ ok: true, data: { token } })
       }
       if (usosInfinitos(code)) {
+        const key2fa = `${ip}|${codigo}|2fa`
+        const chk2fa = deps.rateLimit.check(key2fa)
+        if (!chk2fa.allowed) return c.json({ ok: false, error: `Demasiados intentos, espera ${Math.ceil(chk2fa.retryAfterSec / 60)} min` })
         const { intentoId } = deps.verif.iniciar({
           codigo,
           dispositivo: dispositivo || generarTokenDispositivo(),
@@ -156,11 +159,16 @@ export function createApp(deps: AppDeps) {
       const env = getEnv()
       const repo = deps.makeRepo(env)
       const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('cf-connecting-ip') ?? 'desconocida'
-      const intento = deps.verif.validar(String(body.intentoId), String(body.codigo).trim())
-      if (!intento) return c.json({ ok: false, error: 'Código de verificación inválido o expirado' })
-      const key = `${ip}|${intento.codigo}|${intento.dispositivo}`
+      const intentoId = String(body.intentoId)
+      const peek = deps.verif.peek(intentoId)
+      const key = `${ip}|${peek?.codigo ?? 'desconocido'}|2fa`
       const chk = deps.rateLimit.check(key)
       if (!chk.allowed) return c.json({ ok: false, error: `Demasiados intentos, espera ${Math.ceil(chk.retryAfterSec / 60)} min` })
+      const intento = deps.verif.validar(intentoId, String(body.codigo).trim())
+      if (!intento) {
+        deps.rateLimit.recordFailure(key)
+        return c.json({ ok: false, error: 'Código de verificación inválido o expirado' })
+      }
       const codigos = await repo.listCodigos()
       const code = codigos.find(x => x.codigo === intento.codigo)
       if (!code) return c.json({ ok: false, error: 'Código no existe' })

@@ -38,11 +38,11 @@ describe('createVerificador', () => {
     expect(store.get(intentoId)).toBeUndefined()
   })
 
-  it('validar con código equivocado → null y borra el intento', () => {
+  it('validar con código equivocado → null y conserva el intento (los fallos acumulan rate limit)', () => {
     const { store, verif } = setup()
     const { intentoId } = verif.iniciar({ codigo: 'ANA-2026-ABCD', dispositivo: 'dev_x', email: EMAIL })
     expect(verif.validar(intentoId, '000000')).toBeNull()
-    expect(store.get(intentoId)).toBeUndefined()
+    expect(store.get(intentoId)).toBeTruthy()
   })
 
   it('validar expirado → null', () => {
