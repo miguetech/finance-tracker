@@ -2,7 +2,7 @@ import React, { createContext, useContext } from 'react'
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Repository } from '../data/repository'
 import { useAppStore } from './appStore'
-import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, MetodoPago, Producto, TipoMovimiento, CodigoAcceso, Dispositivo } from '../types/entities'
+import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, MetodoPago, Producto, TipoMovimiento, CodigoAcceso, GastoFijo, TasaHistorial } from '../types/entities'
 import type { Usuario } from '../roles/roles'
 import { DEFAULT_METODOS_PAGO } from '../types/schemas'
 import { getCurrency, registerCurrency, parseCustomCurrencies, type Currency } from '../currency'
@@ -217,4 +217,47 @@ export function useRegistrarMovimiento() {
     mutationFn: (m: { id_producto: string; tipo: TipoMovimiento; cantidad: number; motivo: string; id_proveedor: string; fecha: string }) => repo.registrarMovimiento(m),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['productos'] }); qc.invalidateQueries({ queryKey: ['movimientos'] }) }
   })
+}
+
+export function useGastosFijos() {
+  const repo = useRepo()
+  const qc = useQueryClient()
+  const q = useQuery({ queryKey: ['gastosFijos'], queryFn: () => repo.listGastosFijos() })
+  const save = useMutation({ mutationFn: (g: GastoFijo) => repo.saveGastoFijo(g), onSuccess: () => qc.invalidateQueries({ queryKey: ['gastosFijos'] }) })
+  const del = useMutation({ mutationFn: (id: string) => repo.deleteGastoFijo(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['gastosFijos'] }) })
+  return { gastosFijos: q.data ?? [], isLoading: q.isLoading, saveGastoFijo: save, deleteGastoFijo: del }
+}
+
+export function useTasasHistorial() {
+  const repo = useRepo()
+  const qc = useQueryClient()
+  const q = useQuery({ queryKey: ['tasasHistorial'], queryFn: () => repo.listTasasHistorial() })
+  const registrar = useMutation({ mutationFn: (t: Omit<TasaHistorial, 'id_tasa'>) => repo.registrarTasa(t), onSuccess: () => qc.invalidateQueries({ queryKey: ['tasasHistorial'] }) })
+  return { tasas: (q.data ?? []).slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))), isLoading: q.isLoading, registrarTasa: registrar }
+}
+
+export function useNominaDetalles() {
+  const repo = useRepo()
+  const qc = useQueryClient()
+  const q = useQuery({ queryKey: ['nominaDetalles'], queryFn: () => repo.listNominaDetalles() })
+  const registrar = useMutation({
+    mutationFn: (i: Parameters<Repository['registerNominaAvanzada']>[0]) => repo.registerNominaAvanzada(i),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['nominaDetalles'] }); qc.invalidateQueries({ queryKey: ['gastos'] }); qc.invalidateQueries({ queryKey: ['reportes'] }) }
+  })
+  return { detalles: q.data ?? [], isLoading: q.isLoading, registerNominaAvanzada: registrar }
+}
+
+export function useReporteFinanciero(desde: string, hasta: string) {
+  const repo = useRepo()
+  return useQuery({ queryKey: ['reporteFinanciero', desde, hasta], queryFn: () => repo.getReporteFinanciero({ desde, hasta }), enabled: !!desde || !!hasta })
+}
+
+export function useReportesInventario(desde: string, hasta: string, ids?: string[]) {
+  const repo = useRepo()
+  return useQuery({ queryKey: ['reportesInventario', desde, hasta, ids?.join(',') ?? ''], queryFn: () => repo.getReportesInventario({ desde, hasta }, ids) })
+}
+
+export function useMetasVsLogros(meses: string[]) {
+  const repo = useRepo()
+  return useQuery({ queryKey: ['metasVsLogros', meses.join(',')], queryFn: () => repo.getMetasVsLogros(meses), enabled: meses.length > 0 })
 }

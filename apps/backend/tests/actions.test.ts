@@ -27,7 +27,13 @@ const defaultConfig: Config = {
   metodos_pago: '',
   tipo_doc: 'RFC',
   tipo_doc_etiqueta: 'RFC',
-  share_backend_url: ''
+  share_backend_url: '',
+  metas_mensuales: '',
+  comisiones_transaccion: '',
+  tasa_dia_activa: '',
+  google_permisos: '',
+  notif_gastos_activa: '',
+  unidades_medida: 'pieza,kg'
 }
 
 function fakeRepo(overrides: Partial<Repository> = {}): Repository {
@@ -158,5 +164,35 @@ describe('route', () => {
   it('acción desconocida → error', async () => {
     const p = permsFor(OWNER, OWNER, null)
     await expect(route(fakeRepo(), 'noExiste', {}, p)).rejects.toThrow('No tienes permiso')
+  })
+
+  it('uploadImagen logo (configuracion) solo admin', async () => {
+    const uploadImagen = vi.fn(async () => 'https://drive.url')
+    const repo = fakeRepo({ uploadImagen })
+    const input = { nombre: 'logo.png', mimeType: 'image/png', base64: 'abc', modulo: 'configuracion' }
+
+    await expect(route(repo, 'uploadImagen', input, permsFor('user@ft.com', OWNER, usuario({ rol: 'asistente', modulos_ver: '', modulos_editar: '' })))).rejects.toThrow('No tienes permiso')
+
+    const res = await route(repo, 'uploadImagen', input, permsFor(OWNER, OWNER, null))
+    expect(res).toBe('https://drive.url')
+    expect(uploadImagen).toHaveBeenCalledWith({ nombre: 'logo.png', mimeType: 'image/png', base64: 'abc' })
+  })
+
+  it('uploadImagen producto (inventario) con canEdit(inventario)', async () => {
+    const uploadImagen = vi.fn(async () => 'https://drive.url')
+    const repo = fakeRepo({ uploadImagen })
+    const input = { nombre: 'p.png', mimeType: 'image/png', base64: 'xyz', modulo: 'inventario' }
+
+    await expect(route(repo, 'uploadImagen', input, permsFor('user@ft.com', OWNER, usuario({ rol: 'personalizado', modulos_ver: 'inventario', modulos_editar: '' })))).rejects.toThrow('No tienes permiso')
+
+    const ok = permsFor('user@ft.com', OWNER, usuario({ rol: 'asistente', modulos_ver: 'inventario', modulos_editar: 'inventario' }))
+    const res = await route(repo, 'uploadImagen', input, ok)
+    expect(res).toBe('https://drive.url')
+    expect(uploadImagen).toHaveBeenCalledWith({ nombre: 'p.png', mimeType: 'image/png', base64: 'xyz' })
+  })
+
+  it('uploadImagen módulo desconocido → denegado', async () => {
+    const p = permsFor(OWNER, OWNER, null)
+    await expect(route(fakeRepo(), 'uploadImagen', { nombre: 'x', mimeType: 'image/png', base64: 'a', modulo: 'gastos' }, p)).rejects.toThrow('No tienes permiso')
   })
 })

@@ -86,7 +86,7 @@ function cfg(overrides: Partial<Config> = {}): Config {
     empresa_nombre: 'E', empresa_rfc: '', empresa_direccion: '', empresa_telefono: '', empresa_email: '', empresa_logo: '',
     empresa_cp: '', empresa_ciudad: '', empresa_pais: '', prefijo_folio: 'FAC-', contador_folio: 1, moneda: 'USD', iva_porcentaje: 16,
     categorias_gastos: '', categorias_cxp: '', categorias_inventario: '', monedas_activas: '', monedas_custom: '', tasas_cambio: '', metodos_pago: 'Efectivo,Transferencia,Tarjeta',
-    tipo_doc: 'RFC', tipo_doc_etiqueta: '', share_backend_url: '', ...overrides
+    tipo_doc: 'RFC', tipo_doc_etiqueta: '', share_backend_url: '', metas_mensuales: '', comisiones_transaccion: '', tasa_dia_activa: '', google_permisos: '', notif_gastos_activa: '', ...overrides
   }
 }
 
@@ -224,7 +224,7 @@ describe('moneda en registros', () => {
 
 describe('esquema tablas inventario', () => {
   it('TABLES incluye Productos y Movimientos_Stock', () => {
-    expect(TABLES.Productos.map(c => c.key)).toEqual(['id_producto', 'nombre', 'categoria', 'unidad', 'stock', 'stock_minimo', 'precio_costo', 'precio_venta', 'id_proveedor', 'nombre_proveedor', 'notas', 'activo', 'fecha_registro'])
+    expect(TABLES.Productos.map(c => c.key)).toEqual(['id_producto', 'nombre', 'categoria', 'unidad', 'stock', 'stock_minimo', 'precio_costo', 'precio_venta', 'id_proveedor', 'nombre_proveedor', 'imagen', 'notas', 'activo', 'fecha_registro'])
     expect(TABLES.Movimientos_Stock.map(c => c.key)).toEqual(['id_movimiento', 'id_producto', 'tipo', 'cantidad', 'motivo', 'id_proveedor', 'fecha'])
   })
 })

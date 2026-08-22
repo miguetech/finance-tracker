@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { todayLocal } from '../../lib/date'
 import { Dialog, Button, Input, Select } from '../../ui/components'
-import { useClientes, useFacturas, useRegisterPago, useProductos, useRegistrarMovimiento, useMetodosPago, useConfig } from '../../store/queries'
+import { useClientes, useFacturas, useRegisterPago, useProductos, useMetodosPago, useConfig } from '../../store/queries'
 import { useToast } from '../../ui/components'
 import { CurrencySelect } from '../../ui/currency'
 import { formatMoney, getCurrency } from '../../currency'
@@ -14,7 +14,6 @@ export function VentaRapidaModal({ open, onClose, onSaved }: { open: boolean; on
   const { createFactura } = useFacturas()
   const registerPago = useRegisterPago()
   const { productos } = useProductos()
-  const registrarMovimiento = useRegistrarMovimiento()
   const metodos = useMetodosPago()
   const { config } = useConfig()
   const toast = useToast()
@@ -55,16 +54,13 @@ export function VentaRapidaModal({ open, onClose, onSaved }: { open: boolean; on
       await saveCliente.mutateAsync({ id_cliente: 'cli_mostrador', nombre: t('facturas.ventaMostrador'), rfc: '', email: '', telefono: '', direccion: '', fecha_registro: todayLocal() })
       const factura = await createFactura.mutateAsync({
         id_cliente: 'cli_mostrador',
-        items: [{ descripcion: descripcion.trim(), cantidad: n, precio_unitario: p }],
+        items: [{ descripcion: descripcion.trim(), cantidad: n, precio_unitario: p, ...(id_producto ? { id_producto } : {}) }],
         fecha_emision: todayLocal(),
         fecha_vencimiento: '',
         notas: notas || t('facturas.ventaRapida'),
         moneda: monedaSel
       })
       await registerPago.mutateAsync({ tipo: 'cobro', id_origen: factura.id_factura, fecha: todayLocal(), monto: factura.total, metodo_pago: metodo || 'Efectivo', notas: t('facturas.pagoVentaRapida') })
-      if (id_producto) {
-        await registrarMovimiento.mutateAsync({ id_producto, tipo: 'salida', cantidad: n, motivo: t('facturas.ventaRapida'), id_proveedor: '', fecha: todayLocal() })
-      }
       toast(`${t('facturas.ventaRegistrada')} — ${factura.folio}`)
       onSaved()
       onClose()

@@ -7,6 +7,7 @@ import { usePerms } from '../../store/perms'
 import { formatMoneyConverted } from '../../currency'
 import { IconPhone, IconSearch, IconCoins } from '../../ui/icons'
 import { useI18n } from '../../i18n'
+import { whatsappUrl } from '../../lib/contactos'
 import { estadoCxc } from '../../ui/estados'
 import { FacturaDetail } from '../facturas/FacturaDetail'
 import { PagoModal } from '../facturas/PagoModal'
@@ -48,6 +49,20 @@ export function CuentasPorCobrar() {
     if (!tel) { toast(t('cxc.clienteSinTelefono'), 'error'); return }
     if (navigator.clipboard) navigator.clipboard.writeText(tel)
     toast(t('cxc.telefonoCon', { telefono: c?.telefono ?? '' }))
+  }
+
+  /** Mensaje de cobro automático redirigido a WhatsApp Web/Móvil. */
+  const cobroWhatsApp = (f: Factura) => {
+    const c = clientes.find(x => x.id_cliente === String(f.id_cliente))
+    const tel = (c?.telefono ?? '').replace(/\s+/g, '')
+    if (!tel) { toast(t('whatsapp.sinTelefono'), 'error'); return }
+    const mensaje = t('whatsapp.mensajeDefault', {
+      nombre: f.nombre_cliente,
+      empresa: config?.empresa_nombre ?? '',
+      folio: f.folio,
+      monto: formatMoneyConverted(f.saldo, f.moneda, moneda, config)
+    })
+    window.open(whatsappUrl(tel, mensaje), '_blank')
   }
 
   return (
@@ -95,6 +110,9 @@ export function CuentasPorCobrar() {
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-1">
               {isAdmin && <Button variant="success" size="sm" icon={<IconCoins className="w-4 h-4" />} onClick={() => setCobroDe(r as unknown as Factura)}>{t('cxc.cobrar')}</Button>}
+              {clientes.find(c => c.id_cliente === String(r.id_cliente))?.telefono && (
+                <Button variant="outline" size="sm" onClick={() => cobroWhatsApp(r as unknown as Factura)} title={t('whatsapp.cobroTitulo')}>{t('whatsapp.abrirWhatsApp')}</Button>
+              )}
               <Button variant="ghost" size="sm" onClick={() => setDetalleId(String(r.id_factura))}>{t('facturas.ver')}</Button>
             </div>
           ) }

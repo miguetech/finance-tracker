@@ -144,7 +144,14 @@ const en: Partial<Dict> = {
     stockMinimoAlerta: 'Min stock (alert)', ej5: 'E.g. 5', costoCompra: 'Purchase cost',
     ejCosto: 'How much it costs you', precioVentaLabel: 'Sale price',
     ejVenta: 'How much you sell it for', proveedorPedir: 'Supplier (to order goods)',
-    telefonoContactar: 'Phone (to contact)', stockOk: 'OK', stockBajo: 'Low', stockCritico: 'Critical'
+    telefonoContactar: 'Phone (to contact)', stockOk: 'OK', stockBajo: 'Low', stockCritico: 'Critical',
+    imagen: 'Image'
+  },
+  imagenes: {
+    arrastrarSoltar: 'Drag an image here or click to upload',
+    cambiar: 'Change image', quitar: 'Remove image',
+    errorTipo: 'The file must be an image', errorGrande: 'The image weighs more than 10 MB',
+    subiendo: 'Uploading…'
   },
   reportes: {
     title: 'Reports', facturado: 'Invoiced', cobrado: 'Collected', pendiente: 'Pending',
@@ -158,7 +165,7 @@ const en: Partial<Dict> = {
     iva: 'VAT (%)', moneda: 'Currency', categorias: 'Categories', metodosPago: 'Payment methods',
     idioma: 'Language', guardada: 'Settings saved', facturacion: 'Invoicing',
     tipoDoc: 'Document type', etiquetaDoc: 'Custom document label',
-    ejTipoDoc: 'E.g. RUT, DNI, CUIT…', logo: 'Logo (URL)', codigoPostal: 'ZIP code',
+    ejTipoDoc: 'E.g. RUT, DNI, CUIT…', logo: 'Logo (URL)', logoUrlOpcional: 'Or paste a logo URL', codigoPostal: 'ZIP code',
     ciudad: 'City', pais: 'Country', tokens: 'Tokens', ejemplo: 'E.g',
     comoConfigurar: 'How to set up?', ejemplos: 'Examples:',
     tokenInvalido: 'Invalid token: {tokens}', contadorActual: 'Current counter',

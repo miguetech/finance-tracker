@@ -100,9 +100,15 @@ export function Inventario() {
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table columns={[
           { key: 'nombre', header: t('inventario.producto'), render: r => (
-            <div>
-              <div className="font-medium">{String(r.nombre)}</div>
-              <div className="text-xs text-gray-500">{[String(r.categoria), String(r.unidad)].filter(Boolean).join(' · ')}</div>
+            <div className="flex items-center gap-3">
+              {String(r.imagen ?? '') && (
+                <img src={String(r.imagen)} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-gray-200 object-cover bg-white"
+                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+              )}
+              <div>
+                <div className="font-medium">{String(r.nombre)}</div>
+                <div className="text-xs text-gray-500">{[String(r.categoria), String(r.unidad)].filter(Boolean).join(' · ')}</div>
+              </div>
             </div>
           ) },
           { key: 'stock', header: t('inventario.stock'), render: r => <span className="inline-flex items-center gap-2"><b>{String(r.stock)}</b> <StockBadge stock={Number(r.stock)} minimo={Number(r.stock_minimo)} /></span> },

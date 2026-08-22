@@ -2,7 +2,7 @@ import type { AuthProvider } from './types'
 
 export function popupOAuth(options: { clientId: string; redirectUri: string }): AuthProvider & { getIdToken: (interactive: boolean) => Promise<string> } {
   const { clientId, redirectUri } = options
-  const SCOPE = encodeURIComponent(['openid', 'email', 'https://www.googleapis.com/auth/drive.file'].join(' '))
+  const SCOPE = encodeURIComponent(['openid', 'email', 'https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/spreadsheets'].join(' '))
   const NONCE_KEY = 'ft_web_oauth_nonce'
   let memAccess: string | null = null
   let memIdToken: string | null = null

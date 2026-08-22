@@ -3,7 +3,7 @@ import { SheetsApi } from '@ft/shared'
 import type { Env } from './env'
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token'
-const SCOPES = 'https://www.googleapis.com/auth/spreadsheets'
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file'
 const GRANT_TTL = 3600
 const CACHE_MARGIN = 60
 const EMAIL_CACHE_TTL_MS = 60 * 1000

@@ -20,6 +20,7 @@ export interface FacturaItem {
   cantidad: number
   precio_unitario: number
   importe: number
+  id_producto?: string
 }
 
 export interface Factura {
@@ -50,6 +51,33 @@ export interface Empleado {
   salario_moneda: string
   fecha_ingreso: string
   activo: string
+  hora_entrada: string
+  hora_salida: string
+  esquema_pago: 'semanal' | 'quincenal' | 'mensual' | ''
+  tarifa_hora_extra: number
+}
+
+export interface GastoFijo {
+  id_gasto_fijo: string
+  descripcion: string
+  categoria: string
+  monto: number
+  moneda: string
+  dia_vencimiento: number
+  id_proveedor: string
+  nombre_proveedor: string
+  enlace_pago: string
+  notas: string
+  activo: string
+}
+
+export interface TasaHistorial {
+  id_tasa: string
+  fecha: string
+  base: string
+  moneda: string
+  tasa: number
+  fuente: string
 }
 
 export interface Gasto {
@@ -114,6 +142,7 @@ export interface Producto {
   precio_venta: number
   id_proveedor: string
   nombre_proveedor: string
+  imagen: string
   notas: string
   activo: string
   fecha_registro: string
@@ -155,6 +184,18 @@ export interface Config {
   tipo_doc: TipoDoc
   tipo_doc_etiqueta: string
   share_backend_url: string
+  /** Metas de venta mensuales: JSON { "YYYY-MM": monto } */
+  metas_mensuales: string
+  /** Comisiones por transacción: JSON { metodos: { [metodo]: % }, gastos: %, cxp: %, nomina: % } */
+  comisiones_transaccion: string
+  /** Registro automático de la tasa del día activado */
+  tasa_dia_activa: string
+  /** Permisos otorgados a Google: JSON { scope: 'granted' | 'revoked' } */
+  google_permisos: string
+  /** Recordatorios de pago por notificación del navegador */
+  notif_gastos_activa: string
+  /** Unidades de medida del inventario separadas por coma */
+  unidades_medida: string
 }
 
 export interface InvoiceTotals {

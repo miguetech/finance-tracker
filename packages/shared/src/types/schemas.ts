@@ -19,7 +19,8 @@ export const FacturaItemSchema = z.object({
   descripcion: z.string().min(1, 'Descripción obligatoria'),
   cantidad: z.number().positive('Cantidad > 0'),
   precio_unitario: z.number().nonnegative('Precio >= 0'),
-  importe: z.number().optional()
+  importe: z.number().optional(),
+  id_producto: z.string().optional()
 })
 
 export const FacturaInputSchema = z.object({
@@ -61,7 +62,11 @@ export const EmpleadoSchema = z.object({
   salario: z.number().nonnegative('Salario >= 0').default(0),
   salario_moneda: z.string().default(''),
   fecha_ingreso: z.string().default(''),
-  activo: z.string().default('true')
+  activo: z.string().default('true'),
+  hora_entrada: z.string().default(''),
+  hora_salida: z.string().default(''),
+  esquema_pago: z.enum(['semanal', 'quincenal', 'mensual']).or(z.literal('')).default('mensual'),
+  tarifa_hora_extra: z.number().nonnegative().default(0)
 })
 
 export const NominaInputSchema = z.object({
@@ -72,6 +77,15 @@ export const NominaInputSchema = z.object({
   fecha: z.string().default(() => todayLocal()),
   notas: z.string().default(''),
   moneda: z.string().default('')
+})
+
+export const NominaDetalleInputSchema = NominaInputSchema.extend({
+  sueldo_base: z.number().nonnegative().default(0),
+  horas_extra: z.number().nonnegative().default(0),
+  tarifa_hora_extra: z.number().nonnegative().default(0),
+  bonos: z.number().nonnegative().default(0),
+  comisiones: z.number().nonnegative().default(0),
+  pagos_divididos: z.array(z.object({ metodo_pago: z.string(), moneda: z.string(), monto: z.number().positive() })).default([])
 })
 
 export const CxpInputSchema = z.object({
@@ -97,6 +111,7 @@ export const ProductoSchema = z.object({
   precio_venta: z.number().nonnegative('Precio >= 0').default(0),
   id_proveedor: z.string().default(''),
   nombre_proveedor: z.string().default(''),
+  imagen: z.string().default(''),
   notas: z.string().default(''),
   activo: z.string().default('true'),
   fecha_registro: z.string().default('')
@@ -109,6 +124,29 @@ export const MovimientoStockSchema = z.object({
   motivo: z.string().default(''),
   id_proveedor: z.string().default(''),
   fecha: z.string().default(() => todayLocal())
+})
+
+export const GastoFijoSchema = z.object({
+  id_gasto_fijo: z.string().optional(),
+  descripcion: z.string().min(1, 'Descripción obligatoria'),
+  categoria: z.string().default(''),
+  monto: z.number().positive('Monto > 0'),
+  moneda: z.string().default(''),
+  dia_vencimiento: z.number().int().min(1).max(31).default(1),
+  id_proveedor: z.string().default(''),
+  nombre_proveedor: z.string().default(''),
+  enlace_pago: z.string().default(''),
+  notas: z.string().default(''),
+  activo: z.string().default('true')
+})
+
+export const TasaHistorialSchema = z.object({
+  id_tasa: z.string().optional(),
+  fecha: z.string().min(1),
+  base: z.string().min(1),
+  moneda: z.string().min(1),
+  tasa: z.number().positive('Tasa > 0'),
+  fuente: z.string().default('')
 })
 
 export const PagoInputSchema = z.object({
@@ -143,7 +181,13 @@ export const ConfigSchema = z.object({
   metodos_pago: z.string().default(DEFAULT_METODOS_PAGO),
   tipo_doc: z.enum(['RFC', 'NIF', 'Cedula', 'Otro']).default('RFC'),
   tipo_doc_etiqueta: z.string().default(''),
-  share_backend_url: z.string().default('')
+  share_backend_url: z.string().default(''),
+  metas_mensuales: z.string().default(''),
+  comisiones_transaccion: z.string().default(''),
+  tasa_dia_activa: z.string().default(''),
+  google_permisos: z.string().default(''),
+  notif_gastos_activa: z.string().default(''),
+  unidades_medida: z.string().default('pieza,kg,gr,litro,ml,caja,saco,docena,metro')
 })
 
 export type MetodoPagoValue = z.infer<typeof MetodoPagoSchema>

@@ -9,7 +9,12 @@ import { TIPO_DOC_OPTIONS, getDocLabel } from '../../taxid'
 import { FOLIO_TOKENS, expandFolioTemplate, invalidFolioTokens } from '../../calc/folio'
 import { InvoicePrint } from '../../ui/print/InvoicePrint'
 import { printInvoice } from '../facturas/FacturaDetail'
+import { ImageUploader } from '../../ui/ImageUploader'
+import { optimizeImage } from '../../lib/image'
 import { useI18n, SUPPORTED_LOCALES, LOCALE_LABELS } from '../../i18n'
+import { useTasasHistorial } from '../../store/queries'
+import { parseComisiones } from '../../reports/comisiones'
+import { parseMetas } from '../../reports/metas'
 import type { Config, Factura, FacturaItem } from '../../types/entities'
 
 export function Configuracion() {
@@ -19,6 +24,8 @@ export function Configuracion() {
   const qc = useQueryClient()
   const toast = useToast()
   const [form, setForm] = useState<Config | null>(null)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [subiendo, setSubiendo] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [ayudaFolio, setAyudaFolio] = useState(false)
   useEffect(() => { if (config && !form) setForm(config) }, [config, form])
@@ -52,15 +59,23 @@ export function Configuracion() {
 
   const submit = async () => {
     if (Object.keys(errors).length > 0) { toast(t('configuracion.revisaCampos'), 'error'); return }
+    setSubiendo(true)
     try {
+      let logo = form.empresa_logo
+      if (logoFile) {
+        const { base64, mimeType } = await optimizeImage(logoFile)
+        logo = await repo.uploadImagen({ nombre: `logo_${Date.now()}.${mimeType.split('/')[1] || 'png'}`, mimeType, base64, modulo: 'configuracion' })
+      }
       const fresh = await qc.fetchQuery({ queryKey: ['config'], queryFn: () => repo.getConfig() })
       await saveConfig.mutateAsync({
         ...form,
+        empresa_logo: logo,
         contador_folio: Math.max(fresh.contador_folio, numContador),
         iva_porcentaje: numIva
       })
       toast(t('configuracion.guardada'))
     } catch (e) { toast((e as Error).message, 'error') }
+    finally { setSubiendo(false) }
   }
   return (
     <div className="space-y-6">
@@ -91,16 +106,18 @@ export function Configuracion() {
           </div>
           <div><label className="text-xs text-muted-foreground">{t('common.email')}</label><Input value={form.empresa_email} onChange={set('empresa_email')} /></div>
           <div><label className="text-xs text-muted-foreground">{t('common.direccion')}</label><Input value={form.empresa_direccion} onChange={set('empresa_direccion')} /></div>
-          <div><label className="text-xs text-muted-foreground">{t('configuracion.logo')}</label><Input value={form.empresa_logo} onChange={set('empresa_logo')} /></div>
+          <div>
+            <label className="text-xs text-muted-foreground">{t('configuracion.logo')}</label>
+            <div className="mt-1"><ImageUploader value={form.empresa_logo} onChange={f => setLogoFile(f)} /></div>
+            <p className="mt-1 text-xs text-muted-foreground">{t('configuracion.logoUrlOpcional')}</p>
+            <Input value={form.empresa_logo} onChange={set('empresa_logo')} placeholder="https://…" className="mt-1" />
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div><label className="text-xs text-muted-foreground">{t('configuracion.codigoPostal')}</label><Input value={form.empresa_cp} onChange={set('empresa_cp')} /></div>
             <div><label className="text-xs text-muted-foreground">{t('configuracion.ciudad')}</label><Input value={form.empresa_ciudad} onChange={set('empresa_ciudad')} /></div>
             <div><label className="text-xs text-muted-foreground">{t('configuracion.pais')}</label><Input value={form.empresa_pais} onChange={set('empresa_pais')} /></div>
           </div>
-          {form.empresa_logo && (
-            <img src={form.empresa_logo} alt="Logo" className="h-12 mt-1 rounded-lg border border-gray-200 object-contain bg-white"
-              onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-          )}
+          
         </div>
       </Card>
       <Card title={t('configuracion.facturacion')}>
@@ -162,6 +179,18 @@ export function Configuracion() {
       <Card title={t('configuracion.monedasTipo')}>
         <MonedasCard config={form} setForm={fn => setForm(f => f && fn(f))} />
       </Card>
+      <Card title={t('configuracion.tasaDia')}>
+        <TasaDiaCard config={form} setForm={fn => setForm(f => f && fn(f))} onSaved={submit} />
+      </Card>
+      <Card title={t('configuracion.comisiones')}>
+        <ComisionesCard config={form} setForm={fn => setForm(f => f && fn(f))} />
+      </Card>
+      <Card title={t('configuracion.metas')}>
+        <MetasCard config={form} setForm={fn => setForm(f => f && fn(f))} moneda={form.moneda} />
+      </Card>
+      <Card title={t('configuracion.permisosGoogle')}>
+        <PermisosGoogleCard config={form} setForm={fn => setForm(f => f && fn(f))} />
+      </Card>
       <Card title={t('configuracion.categorias')}>
         <div className="space-y-5">
           <CategoriasEditor title={t('gastos.title')} value={form.categorias_gastos} onChange={v => setForm(f => f && ({ ...f, categorias_gastos: v }))} />
@@ -170,7 +199,7 @@ export function Configuracion() {
           <CategoriasEditor title={t('configuracion.metodosPago')} value={form.metodos_pago} onChange={v => setForm(f => f && ({ ...f, metodos_pago: v }))} />
         </div>
       </Card>
-      <Button onClick={submit}>{t('configuracion.guardarConfig')}</Button>
+      <Button onClick={submit} disabled={subiendo}>{subiendo ? t('imagenes.subiendo') : t('configuracion.guardarConfig')}</Button>
       {previewOpen && (
         <Dialog open onClose={() => setPreviewOpen(false)} title={t('configuracion.vistaPrevia')}
           footer={<>
@@ -342,6 +371,164 @@ function MonedasCard({ config, setForm }: { config: Config; setForm: (fn: (f: Co
         </div>
         <p className="mt-1 text-xs text-muted-foreground">Útil si tu país no está en la lista. La tasa se configura arriba.</p>
       </div>
+    </div>
+  )
+}
+
+/** Registro automático de la tasa del día + historial de variaciones. */
+function TasaDiaCard({ config, setForm, onSaved }: { config: Config; setForm: (fn: (f: Config) => Config) => void; onSaved: () => Promise<void> | void }) {
+  const { t } = useI18n()
+  const toast = useToast()
+  const { tasas } = useTasasHistorial()
+  const activa = config.tasa_dia_activa === 'true'
+
+  const toggle = async () => {
+    setForm(f => ({ ...f, tasa_dia_activa: f.tasa_dia_activa === 'true' ? 'false' : 'true' }))
+    toast(t('configuracion.guardada'))
+    setTimeout(() => { void onSaved() }, 0)
+  }
+
+  // Últimas variaciones por moneda (últimos 30 registros).
+  const recientes = [...tasas].sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, 30)
+  return (
+    <div className="space-y-4">
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" className="h-4 w-4" checked={activa} onChange={toggle} />
+        {t('configuracion.tasaDiaActiva')}
+      </label>
+      <p className="text-xs text-muted-foreground">{t('configuracion.tasaDiaInfo')}</p>
+      <div>
+        <div className="text-xs text-muted-foreground mb-2">{t('configuracion.historialTasas')}</div>
+        {recientes.length === 0 ? (
+          <p className="text-sm text-gray-500">{t('configuracion.sinHistorial')}</p>
+        ) : (
+          <div className="max-h-56 overflow-auto rounded-xl border border-gray-100">
+            <table className="w-full text-sm">
+              <thead><tr className="text-xs uppercase text-muted-foreground bg-muted/60"><th className="px-3 py-1.5 text-left">Fecha</th><th className="px-3 py-1.5 text-left">Moneda</th><th className="px-3 py-1.5 text-right">Tasa</th></tr></thead>
+              <tbody>
+                {recientes.map(x => (
+                  <tr key={x.id_tasa} className="border-t border-gray-50">
+                    <td className="px-3 py-1.5">{x.fecha}</td>
+                    <td className="px-3 py-1.5">{x.base} → {x.moneda}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums">{Number(x.tasa).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Comisiones por transacción en Gastos, CXP, Nómina y métodos de pago. */
+function ComisionesCard({ config, setForm }: { config: Config; setForm: (fn: (f: Config) => Config) => void }) {
+  const { t } = useI18n()
+  const parsed = parseComisiones(config.comisiones_transaccion)
+  const metodos = (config.metodos_pago || '').split(',').map(s => s.trim()).filter(Boolean)
+
+  const update = (patch: Partial<ReturnType<typeof parseComisiones>>) => {
+    const next = { ...parsed, ...patch }
+    setForm(f => ({ ...f, comisiones_transaccion: JSON.stringify(next) }))
+  }
+
+  const numInput = (label: string, value: number, onChange: (n: number) => void) => (
+    <div>
+      <label className="text-xs text-muted-foreground">{label}</label>
+      <Input type="number" min={0} max={100} step="any" defaultValue={value || ''} key={`${label}-${value}`}
+        onBlur={e => onChange(Number(e.target.value) || 0)} />
+    </div>
+  )
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">{t('configuracion.comisionesInfo')}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {numInput(t('configuracion.comisionGastos'), parsed.gastos, n => update({ gastos: n }))}
+        {numInput(t('configuracion.comisionCxp'), parsed.cxp, n => update({ cxp: n }))}
+        {numInput(t('configuracion.comisionNomina'), parsed.nomina, n => update({ nomina: n }))}
+      </div>
+      {metodos.length > 0 && (
+        <div>
+          <div className="text-xs text-muted-foreground mb-2">Métodos de pago</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {metodos.map(m => numInput(t('configuracion.comisionMetodo', { metodo: m }), parsed.metodos[m] ?? 0,
+              n => update({ metodos: { ...parsed.metodos, [m]: n } })))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Metas mensuales de venta (JSON en config). */
+function MetasCard({ config, setForm, moneda }: { config: Config; setForm: (fn: (f: Config) => Config) => void; moneda: string }) {
+  const { t } = useI18n()
+  const metas = parseMetas(config.metas_mensuales)
+  const [mes, setMes] = useState(() => new Date().toISOString().slice(0, 7))
+  const [monto, setMonto] = useState('')
+
+  const guardarMeta = () => {
+    const m = Number(monto)
+    if (!/^\d{4}-\d{2}$/.test(mes)) return
+    const next = { ...metas }
+    if (!m || m <= 0) delete next[mes]
+    else next[mes] = m
+    setForm(f => ({ ...f, metas_mensuales: JSON.stringify(next) }))
+    setMonto('')
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">{t('configuracion.metasInfo')}</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <Input type="month" value={mes} onChange={e => setMes(e.target.value)} className="w-40" />
+        <Input type="number" min={0} step="any" value={monto} onChange={e => setMonto(e.target.value)} placeholder={`Monto (${moneda})`} className="w-40" />
+        <Button variant="outline" onClick={guardarMeta}>{t('common.guardar')}</Button>
+      </div>
+      {Object.keys(metas).length > 0 && (
+        <ul className="text-sm divide-y divide-gray-50 rounded-xl border border-gray-100 max-h-40 overflow-auto">
+          {Object.entries(metas).sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => (
+            <li key={k} className="flex justify-between px-3 py-1.5">
+              <span>{k}</span><b>{v.toLocaleString()} {moneda}</b>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** Permisos otorgados a Google (Sheets, Drive, perfil) con guía de revocación. */
+function PermisosGoogleCard({ config, setForm }: { config: Config; setForm: (fn: (f: Config) => Config) => void }) {
+  const { t } = useI18n()
+  let permisos: Record<string, string> = {}
+  try { permisos = JSON.parse(config.google_permisos || '{}') } catch { permisos = {} }
+
+  const togglePermiso = (key: string) => {
+    const cur = permisos[key] === 'granted' ? 'revoked' : 'granted'
+    setForm(f => ({ ...f, google_permisos: JSON.stringify({ ...permisos, [key]: cur }) }))
+  }
+
+  const filas = [
+    { key: 'sheets', label: t('configuracion.permisoSheets') },
+    { key: 'drive', label: t('configuracion.permisoDrive') },
+    { key: 'profile', label: t('configuracion.permisoPerfil') }
+  ]
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">{t('configuracion.permisosGoogleInfo')}</p>
+      <ul className="divide-y divide-gray-50 rounded-xl border border-gray-100">
+        {filas.map(f => (
+          <li key={f.key} className="flex items-center justify-between px-3 py-2.5 text-sm">
+            <span>{f.label}</span>
+            <label className="inline-flex items-center cursor-pointer gap-2">
+              <input type="checkbox" className="h-4 w-4" checked={permisos[f.key] !== 'revoked'} onChange={() => togglePermiso(f.key)} />
+            </label>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

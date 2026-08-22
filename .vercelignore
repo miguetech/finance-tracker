@@ -1,0 +1,15 @@
+docs
+apps/backend
+apps/script
+apps/extension
+.github
+.opencode
+.superpowers
+FUNCIONALIDADES.md
+README.md
+playwright-report
+test-results
+.env
+.env.local
+apps/web/.env
+apps/web/.env.local

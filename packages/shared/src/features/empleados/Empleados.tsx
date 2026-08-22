@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useEmpleados, useRegisterNomina, useGastos, useConfig } from '../../store/queries'
+import { useEmpleados, useNominaDetalles, useGastos, useConfig } from '../../store/queries'
 import { Table, Button, Badge, ConfirmDialog } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { usePerms } from '../../store/perms'
@@ -14,7 +14,7 @@ import type { Empleado } from '../../types/entities'
 export function Empleados() {
   const { t } = useI18n()
   const { empleados, saveEmpleado, deleteEmpleado } = useEmpleados()
-  const registerNomina = useRegisterNomina()
+  const { registerNominaAvanzada } = useNominaDetalles()
   const { gastos } = useGastos({})
   const { config } = useConfig()
   const { isAdmin } = usePerms()
@@ -63,7 +63,7 @@ export function Empleados() {
         <NominaModal empleado={nominaDe} onClose={() => setNominaDe(null)}
           onSave={async i => {
             try {
-              await registerNomina.mutateAsync({ id_empleado: nominaDe.id_empleado, ...i })
+              await registerNominaAvanzada.mutateAsync({ id_empleado: nominaDe.id_empleado, ...i })
               toast(t('empleados.nominaRegistrada'))
             } catch (err) { toast((err as Error).message, 'error') }
           }} />

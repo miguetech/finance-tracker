@@ -47,7 +47,14 @@ const ca: Partial<Dict> = {
   inventario: {
     title: 'Inventari', nuevo: 'Nou producte', producto: 'Producte', stock: 'Stock',
     stockMinimo: 'Stock mínim', precioCosto: 'Cost', precioVenta: 'Preu venda', unidad: 'Unitat',
-    entradaSalida: 'Entrada/Sortida', historial: 'Historial', movimiento: 'Moviment', motivo: 'Motiu'
+    entradaSalida: 'Entrada/Sortida', historial: 'Historial', movimiento: 'Moviment', motivo: 'Motiu',
+    imagen: 'Imatge'
+  },
+  imagenes: {
+    arrastrarSoltar: 'Arrossega una imatge aquí o fes clic per pujar-la',
+    cambiar: 'Canviar imatge', quitar: 'Treure imatge',
+    errorTipo: 'El fitxer ha de ser una imatge', errorGrande: 'La imatge pesa més de 10 MB',
+    subiendo: 'Pujant…'
   },
   reportes: {
     title: 'Informes', facturado: 'Facturat', cobrado: 'Cobrat', pendiente: 'Pendent',
@@ -57,7 +64,8 @@ const ca: Partial<Dict> = {
     title: 'Configuració', datosEmpresa: 'Dades de l\'empresa', empresaNombre: 'Nom',
     empresaRfc: 'NIF', prefijoFolio: 'Prefix del folio', contadorFolio: 'Comptador del folio',
     iva: 'IVA (%)', moneda: 'Moneda', categorias: 'Categories', metodosPago: 'Mètodes de pagament',
-    idioma: 'Idioma', guardada: 'Configuració desada'
+    idioma: 'Idioma', guardada: 'Configuració desada',
+    logo: 'Logo (URL)', logoUrlOpcional: 'O enganxa la URL del logo'
   },
   compartir: {
     title: 'Compartir', generarLink: 'Generar enllaç', copiarLink: 'Copiar enllaç',

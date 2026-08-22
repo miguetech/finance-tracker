@@ -1,4 +1,4 @@
-export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Usuarios' | 'Productos' | 'Movimientos_Stock' | 'Codigos_Acceso' | 'Dispositivos'
+export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Usuarios' | 'Productos' | 'Movimientos_Stock' | 'Codigos_Acceso' | 'Dispositivos' | 'Gastos_Fijos' | 'Tasas_Historial' | 'Nomina_Detalles'
 
 export interface ColumnSpec {
   key: string
@@ -32,7 +32,11 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'salario', header: 'salario', type: N },
     { key: 'salario_moneda', header: 'salario_moneda', type: S },
     { key: 'fecha_ingreso', header: 'fecha_ingreso', type: D },
-    { key: 'activo', header: 'activo', type: S }
+    { key: 'activo', header: 'activo', type: S },
+    { key: 'hora_entrada', header: 'hora_entrada', type: S },
+    { key: 'hora_salida', header: 'hora_salida', type: S },
+    { key: 'esquema_pago', header: 'esquema_pago', type: S },
+    { key: 'tarifa_hora_extra', header: 'tarifa_hora_extra', type: N }
   ],
   Facturas: [
     { key: 'id_factura', header: 'id_factura', type: S },
@@ -57,7 +61,8 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'descripcion', header: 'descripcion', type: S },
     { key: 'cantidad', header: 'cantidad', type: N },
     { key: 'precio_unitario', header: 'precio_unitario', type: N },
-    { key: 'importe', header: 'importe', type: N }
+    { key: 'importe', header: 'importe', type: N },
+    { key: 'id_producto', header: 'id_producto', type: S }
   ],
   Gastos: [
     { key: 'id_gasto', header: 'id_gasto', type: S },
@@ -123,6 +128,7 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'precio_venta', header: 'precio_venta', type: N },
     { key: 'id_proveedor', header: 'id_proveedor', type: S },
     { key: 'nombre_proveedor', header: 'nombre_proveedor', type: S },
+    { key: 'imagen', header: 'imagen', type: S },
     { key: 'notas', header: 'notas', type: S },
     { key: 'activo', header: 'activo', type: S },
     { key: 'fecha_registro', header: 'fecha_registro', type: D }
@@ -154,6 +160,44 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'dispositivo', header: 'dispositivo', type: S },
     { key: 'ip_info', header: 'ip_info', type: S },
     { key: 'registrado_en', header: 'registrado_en', type: S }
+  ],
+  Gastos_Fijos: [
+    { key: 'id_gasto_fijo', header: 'id_gasto_fijo', type: S },
+    { key: 'descripcion', header: 'descripcion', type: S },
+    { key: 'categoria', header: 'categoria', type: S },
+    { key: 'monto', header: 'monto', type: N },
+    { key: 'moneda', header: 'moneda', type: S },
+    { key: 'dia_vencimiento', header: 'dia_vencimiento', type: N },
+    { key: 'id_proveedor', header: 'id_proveedor', type: S },
+    { key: 'nombre_proveedor', header: 'nombre_proveedor', type: S },
+    { key: 'enlace_pago', header: 'enlace_pago', type: S },
+    { key: 'notas', header: 'notas', type: S },
+    { key: 'activo', header: 'activo', type: S }
+  ],
+  Tasas_Historial: [
+    { key: 'id_tasa', header: 'id_tasa', type: S },
+    { key: 'fecha', header: 'fecha', type: D },
+    { key: 'base', header: 'base', type: S },
+    { key: 'moneda', header: 'moneda', type: S },
+    { key: 'tasa', header: 'tasa', type: N },
+    { key: 'fuente', header: 'fuente', type: S }
+  ],
+  Nomina_Detalles: [
+    { key: 'id_detalle', header: 'id_detalle', type: S },
+    { key: 'id_empleado', header: 'id_empleado', type: S },
+    { key: 'mes', header: 'mes', type: S },
+    { key: 'sueldo_base', header: 'sueldo_base', type: N },
+    { key: 'horas_extra', header: 'horas_extra', type: N },
+    { key: 'tarifa_hora_extra', header: 'tarifa_hora_extra', type: N },
+    { key: 'monto_horas_extra', header: 'monto_horas_extra', type: N },
+    { key: 'bonos', header: 'bonos', type: N },
+    { key: 'comisiones', header: 'comisiones', type: N },
+    { key: 'total', header: 'total', type: N },
+    { key: 'moneda', header: 'moneda', type: S },
+    { key: 'metodo_pago', header: 'metodo_pago', type: S },
+    { key: 'pagos_divididos', header: 'pagos_divididos', type: S },
+    { key: 'fecha', header: 'fecha', type: D },
+    { key: 'id_gasto', header: 'id_gasto', type: S }
   ]
 }
 

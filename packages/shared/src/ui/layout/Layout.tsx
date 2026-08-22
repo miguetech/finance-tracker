@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { cx } from '../components'
 import { IconDashboard, IconInvoice, IconClient, IconUsers, IconPayables, IconReceivable, IconProvider, IconExpense, IconReport, IconSettings, IconMenu, IconLogo, IconBox } from '../icons'
 import { useI18n } from '../../i18n'
+import { OfflineBanner } from '../hooks'
 
 export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuentas' | 'cxc' | 'proveedores' | 'gastos' | 'reportes' | 'configuracion' | 'compartir' | 'inventario'
 
@@ -55,6 +56,7 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
   )
   return (
     <div className="min-h-screen bg-muted md:flex">
+      <OfflineBanner />
       <aside className="hidden md:flex md:flex-col md:w-60 md:min-h-screen bg-surface border-r border-gray-100">{nav}</aside>
       {mobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden bg-black/40" onClick={() => setMobileOpen(false)}>

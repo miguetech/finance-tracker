@@ -6,9 +6,9 @@ import { SheetsApi } from '../src/sheets/api'
 import type { StorageAdapter } from '../src/data/storage'
 
 describe('empleados schema', () => {
-  it('TABLES incluye la hoja Empleados con 8 columnas', () => {
+  it('TABLES incluye la hoja Empleados con 12 columnas', () => {
     const spec = TABLES.Empleados
-    expect(spec.map(c => c.key)).toEqual(['id_empleado', 'nombre', 'rfc', 'puesto', 'salario', 'salario_moneda', 'fecha_ingreso', 'activo'])
+    expect(spec.map(c => c.key)).toEqual(['id_empleado', 'nombre', 'rfc', 'puesto', 'salario', 'salario_moneda', 'fecha_ingreso', 'activo', 'hora_entrada', 'hora_salida', 'esquema_pago', 'tarifa_hora_extra'])
   })
   it('EmpleadoSchema requiere nombre y default salario 0', () => {
     const e = EmpleadoSchema.parse({ nombre: 'Ana' })

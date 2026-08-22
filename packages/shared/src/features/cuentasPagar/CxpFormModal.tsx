@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { todayLocal } from '../../lib/date'
-import { Dialog, Button, Input, Select } from '../../ui/components'
+import { Dialog, Button, Input, Select, Textarea } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { useProveedores, useCxp, useCategorias } from '../../store/queries'
 import { CurrencySelect } from '../../ui/currency'
 import { IconPlus } from '../../ui/icons'
 import { useI18n } from '../../i18n'
+import { useSaveGuard } from '../../ui/hooks'
 import { ProveedorFormModal } from '../proveedores/ProveedorFormModal'
 import type { Proveedor } from '../../types/entities'
 
@@ -18,6 +19,7 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
   const [form, setForm] = useState({ id_proveedor: '', folio_documento: '', categoria: '', descripcion: '', fecha_vencimiento: '', monto_total: '', moneda: '', notas: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [nuevoProv, setNuevoProv] = useState(false)
+  const { guardando, guardar } = useSaveGuard()
   useEffect(() => {
     if (open) {
       setForm({ id_proveedor: '', folio_documento: '', categoria: '', descripcion: '', fecha_vencimiento: '', monto_total: '', moneda: '', notas: '' })
@@ -25,7 +27,7 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
     }
   }, [open])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
-  const submit = async () => {
+  const submit = () => guardar(async () => {
     const errs: Record<string, string> = {}
     if (!form.id_proveedor) errs.proveedor = t('errors.proveedorRequerido')
     if (!form.descripcion.trim()) errs.descripcion = t('errors.descripcionObligatoria')
@@ -40,7 +42,7 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
     } catch (e) {
       toast((e as Error).message, 'error')
     }
-  }
+  })
   const onProveedorCreado = (p: Proveedor) => {
     setForm(f => ({ ...f, id_proveedor: p.id_proveedor }))
     setNuevoProv(false)
@@ -49,7 +51,7 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
   }
   return (
     <Dialog open={open} onClose={onClose} title={t('cuentas.nuevaPorPagar')}
-      footer={<><Button variant="outline" onClick={onClose}>{t('common.cancelar')}</Button><Button onClick={submit}>{t('common.guardar')}</Button></>}>
+      footer={<><Button variant="outline" onClick={onClose}>{t('common.cancelar')}</Button><Button onClick={submit} disabled={guardando}>{guardando ? t('imagenes.subiendo') : t('common.guardar')}</Button></>}>
       <div className="space-y-3">
         <div>
           <div className="flex items-center justify-between mb-1">
@@ -73,7 +75,7 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
           <div><label className="text-xs text-gray-500">{t('cuentas.montoTotal')} *</label><Input type="number" value={form.monto_total} onChange={set('monto_total')} error={errors.monto} /></div>
         </div>
         <div><label className="text-xs text-gray-500">{t('cuentas.monedaDeuda')}</label><CurrencySelect value={form.moneda} onChange={v => setForm(f => ({ ...f, moneda: v }))} /></div>
-        <div><label className="text-xs text-gray-500">{t('common.notas')}</label><Input value={form.notas} onChange={set('notas')} /></div>
+        <div><label className="text-xs text-gray-500">{t('common.notas')}</label><Textarea value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} rows={3} /></div>
       </div>
       {nuevoProv && <ProveedorFormModal open onClose={() => setNuevoProv(false)} initial={null}
         onSave={async p => { await saveProveedor.mutateAsync(p); onProveedorCreado(p) }} />}

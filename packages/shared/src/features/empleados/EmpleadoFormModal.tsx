@@ -10,12 +10,12 @@ export function EmpleadoFormModal({ open, onClose, initial, onSave }: { open: bo
   const { t } = useI18n()
   const { config } = useConfig()
   const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.tipo_doc_etiqueta ?? '')
-  const [form, setForm] = useState({ nombre: '', rfc: '', puesto: '', salario: '', salario_moneda: '', fecha_ingreso: '', activo: 'true' })
+  const [form, setForm] = useState({ nombre: '', rfc: '', puesto: '', salario: '', salario_moneda: '', fecha_ingreso: '', activo: 'true', hora_entrada: '', hora_salida: '', esquema_pago: 'mensual', tarifa_hora_extra: '' })
   const [error, setError] = useState('')
   useEffect(() => {
     if (open) setForm(initial
-      ? { nombre: initial.nombre, rfc: initial.rfc, puesto: initial.puesto, salario: String(initial.salario), salario_moneda: initial.salario_moneda, fecha_ingreso: initial.fecha_ingreso, activo: initial.activo }
-      : { nombre: '', rfc: '', puesto: '', salario: '', salario_moneda: '', fecha_ingreso: '', activo: 'true' })
+      ? { nombre: initial.nombre, rfc: initial.rfc, puesto: initial.puesto, salario: String(initial.salario), salario_moneda: initial.salario_moneda, fecha_ingreso: initial.fecha_ingreso, activo: initial.activo, hora_entrada: initial.hora_entrada || '', hora_salida: initial.hora_salida || '', esquema_pago: initial.esquema_pago || 'mensual', tarifa_hora_extra: String(initial.tarifa_hora_extra ?? '') }
+      : { nombre: '', rfc: '', puesto: '', salario: '', salario_moneda: '', fecha_ingreso: '', activo: 'true', hora_entrada: '', hora_salida: '', esquema_pago: 'mensual', tarifa_hora_extra: '' })
   }, [open, initial])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   const submit = async () => {
@@ -24,7 +24,7 @@ export function EmpleadoFormModal({ open, onClose, initial, onSave }: { open: bo
     if (form.salario.trim() !== '' && Number.isNaN(salario)) return setError(t('errors.salarioInvalido'))
     if (salario < 0) return setError(t('errors.salarioNegativo'))
     try {
-      await onSave({ ...initial, ...form, salario: salario || 0 } as Empleado)
+      await onSave({ ...initial, ...form, salario: salario || 0, esquema_pago: form.esquema_pago as Empleado['esquema_pago'], tarifa_hora_extra: Number(form.tarifa_hora_extra) || 0 } as Empleado)
       onClose()
     } catch {
       /* el padre muestra el error; se mantiene abierto */
@@ -44,6 +44,17 @@ export function EmpleadoFormModal({ open, onClose, initial, onSave }: { open: bo
           <div><label className="text-xs text-muted-foreground">{t('empleados.fechaIngreso')}</label><Input type="date" value={form.fecha_ingreso} onChange={set('fecha_ingreso')} /></div>
         </div>
         <CurrencySelect label={t('empleados.monedaSalario')} value={form.salario_moneda} onChange={v => setForm(f => ({ ...f, salario_moneda: v }))} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div><label className="text-xs text-muted-foreground">{t('nominaAv.horaEntrada')}</label><Input type="time" value={form.hora_entrada} onChange={set('hora_entrada')} /></div>
+          <div><label className="text-xs text-muted-foreground">{t('nominaAv.horaSalida')}</label><Input type="time" value={form.hora_salida} onChange={set('hora_salida')} /></div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div><label className="text-xs text-muted-foreground">{t('nominaAv.esquemaPago')}</label>
+            <Select value={form.esquema_pago} onChange={v => setForm(f => ({ ...f, esquema_pago: v }))}
+              options={[{ value: 'semanal', label: t('nominaAv.semanal') }, { value: 'quincenal', label: t('nominaAv.quincenal') }, { value: 'mensual', label: t('nominaAv.mensual') }]} />
+          </div>
+          <div><label className="text-xs text-muted-foreground">{t('nominaAv.tarifaHoraExtra')}</label><Input type="number" min={0} step="any" value={form.tarifa_hora_extra} onChange={set('tarifa_hora_extra')} placeholder="0" /></div>
+        </div>
         <div>
           <label className="text-xs text-muted-foreground">{t('common.estado')}</label>
           <Select value={form.activo} onChange={v => setForm(f => ({ ...f, activo: v }))} options={[{ value: 'true', label: t('empleados.activo') }, { value: 'false', label: t('empleados.inactivo') }]} />

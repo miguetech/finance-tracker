@@ -18,13 +18,19 @@ export function GastoFormModal({ open, onClose, initial }: { open: boolean; onCl
     if (open) setForm(initial ? { ...initial, monto: String(initial.monto) } : { fecha: todayLocal(), categoria: '', descripcion: '', monto: '', metodo_pago: 'Efectivo', proveedor: '', moneda: '' })
   }, [open, initial])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
+  const setCategoria = (v: string) => setForm(f => ({
+    ...f,
+    categoria: v,
+    // Si solo se eligió la categoría (ej. "Renta"), la descripción se rellena sola.
+    descripcion: f.descripcion.trim() === '' ? v : f.descripcion
+  }))
   const submit = async () => {
-    if (!form.descripcion.trim() || Number(form.monto) <= 0) {
-      toast(t('gastos.llenaDescripcion'), 'error')
-      return
-    }
+    if (!form.categoria.trim()) { toast(t('gastos.seleccionaCategoria'), 'error'); return }
+    if (!form.descripcion.trim()) { toast(t('gastos.llenaDescripcion'), 'error'); return }
+    const montoNum = Number(form.monto)
+    if (!Number.isFinite(montoNum) || montoNum <= 0) { toast(t('errors.montoMayorCero'), 'error'); return }
     try {
-      await saveGasto.mutateAsync({ ...(initial ?? {}), ...form, monto: Number(form.monto) } as Gasto)
+      await saveGasto.mutateAsync({ ...(initial ?? {}), ...form, monto: montoNum } as Gasto)
       toast(t('gastos.guardado'))
       onClose()
     } catch (e) {
@@ -38,7 +44,7 @@ export function GastoFormModal({ open, onClose, initial }: { open: boolean; onCl
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">{t('common.fecha')}</label><Input type="date" value={form.fecha} onChange={set('fecha')} /></div>
           <div><label className="text-xs text-gray-500">{t('common.categoria')}</label>
-            <Select value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} options={categorias.map(c => ({ value: c, label: c }))} />
+            <Select value={form.categoria} onChange={setCategoria} options={categorias.map(c => ({ value: c, label: c }))} />
           </div>
         </div>
         <div><label className="text-xs text-gray-500">{t('gastos.descripcion')} *</label><Input value={form.descripcion} onChange={set('descripcion')} /></div>

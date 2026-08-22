@@ -1,4 +1,5 @@
 import { SheetsApi } from './api'
+import { DriveApi } from '../drive/api'
 import { TABLES, sheetName, HEADER_ROWS } from './tables'
 import { serializeRow } from './rows'
 import type { Config } from '../types/entities'
@@ -29,7 +30,13 @@ const DEFAULT_CONFIG: Config = {
   metodos_pago: 'Efectivo,Transferencia,Tarjeta',
   tipo_doc: 'RFC' as const,
   tipo_doc_etiqueta: '',
-  share_backend_url: ''
+  share_backend_url: '',
+  metas_mensuales: '',
+  comisiones_transaccion: '',
+  tasa_dia_activa: 'true',
+  google_permisos: '',
+  notif_gastos_activa: '',
+  unidades_medida: 'pieza,kg,gr,litro,ml,caja,saco,docena,metro'
 }
 
 export async function createInitialSpreadsheet(api: SheetsApi): Promise<{ spreadsheetId: string; url: string }> {
@@ -41,6 +48,21 @@ export async function createInitialSpreadsheet(api: SheetsApi): Promise<{ spread
   const configRows = (Object.entries(DEFAULT_CONFIG) as [string, unknown][]).map(([clave, valor]) => serializeRow(TABLES.Config, { clave, valor: String(valor) }))
   await api.batchUpdate(spreadsheetId, [{ range: `'Config'!A1:B${configRows.length}`, values: configRows }])
   return { spreadsheetId, url }
+}
+
+/**
+ * Conecta a la hoja principal existente o crea una nueva solo si no hay ninguna.
+ * Evita duplicar hojas de cálculo al iniciar sesión con almacenamiento vacío.
+ */
+export async function connectOrCreateSpreadsheet(api: SheetsApi): Promise<{ spreadsheetId: string; url: string; creada: boolean }> {
+  const drive = new DriveApi(() => api.getToken())
+  const existente = await drive.findSpreadsheet('FinanceTracker')
+  if (existente) {
+    await ensureTables(api, existente.id)
+    return { spreadsheetId: existente.id, url: existente.url ?? `https://docs.google.com/spreadsheets/d/${existente.id}`, creada: false }
+  }
+  const created = await createInitialSpreadsheet(api)
+  return { ...created, creada: true }
 }
 
 function writeAllHeaders(api: SheetsApi, spreadsheetId: string, tables: (keyof typeof TABLES)[]): Promise<void> {
@@ -122,7 +144,13 @@ export function configFromRows(rows: (string | number)[][]): Config {
     metodos_pago: map.get('metodos_pago') ?? DEFAULT_CONFIG.metodos_pago,
     tipo_doc: (map.get('tipo_doc') as Config['tipo_doc']) || DEFAULT_CONFIG.tipo_doc,
     tipo_doc_etiqueta: map.get('tipo_doc_etiqueta') ?? DEFAULT_CONFIG.tipo_doc_etiqueta,
-    share_backend_url: map.get('share_backend_url') ?? ''
+    share_backend_url: map.get('share_backend_url') ?? '',
+    metas_mensuales: map.get('metas_mensuales') ?? '',
+    comisiones_transaccion: map.get('comisiones_transaccion') ?? '',
+    tasa_dia_activa: map.get('tasa_dia_activa') ?? DEFAULT_CONFIG.tasa_dia_activa,
+    google_permisos: map.get('google_permisos') ?? '',
+    notif_gastos_activa: map.get('notif_gastos_activa') ?? '',
+    unidades_medida: map.get('unidades_medida') ?? DEFAULT_CONFIG.unidades_medida
   }
 }
 

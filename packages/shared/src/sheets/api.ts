@@ -6,12 +6,16 @@ export interface ValueRange {
 }
 
 export class SheetsApi {
-  constructor(private getToken: () => Promise<string>) {}
+  constructor(private tokenGetter: () => Promise<string>) {}
+
+  getToken(): Promise<string> {
+    return this.tokenGetter()
+  }
 
   private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
     const maxAttempts = 4
     for (let attempt = 0; ; attempt++) {
-      const token = await this.getToken()
+      const token = await this.tokenGetter()
       const res = await fetch(url, {
         ...init,
         headers: {

@@ -1,5 +1,6 @@
 import type { Repository } from './repository'
 import type { PermsInfo } from '../roles/roles'
+import type { UploadImagenInput } from '../drive/api'
 
 export interface RemoteRepositoryCtx {
   apiUrl: string
@@ -18,9 +19,26 @@ export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & {
     if (!data.ok) throw new Error(data.error ?? 'Error')
     return data.data as T
   }
+
+  async function callPost<T>(action: string, payload: unknown = {}): Promise<T> {
+    const token = ctx.getSessionToken ? await ctx.getSessionToken() : null
+    const body: Record<string, unknown> = { action, payload }
+    if (token) body.token = token
+    else body.id_token = await ctx.getIdToken()
+    const res = await fetch(ctx.apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    })
+    const data = (await res.json()) as { ok: boolean; data?: T; error?: string }
+    if (!data.ok) throw new Error(data.error ?? 'Error')
+    return data.data as T
+  }
+
   return {
     getPerms: () => call('getPerms'),
     getConfig: () => call('getConfig'),
+    uploadImagen: (input: UploadImagenInput) => callPost('uploadImagen', input),
     saveConfig: c => call('saveConfig', c),
     listClientes: () => call('listClientes'),
     saveCliente: c => call('saveCliente', c),
@@ -52,6 +70,16 @@ export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & {
     deleteProducto: id => call('deleteProducto', id),
     registrarMovimiento: m => call('registrarMovimiento', m),
     listMovimientos: id => call('listMovimientos', id ?? null),
+    listGastosFijos: () => call('listGastosFijos'),
+    saveGastoFijo: g => call('saveGastoFijo', g),
+    deleteGastoFijo: id => call('deleteGastoFijo', id),
+    listTasasHistorial: () => call('listTasasHistorial'),
+    registrarTasa: t => callPost('registrarTasa', t),
+    listNominaDetalles: () => call('listNominaDetalles'),
+    registerNominaAvanzada: i => callPost('registerNominaAvanzada', i),
+    getReporteFinanciero: r => call('getReporteFinanciero', r),
+    getReportesInventario: (r, ids) => call('getReportesInventario', { r, ids }),
+    getMetasVsLogros: meses => call('getMetasVsLogros', meses),
     listUsuarios: () => call('listUsuarios'),
     saveUsuario: u => call('saveUsuario', u),
     deleteUsuario: email => call('deleteUsuario', email),

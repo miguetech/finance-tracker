@@ -19,6 +19,8 @@ declare const ContentService: any
 declare const UrlFetchApp: any
 declare const LockService: any
 declare const PropertiesService: any
+declare const DriveApp: any
+declare const Utilities: any
 
 const g = globalThis as Record<string, unknown>
 const tokenCache = new Map<string, { email: string; at: number }>()
@@ -326,12 +328,24 @@ function backendSaveProducto(pr: Producto): Producto {
     precio_venta: Number(pr.precio_venta) || 0,
     id_proveedor: pr.id_proveedor || '',
     nombre_proveedor: pr.nombre_proveedor || provs[String(pr.id_proveedor || '')] || '',
+    imagen: pr.imagen || '',
     notas: pr.notas || '',
     activo: pr.activo === undefined ? 'true' : String(pr.activo),
     fecha_registro: pr.fecha_registro || todayISO()
   }
   insertOrReplace('Productos', 'id_producto', parsed)
   return parsed
+}
+
+function backendUploadImagen(input: { nombre?: string; mimeType?: string; base64?: string }): string {
+  if (!input?.base64) throw new Error('Imagen requerida')
+  const nombre = String(input.nombre || `imagen_${Date.now()}.png`)
+  const mimeType = String(input.mimeType || 'image/png')
+  const bytes = Utilities.base64Decode(String(input.base64))
+  const blob = Utilities.newBlob(bytes, mimeType, nombre)
+  const file = DriveApp.createFile(blob)
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
+  return file.getUrl()
 }
 
 function backendRegistrarMovimiento(input: { id_producto: string; tipo: TipoMovimiento; cantidad: number; motivo: string; id_proveedor: string; fecha: string }): MovimientoStock {
@@ -616,6 +630,17 @@ function route(action: string, payload: any, p: Perms): unknown {
     case 'saveProducto':
       if (!p.canEdit('inventario')) return denied()
       return backendSaveProducto(payload)
+    case 'uploadImagen': {
+      const modulo = String(payload?.modulo ?? '')
+      if (modulo === 'configuracion') {
+        if (!p.isAdmin) return denied()
+      } else if (modulo === 'inventario') {
+        if (!p.canEdit('inventario')) return denied()
+      } else {
+        return denied()
+      }
+      return backendUploadImagen(payload)
+    }
     case 'deleteProducto':
       if (!p.canEdit('inventario')) return denied()
       backendDeleteById('Productos', 'id_producto', String(payload))

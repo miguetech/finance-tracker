@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, createInitialSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input } from '@ft/shared'
+import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input } from '@ft/shared'
 import type { NavKey, NavItem, ModuleKey, PermsInfo } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
@@ -30,11 +30,12 @@ function OwnerShell() {
           await webAuth.getToken(true)
           id = await localStorageAdapter.get(KEYS.spreadsheetId)
           if (!id) {
+            // Conecta a la hoja principal existente; solo crea una si no hay ninguna.
             const token = await webAuth.getToken(false)
             const api = new SheetsApi(async () => token)
-            const created = await createInitialSpreadsheet(api)
-            await localStorageAdapter.set(KEYS.spreadsheetId, created.spreadsheetId)
-            id = created.spreadsheetId
+            const connected = await connectOrCreateSpreadsheet(api)
+            await localStorageAdapter.set(KEYS.spreadsheetId, connected.spreadsheetId)
+            id = connected.spreadsheetId
           }
         }
         await ensureTables(makeApi(), id)

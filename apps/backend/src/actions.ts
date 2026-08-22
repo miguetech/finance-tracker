@@ -20,6 +20,18 @@ export async function route(repo: Repository, action: string, payload: Payload, 
       const cfg = await repo.getConfig()
       return p.isAdmin ? cfg : sanitizeConfig(cfg as unknown as Record<string, unknown>)
     }
+    case 'uploadImagen': {
+      const input = payload as { nombre?: string; mimeType?: string; base64?: string; modulo?: string } | null
+      const modulo = input?.modulo
+      if (modulo === 'configuracion') {
+        if (!p.isAdmin) return denied()
+      } else if (modulo === 'inventario') {
+        if (!p.canEdit('inventario')) return denied()
+      } else {
+        return denied()
+      }
+      return repo.uploadImagen({ nombre: String(input?.nombre ?? ''), mimeType: String(input?.mimeType ?? 'image/jpeg'), base64: String(input?.base64 ?? '') })
+    }
     case 'listClientes':
       if (!p.canView('clientes')) return denied()
       return repo.listClientes()
@@ -126,6 +138,42 @@ export async function route(repo: Repository, action: string, payload: Payload, 
     case 'registrarMovimiento':
       if (!p.canEdit('inventario')) return denied()
       return repo.registrarMovimiento(payload as Parameters<Repository['registrarMovimiento']>[0])
+    case 'listGastosFijos':
+      if (!p.canView('gastos') && !p.canView('reportes')) return denied()
+      return repo.listGastosFijos()
+    case 'saveGastoFijo':
+      if (!p.canEdit('gastos')) return denied()
+      return repo.saveGastoFijo(payload as Parameters<Repository['saveGastoFijo']>[0])
+    case 'deleteGastoFijo':
+      if (!p.canEdit('gastos')) return denied()
+      await repo.deleteGastoFijo(String(payload))
+      return { ok: true }
+    case 'listTasasHistorial':
+      if (!p.canView('reportes') && !p.isAdmin) return denied()
+      return repo.listTasasHistorial()
+    case 'registrarTasa':
+      if (!p.isAdmin) return denied()
+      return repo.registrarTasa(payload as Parameters<Repository['registrarTasa']>[0])
+    case 'listNominaDetalles':
+      if (!p.canView('empleados')) return denied()
+      return repo.listNominaDetalles()
+    case 'registerNominaAvanzada':
+      if (!p.canEdit('empleados')) return denied()
+      return repo.registerNominaAvanzada(payload as Parameters<Repository['registerNominaAvanzada']>[0])
+    case 'getReporteFinanciero': {
+      const r = (payload ?? {}) as Parameters<Repository['getReporteFinanciero']>[0]
+      if (!p.canView('reportes')) return denied()
+      return repo.getReporteFinanciero(r)
+    }
+    case 'getReportesInventario': {
+      if (!p.canView('reportes')) return denied()
+      const input = (payload ?? {}) as { r?: Parameters<Repository['getReportesInventario']>[0]; ids?: string[] }
+      return repo.getReportesInventario(input.r ?? { desde: '', hasta: '' }, input.ids)
+    }
+    case 'getMetasVsLogros': {
+      if (!p.canView('dashboard') && !p.canView('reportes')) return denied()
+      return repo.getMetasVsLogros((payload ?? []) as string[])
+    }
     case 'listUsuarios':
       if (!p.isAdmin) return denied()
       return repo.listUsuarios()

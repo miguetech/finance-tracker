@@ -1,4 +1,5 @@
 import { SheetsApi } from '../sheets/api'
+import { DriveApi, type UploadImagenInput } from '../drive/api'
 import { TABLES, HEADER_ROWS } from '../sheets/tables'
 import { serializeRow } from '../sheets/rows'
 import { configFromRows, configToRows } from '../sheets/createSpreadsheet'
@@ -12,8 +13,30 @@ import { parseRates } from '../currency/rates'
 import { buildFactura, estadoDesdeSaldo, round2 } from '../calc/invoice'
 import { kpisForMonth, topClientes, gastosPorCategoria, type Kpis } from '../calc/kpis'
 import { expandFolioTemplate } from '../calc/folio'
-import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago, Producto, MovimientoStock, TipoMovimiento, CodigoAcceso, Dispositivo } from '../types/entities'
-import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema, EmpleadoSchema, NominaInputSchema, UsuarioSchema, ProductoSchema, MovimientoStockSchema } from '../types/schemas'
+import { estadoResultados, puntoDeEquilibrio, reconversionMonetaria, flujoCaja } from '../reports/financieros'
+import { productosStockBajo, movimientosPorMes, statsMultiproducto } from '../reports/inventario'
+import { metasVsLogros, parseMetas } from '../reports/metas'
+import { parseComisiones } from '../reports/comisiones'
+import type { ResultadoPL, PuntoEquilibrio, ResumenReconversion, ResultadoFlujoCaja, RangoFecha, StatsProducto } from '../reports/types'
+import type { NominaDetalle } from '../reports/nomina'
+
+export interface NominaAvanzadaInput {
+  id_empleado: string
+  mes: string
+  monto: number
+  metodo_pago: MetodoPago
+  fecha: string
+  notas: string
+  moneda?: string
+  sueldo_base?: number
+  horas_extra?: number
+  tarifa_hora_extra?: number
+  bonos?: number
+  comisiones?: number
+  pagos_divididos?: { metodo_pago: string; moneda: string; monto: number }[]
+}
+import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago, Producto, MovimientoStock, TipoMovimiento, CodigoAcceso, Dispositivo, GastoFijo, TasaHistorial } from '../types/entities'
+import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, GastoFijoSchema, TasaHistorialSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema, EmpleadoSchema, NominaInputSchema, NominaDetalleInputSchema, UsuarioSchema, ProductoSchema, MovimientoStockSchema } from '../types/schemas'
 import type { Usuario, UserRole } from '../roles/roles'
 import { assertClienteSinFacturas, assertProveedorSinCxp, enrichNombreProveedor, emailIgual } from './guards'
 import { generarCodigo, prefijoDesdeNombre, CODIGO_ROLES_SIN_ADMIN } from '../lib/codigos'
@@ -28,6 +51,7 @@ export function createRepository(ctx: RepoContext) {
   const { api } = ctx
   const sid = ctx.getSpreadsheetId
   const store: TableStore = createSheetsTableStore(api, sid)
+  const drive = new DriveApi(() => api.getToken())
 
   function tipoCambioDe(cfg: Config, moneda: string): number {
     if (!moneda || moneda === cfg.moneda) return 1
@@ -90,12 +114,40 @@ export function createRepository(ctx: RepoContext) {
     return obj
   }
 
+  /** Salida de inventario por venta: actualiza stock y registra movimiento. */
+  async function descontarStock(idProducto: string, cantidad: number, motivo: string): Promise<void> {
+    const productos = await readTable<Producto>('Productos')
+    const prod = productos.find(p => p.id_producto === idProducto)
+    if (!prod) return
+    const nuevoStock = Math.max(0, (Number(prod.stock) || 0) - cantidad)
+    await replaceTable('Productos', productos.map(r => (r.id_producto === idProducto ? { ...r, stock: nuevoStock } : r)))
+    await appendRows('Movimientos_Stock', [{ id_movimiento: uid('mov_'), id_producto: idProducto, tipo: 'salida', cantidad, motivo, id_proveedor: '', fecha: todayLocal() }])
+  }
+
   return {
     async getConfig(): Promise<Config> { return readConfig() },
+
+    async uploadImagen(input: UploadImagenInput): Promise<string> {
+      const res = await drive.uploadBase64({ nombre: input.nombre, mimeType: input.mimeType, base64: input.base64 })
+      return res.url
+    },
 
     async saveConfig(config: Config): Promise<void> {
       const parsed = ConfigSchema.parse(config)
       await writeConfig(parsed)
+      // Registro automático de la tasa del día en el historial.
+      if (parsed.tasa_dia_activa === 'true' && parsed.tasas_cambio) {
+        try {
+          const r = parseRates(parsed.tasas_cambio)
+          if (r && r.fecha && r.base === parsed.moneda) {
+            for (const [mon, tasa] of Object.entries(r.rates)) {
+              if (typeof tasa === 'number' && tasa > 0) {
+                await this.registrarTasa({ fecha: r.fecha, base: r.base, moneda: mon, tasa, fuente: 'auto' })
+              }
+            }
+          }
+        } catch { /* el historial nunca bloquea el guardado */ }
+      }
     },
 
     async listClientes(): Promise<Cliente[]> { return readTable<Cliente>('Clientes') },
@@ -186,7 +238,7 @@ export function createRepository(ctx: RepoContext) {
       await replaceTable('Dispositivos', (await readTable('Dispositivos')).filter(r => r.dispositivo !== dispositivo))
     },
 
-    async createFactura(input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }): Promise<Factura> {
+    async createFactura(input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number; id_producto?: string }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }): Promise<Factura> {
       const parsed = FacturaInputSchema.parse(input)
       const clientes = await readTable('Clientes')
       const cliente = clientes.find(c => c.id_cliente === parsed.id_cliente)
@@ -195,6 +247,16 @@ export function createRepository(ctx: RepoContext) {
       const moneda = parsed.moneda || cfg.moneda
       const { items, totals } = buildFactura(parsed.items, cfg.iva_porcentaje, getCurrency(moneda).decimals)
       const id_factura = uid('fac_')
+      // Validar stock disponible antes de escribir nada (items con producto vinculado).
+      const itemsConProducto = items.filter(it => it.id_producto)
+      if (itemsConProducto.length > 0) {
+        const productos = await readTable<Producto>('Productos')
+        for (const it of itemsConProducto) {
+          const prod = productos.find(p => p.id_producto === it.id_producto)
+          if (!prod) throw new Error(`Producto no existe: ${it.descripcion}`)
+          if (it.cantidad > Number(prod.stock)) throw new Error(`Stock insuficiente de "${prod.nombre}" (disponible: ${prod.stock})`)
+        }
+      }
       const folio = await withMutex<string>(
         mutexReadRow,
         mutexWriteRow,
@@ -226,6 +288,10 @@ export function createRepository(ctx: RepoContext) {
       await appendRows('Facturas', [factura])
       const itemRows = items.map(it => ({ id_factura, ...it }))
       await appendRows('Factura_Items', itemRows)
+      // Descuento automático de inventario por ventas.
+      for (const it of itemsConProducto) {
+        await descontarStock(String(it.id_producto), it.cantidad, `Venta ${folio}`)
+      }
       return factura
     },
 
@@ -248,13 +314,14 @@ export function createRepository(ctx: RepoContext) {
       const facturas = await readTable<Factura>('Facturas')
       const factura = facturas.find(f => f.id_factura === id)
       if (!factura) throw new Error('Factura no existe')
-      const items = (await readTable('Factura_Items')).filter(i => i.id_factura === id).map(i => ({
-        descripcion: String(i.descripcion), cantidad: Number(i.cantidad), precio_unitario: Number(i.precio_unitario), importe: Number(i.importe)
+      const items = (await readTable<FacturaItem & { id_factura: string }>('Factura_Items')).filter(i => i.id_factura === id).map(i => ({
+        descripcion: String(i.descripcion), cantidad: Number(i.cantidad), precio_unitario: Number(i.precio_unitario), importe: Number(i.importe),
+        ...(i.id_producto ? { id_producto: String(i.id_producto) } : {})
       }))
       return { factura, items }
     },
 
-    async updateFactura(id: string, input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }): Promise<Factura> {
+    async updateFactura(id: string, input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number; id_producto?: string }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }): Promise<Factura> {
       const parsed = FacturaInputSchema.parse(input)
       const facturas = await readTable<Factura>('Facturas')
       const actual = facturas.find(f => f.id_factura === id)
@@ -431,6 +498,21 @@ export function createRepository(ctx: RepoContext) {
         const monedaOrigen = String(target.moneda ?? '')
         const tipoCambioOrigen = Number(target.tipo_cambio) || 1
         const pagoRow: Pago = { id_pago: uid('pag_'), ...parsed, moneda: monedaOrigen, tipo_cambio: tipoCambioOrigen }
+        // Al liquidar una cuenta por pagar se traslada contablemente a Gastos Totales.
+        let gastoGenerado: Gasto | null = null
+        if (table === 'Cuentas_Pagar' && nuevoSaldo <= 0) {
+          gastoGenerado = {
+            id_gasto: uid('gas_'),
+            fecha: parsed.fecha,
+            categoria: String(target.categoria || 'Servicios'),
+            descripcion: `CXP pagada ${String(target.folio_documento || '')} — ${String(target.nombre_proveedor || '')}`.trim(),
+            monto: Number(target.monto_total) || 0,
+            metodo_pago: parsed.metodo_pago,
+            proveedor: String(target.nombre_proveedor || ''),
+            moneda: monedaOrigen,
+            tipo_cambio: tipoCambioOrigen
+          }
+        }
         const updated = rows.map(r => {
           if (r[idKey] === parsed.id_origen) {
             if (table === 'Facturas') return { ...r, saldo: nuevoSaldo, fecha_pago: nuevoSaldo <= 0 ? parsed.fecha : String(r.fecha_pago ?? '') }
@@ -442,6 +524,11 @@ export function createRepository(ctx: RepoContext) {
           { range: `'${table}'!A${base}:${last}`, values: updated.map(r => serializeRow(spec, r)) },
           { range: `'Pagos'!A${pagosBase + pagos.length}:${pagosLast}`, values: [serializeRow(TABLES.Pagos, pagoRow as unknown as Record<string, unknown>)] }
         ]
+        if (gastoGenerado) {
+          const gastosBase = HEADER_ROWS('Gastos') + 1
+          const gastos = await readTable('Gastos')
+          valueRanges.push({ range: `'Gastos'!A${gastosBase + gastos.length}:I`, values: [serializeRow(TABLES.Gastos, gastoGenerado as unknown as Record<string, unknown>)] })
+        }
         await api.batchUpdate(id, valueRanges)
         return pagoRow
       })
@@ -526,6 +613,142 @@ export function createRepository(ctx: RepoContext) {
       let rows = await readTable<MovimientoStock>('Movimientos_Stock')
       if (idProducto) rows = rows.filter(m => m.id_producto === idProducto)
       return rows.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+    },
+
+    async listGastosFijos(): Promise<GastoFijo[]> {
+      const rows = await readTable<GastoFijo>('Gastos_Fijos')
+      const provs = (await readTable('Proveedores')).reduce<Record<string, string>>((m, p) => { m[String(p.id_proveedor)] = String(p.nombre ?? ''); return m }, {})
+      return rows.map(r => ({ ...r, nombre_proveedor: r.nombre_proveedor || provs[String(r.id_proveedor)] || '' }))
+    },
+
+    async saveGastoFijo(gf: GastoFijo): Promise<GastoFijo> {
+      const parsed = GastoFijoSchema.parse(gf)
+      const saved = { ...parsed, id_gasto_fijo: parsed.id_gasto_fijo || uid('gfx_') } as unknown as GastoFijo
+      await insertOrReplace('Gastos_Fijos', 'id_gasto_fijo', saved)
+      return saved
+    },
+
+    async deleteGastoFijo(id: string): Promise<void> {
+      await replaceTable('Gastos_Fijos', (await readTable('Gastos_Fijos')).filter(r => r.id_gasto_fijo !== id))
+    },
+
+    async listTasasHistorial(): Promise<TasaHistorial[]> {
+      return readTable<TasaHistorial>('Tasas_Historial')
+    },
+
+    /** Registra la tasa del día si aún no existe entrada para esa fecha+moneda. */
+    async registrarTasa(input: Omit<TasaHistorial, 'id_tasa'>): Promise<TasaHistorial> {
+      const parsed = TasaHistorialSchema.parse(input)
+      const all = await readTable<TasaHistorial>('Tasas_Historial')
+      const dup = all.find(t => t.fecha === parsed.fecha && t.base === parsed.base && t.moneda === parsed.moneda)
+      if (dup && Math.abs(Number(dup.tasa) - parsed.tasa) < 0.000001) return dup as TasaHistorial
+      const saved: TasaHistorial = { ...parsed, id_tasa: uid('tasa_') }
+      await appendRows('Tasas_Historial', [saved])
+      return saved
+    },
+
+    async listNominaDetalles(): Promise<NominaDetalle[]> {
+      return readTable<NominaDetalle>('Nomina_Detalles')
+    },
+
+    /**
+     * Nómina avanzada: crea el gasto de nómina + detalle con horas extra,
+     * bonos y comisiones; admite pagos divididos en varios métodos/monedas.
+     */
+    async registerNominaAvanzada(input: NominaAvanzadaInput): Promise<{ gasto: Gasto; detalle: NominaDetalle }> {
+      const parsed = NominaDetalleInputSchema.parse(input)
+      const emp = (await readTable('Empleados')).find(r => r.id_empleado === parsed.id_empleado)
+      if (!emp) throw new Error('Empleado no existe')
+      const cfg = await readConfig()
+      const moneda = parsed.moneda || cfg.moneda
+      const fecha = parsed.fecha || `${parsed.mes}-01`
+      // Pagos divididos deben sumar el total.
+      if (parsed.pagos_divididos.length > 0) {
+        const suma = round2(parsed.pagos_divididos.reduce((s, p) => s + p.monto, 0))
+        if (Math.abs(suma - round2(parsed.monto)) > 0.01) throw new Error(`La suma de los pagos (${suma}) debe ser igual al total (${round2(parsed.monto)})`)
+      }
+      const gasto = await this.registerNomina({
+        id_empleado: parsed.id_empleado,
+        mes: parsed.mes,
+        monto: parsed.monto,
+        metodo_pago: parsed.pagos_divididos.length > 0 ? parsed.pagos_divididos.map(p => `${p.metodo_pago}: ${p.monto}`).join(', ') : parsed.metodo_pago,
+        fecha,
+        notas: parsed.notas,
+        moneda
+      })
+      const detalle: NominaDetalle = {
+        id_detalle: uid('ndet_'),
+        id_empleado: parsed.id_empleado,
+        mes: parsed.mes,
+        sueldo_base: round2(parsed.sueldo_base),
+        horas_extra: round2(parsed.horas_extra),
+        tarifa_hora_extra: round2(parsed.tarifa_hora_extra),
+        monto_horas_extra: round2(parsed.horas_extra * parsed.tarifa_hora_extra),
+        bonos: round2(parsed.bonos),
+        comisiones: round2(parsed.comisiones),
+        total: round2(parsed.monto),
+        moneda,
+        metodo_pago: parsed.metodo_pago,
+        pagos_divididos: parsed.pagos_divididos.length > 0 ? JSON.stringify(parsed.pagos_divididos) : '',
+        fecha,
+        id_gasto: gasto.id_gasto
+      }
+      await appendRows('Nomina_Detalles', [detalle])
+      return { gasto, detalle }
+    },
+
+    /** Reporte financiero completo para un rango de fechas (P&L, equilibrio, reconversión, flujo). */
+    async getReporteFinanciero(rango: RangoFecha): Promise<{
+      pl: ResultadoPL
+      equilibrio: PuntoEquilibrio
+      reconversion: ResumenReconversion
+      flujo: ResultadoFlujoCaja
+    }> {
+      const cfg = await readConfig()
+      const [facturas, gastos, cxps, pagos, productos, items] = await Promise.all([
+        readTable<Factura>('Facturas'), readTable<Gasto>('Gastos'), readTable<CuentaPagar>('Cuentas_Pagar'),
+        readTable<Pago>('Pagos'), readTable<Producto>('Productos'),
+        readTable<FacturaItem & { id_factura: string }>('Factura_Items')
+      ])
+      const costoPorProducto = productos.reduce<Record<string, number>>((m, p) => { m[p.id_producto] = Number(p.precio_costo) || 0; return m }, {})
+      const itemsPorFactura = items.reduce<Record<string, { cantidad: number; id_producto?: string; precio_unitario?: number }[]>>((m, it) => {
+        ;(m[it.id_factura] ??= []).push({ cantidad: Number(it.cantidad), id_producto: it.id_producto || undefined, precio_unitario: Number(it.precio_unitario) })
+        return m
+      }, {})
+      const pl = estadoResultados(facturas, gastos, costoPorProducto, itemsPorFactura, rango)
+      const comisiones = parseComisiones(cfg.comisiones_transaccion)
+      const flujo = flujoCaja(pagos, gastos, comisiones.metodos, rango)
+      return {
+        pl,
+        equilibrio: puntoDeEquilibrio(pl),
+        reconversion: reconversionMonetaria(cfg, { facturas, gastos, cxps, pagos }, rango),
+        flujo
+      }
+    },
+
+    /** Datos agregados de inventario/ventas para reportes y dashboard. */
+    async getReportesInventario(rango: RangoFecha, idsProductos?: string[]): Promise<{
+      stockBajo: ReturnType<typeof productosStockBajo>
+      movimientosMensuales: ReturnType<typeof movimientosPorMes>
+      statsProductos: StatsProducto[]
+    }> {
+      const [productos, movimientos, facturas, items] = await Promise.all([
+        readTable<Producto>('Productos'), readTable<MovimientoStock>('Movimientos_Stock'),
+        readTable<Factura>('Facturas'), readTable<FacturaItem & { id_factura: string }>('Factura_Items')
+      ])
+      const ids = idsProductos?.length ? idsProductos : productos.filter(p => p.activo !== 'false').map(p => p.id_producto)
+      return {
+        stockBajo: productosStockBajo(productos),
+        movimientosMensuales: movimientosPorMes(movimientos, rango),
+        statsProductos: statsMultiproducto({ productos, items, facturas, movimientos, ids, rango })
+      }
+    },
+
+    /** Metas vs logros por mes (facturación convertida a base). */
+    async getMetasVsLogros(meses: string[]) {
+      const cfg = await readConfig()
+      const facturas = await readTable<Factura>('Facturas')
+      return metasVsLogros(facturas, parseMetas(cfg.metas_mensuales), meses)
     }
   }
 }

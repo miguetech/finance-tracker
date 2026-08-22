@@ -47,7 +47,14 @@ const gl: Partial<Dict> = {
   inventario: {
     title: 'Inventario', nuevo: 'Novo produto', producto: 'Produto', stock: 'Stock',
     stockMinimo: 'Stock mínimo', precioCosto: 'Custo', precioVenta: 'Prezo venda', unidad: 'Unidade',
-    entradaSalida: 'Entrada/Saída', historial: 'Historial', movimiento: 'Movemento', motivo: 'Motivo'
+    entradaSalida: 'Entrada/Saída', historial: 'Historial', movimiento: 'Movemento', motivo: 'Motivo',
+    imagen: 'Imaxe'
+  },
+  imagenes: {
+    arrastrarSoltar: 'Arrastra unha imaxe aquí ou preme para subila',
+    cambiar: 'Cambiar imaxe', quitar: 'Quitar imaxe',
+    errorTipo: 'O arquivo debe ser unha imaxe', errorGrande: 'A imaxe pesa máis de 10 MB',
+    subiendo: 'Subindo…'
   },
   reportes: {
     title: 'Informes', facturado: 'Facturado', cobrado: 'Cobrado', pendiente: 'Pendente',
@@ -57,7 +64,8 @@ const gl: Partial<Dict> = {
     title: 'Configuración', datosEmpresa: 'Datos da empresa', empresaNombre: 'Nome',
     empresaRfc: 'NIF', prefijoFolio: 'Prefixo do folio', contadorFolio: 'Contador do folio',
     iva: 'IVE (%)', moneda: 'Moeda', categorias: 'Categorías', metodosPago: 'Métodos de pagamento',
-    idioma: 'Idioma', guardada: 'Configuración gardada'
+    idioma: 'Idioma', guardada: 'Configuración gardada',
+    logo: 'Logo (URL)', logoUrlOpcional: 'Ou pega a URL do logo'
   },
   compartir: {
     title: 'Compartir', generarLink: 'Xerar ligazón', copiarLink: 'Copiar ligazón',
