@@ -137,3 +137,39 @@ function diasRango(r: RangoFecha): number {
   const dias = Math.round((hasta.getTime() - desde.getTime()) / 86400000) + 1
   return Math.max(1, dias)
 }
+
+export interface VentaProductoFila {
+  fecha: string
+  folio: string
+  cliente: string
+  cantidad: number
+  precio_unitario: number
+  importe_base: number
+}
+
+/** Historial cronológico de ventas de un producto dentro del rango (importes en base). */
+export function historialVentasProducto(
+  items: (FacturaItem & { id_factura?: string })[],
+  facturas: Factura[],
+  idProducto: string,
+  rango: RangoFecha
+): VentaProductoFila[] {
+  const facPorId = new Map(facturas.map(f => [f.id_factura, f]))
+  const filas: VentaProductoFila[] = []
+  for (const it of items) {
+    const pid = (it as FacturaItem & { id_producto?: string }).id_producto
+    if (!pid || pid !== idProducto) continue
+    const fac = facPorId.get((it as FacturaItem & { id_factura?: string }).id_factura ?? '')
+    if (!fac || !enRangoF(fac.fecha_emision, rango)) continue
+    const tc = Number(fac.tipo_cambio) || 1
+    filas.push({
+      fecha: fac.fecha_emision,
+      folio: fac.folio,
+      cliente: fac.nombre_cliente,
+      cantidad: Number(it.cantidad),
+      precio_unitario: Number(it.precio_unitario),
+      importe_base: round2(tc > 0 ? Number(it.importe) / tc : Number(it.importe))
+    })
+  }
+  return filas.sort((a, b) => b.fecha.localeCompare(a.fecha))
+}

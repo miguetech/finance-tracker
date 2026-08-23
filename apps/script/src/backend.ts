@@ -206,6 +206,7 @@ function backendSaveProveedor(pr: Proveedor): Proveedor {
 function backendSaveEmpleado(emp: Empleado): Empleado {
   if (!emp?.nombre || !String(emp.nombre).trim()) throw new Error('Nombre obligatorio')
   const salario = Number(emp.salario) || 0
+  const extra = emp as unknown as Record<string, string | number | undefined>
   const parsed: Empleado = {
     id_empleado: emp.id_empleado || uid('emp_'),
     nombre: String(emp.nombre),
@@ -214,10 +215,42 @@ function backendSaveEmpleado(emp: Empleado): Empleado {
     salario,
     salario_moneda: emp.salario_moneda || '',
     fecha_ingreso: emp.fecha_ingreso || todayISO(),
-    activo: emp.activo === undefined ? 'true' : String(emp.activo)
+    activo: emp.activo === undefined ? 'true' : String(emp.activo),
+    hora_entrada: String(extra.hora_entrada ?? ''),
+    hora_salida: String(extra.hora_salida ?? ''),
+    esquema_pago: (extra.esquema_pago as Empleado['esquema_pago']) || 'mensual',
+    tarifa_hora_extra: Number(extra.tarifa_hora_extra) || 0,
+    dias_laborales: String(extra.dias_laborales ?? '')
   }
   insertOrReplace('Empleados', 'id_empleado', parsed)
   return parsed
+}
+
+/** Registro de asistencia: un registro por empleado y día (se reemplaza si existe). */
+function backendSaveAsistencia(input: Record<string, unknown>): Record<string, string | number> {
+  const idEmpleado = String(input?.id_empleado ?? '')
+  if (!idEmpleado) throw new Error('Empleado obligatorio')
+  const fecha = String(input?.fecha ?? '')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error('Fecha con formato YYYY-MM-DD')
+  const emp = readTable<Empleado>('Empleados').find(e => e.id_empleado === idEmpleado)
+  if (!emp) throw new Error('Empleado no existe')
+  const saved: Record<string, string | number> = {
+    id_asistencia: String(input.id_asistencia || uid('asi_')),
+    id_empleado: idEmpleado,
+    nombre_empleado: emp.nombre,
+    fecha,
+    hora_entrada: String(input.hora_entrada ?? ''),
+    hora_salida: String(input.hora_salida ?? ''),
+    notas: String(input.notas ?? '')
+  }
+  const all = readTable<Record<string, string | number>>('Asistencias')
+  const existente = all.find(r => r.id_empleado === idEmpleado && String(r.fecha) === fecha && r.id_asistencia !== saved.id_asistencia)
+  if (existente) {
+    replaceTable('Asistencias', all.map(r => (r.id_asistencia === existente.id_asistencia ? saved : r)))
+  } else {
+    insertOrReplace('Asistencias', 'id_asistencia', saved)
+  }
+  return saved
 }
 
 function backendRegisterNomina(input: { id_empleado: string; mes: string; monto: number; metodo_pago: string; fecha: string; notas: string; moneda?: string }): Gasto {
@@ -331,7 +364,8 @@ function backendSaveProducto(pr: Producto): Producto {
     imagen: pr.imagen || '',
     notas: pr.notas || '',
     activo: pr.activo === undefined ? 'true' : String(pr.activo),
-    fecha_registro: pr.fecha_registro || todayISO()
+    fecha_registro: pr.fecha_registro || todayISO(),
+    moneda: (pr as unknown as Record<string, string | undefined>).moneda || readConfig().moneda
   }
   insertOrReplace('Productos', 'id_producto', parsed)
   return parsed
@@ -568,6 +602,13 @@ function route(action: string, payload: any, p: Perms): unknown {
       const raw = payload === 'cxp' ? cfg.categorias_cxp : cfg.categorias_gastos
       return raw.split(',').map(s => s.trim()).filter(Boolean)
     }
+    case 'getVentasProducto': {
+      if (!p.canView('reportes')) return denied()
+      const { id, r } = (payload ?? {}) as { id?: string; r?: { desde?: string; hasta?: string } }
+      const items = readTable<Record<string, string | number>>('Factura_Items')
+      const facturas = readTable<Factura>('Facturas')
+      return backendVentasProducto(items, facturas, String(id ?? ''), r ?? {})
+    }
     case 'saveCliente':
       if (!p.canEdit('clientes')) return denied()
       return backendSaveCliente(payload)
@@ -613,6 +654,22 @@ function route(action: string, payload: any, p: Perms): unknown {
     case 'registerNomina':
       if (!p.canEdit('empleados')) return denied()
       return backendRegisterNomina(payload)
+    case 'listAsistencias': {
+      if (!p.canView('empleados')) return denied()
+      let rows = readTable<Record<string, string | number>>('Asistencias')
+      const f = (payload ?? {}) as { id_empleado?: string; desde?: string; hasta?: string }
+      if (f.id_empleado) rows = rows.filter(r => r.id_empleado === f.id_empleado)
+      if (f.desde) rows = rows.filter(r => String(r.fecha) >= f.desde!)
+      if (f.hasta) rows = rows.filter(r => String(r.fecha) <= f.hasta!)
+      return rows.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+    }
+    case 'saveAsistencia':
+      if (!p.canEdit('empleados')) return denied()
+      return backendSaveAsistencia(payload)
+    case 'deleteAsistencia':
+      if (!p.canEdit('empleados')) return denied()
+      backendDeleteById('Asistencias', 'id_asistencia', String(payload))
+      return { ok: true }
     case 'createCxp':
       if (!p.canEdit('cuentas')) return denied()
       return backendCreateCxp(payload)
@@ -709,3 +766,32 @@ function doPost(e: any) {
 
 g.doGet = doGet
 g.doPost = doPost
+
+/** Historial de ventas de un producto (importes convertidos a moneda base). */
+function backendVentasProducto(
+  items: Record<string, string | number>[],
+  facturas: Factura[],
+  idProducto: string,
+  rango: { desde?: string; hasta?: string }
+): Array<Record<string, string | number>> {
+  const facPorId = new Map(facturas.map(f => [f.id_factura, f]))
+  const filas: Array<Record<string, string | number>> = []
+  for (const it of items) {
+    if (String(it.id_producto ?? '') !== idProducto) continue
+    const fac = facPorId.get(String(it.id_factura ?? ''))
+    if (!fac) continue
+    const fecha = fac.fecha_emision.slice(0, 10)
+    if (rango.desde && fecha < rango.desde) continue
+    if (rango.hasta && fecha > rango.hasta) continue
+    const tc = Number(fac.tipo_cambio) || 1
+    filas.push({
+      fecha: fac.fecha_emision,
+      folio: fac.folio,
+      cliente: fac.nombre_cliente,
+      cantidad: Number(it.cantidad),
+      precio_unitario: Number(it.precio_unitario),
+      importe_base: Math.round((tc > 0 ? Number(it.importe) / tc : Number(it.importe)) * 100) / 100
+    })
+  }
+  return filas.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
+}

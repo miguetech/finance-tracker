@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { todayLocal } from '../../lib/date'
 import { Dialog, Button, Input, Select, SearchSelect, Textarea, Badge } from '../../ui/components'
 import { useToast } from '../../ui/components'
+import { CategoriaQuickSelect } from '../../ui/CategoriaSelect'
 import { useConfig, useProveedores, useProductos, useRepo } from '../../store/queries'
 import { ImageUploader } from '../../ui/ImageUploader'
 import { IconPlus } from '../../ui/icons'
@@ -9,7 +10,7 @@ import { useI18n } from '../../i18n'
 import { optimizeImage } from '../../lib/image'
 import type { Producto } from '../../types/entities'
 import { uid } from '../../lib/uid'
-import { getCurrency } from '../../currency'
+import { getCurrency, activeCurrencies } from '../../currency'
 
 const UNIDADES_DEFAULT = ['pieza', 'kg', 'gr', 'litro', 'ml', 'caja', 'saco', 'docena', 'metro']
 
@@ -20,7 +21,7 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
   const { saveProducto } = useProductos()
   const repo = useRepo()
   const toast = useToast()
-  const [form, setForm] = useState({ nombre: '', categoria: '', unidad: 'pieza', stock: '', stock_minimo: '', precio_costo: '', precio_venta: '', id_proveedor: '', imagen: '', notas: '' })
+  const [form, setForm] = useState({ nombre: '', categoria: '', unidad: 'pieza', stock: '', stock_minimo: '', moneda: '', precio_costo: '', precio_venta: '', id_proveedor: '', imagen: '', notas: '' })
   const [gananciaModo, setGananciaModo] = useState<'precio' | 'pct'>('pct')
   const [imagenFile, setImagenFile] = useState<File | null>(null)
   const [subiendo, setSubiendo] = useState(false)
@@ -29,19 +30,19 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
 
   const unidades = (config?.unidades_medida ?? '').split(',').map(s => s.trim()).filter(Boolean)
   const listaUnidades = unidades.length > 0 ? unidades : UNIDADES_DEFAULT
-  const monedaProducto = config?.moneda ?? 'USD'
+  const monedas = activeCurrencies(config)
+  const monedaProducto = form.moneda || config?.moneda || 'USD'
 
   useEffect(() => {
     if (open) {
       setImagenFile(null)
       setNuevoProveedor(false)
       setForm(initial
-        ? { nombre: initial.nombre, categoria: initial.categoria, unidad: initial.unidad || 'pieza', stock: String(initial.stock), stock_minimo: String(initial.stock_minimo), precio_costo: String(initial.precio_costo), precio_venta: String(initial.precio_venta), id_proveedor: initial.id_proveedor, imagen: initial.imagen, notas: initial.notas }
-        : { nombre: '', categoria: '', unidad: listaUnidades[0] ?? 'pieza', stock: '0', stock_minimo: '', precio_costo: '', precio_venta: '', id_proveedor: '', imagen: '', notas: '' })
+        ? { nombre: initial.nombre, categoria: initial.categoria, unidad: initial.unidad || 'pieza', stock: String(initial.stock), stock_minimo: String(initial.stock_minimo), moneda: initial.moneda || config?.moneda || '', precio_costo: String(initial.precio_costo), precio_venta: String(initial.precio_venta), id_proveedor: initial.id_proveedor, imagen: initial.imagen, notas: initial.notas }
+        : { nombre: '', categoria: '', unidad: listaUnidades[0] ?? 'pieza', stock: '0', stock_minimo: '', moneda: config?.moneda || '', precio_costo: '', precio_venta: '', id_proveedor: '', imagen: '', notas: '' })
     }
   }, [open, initial])
 
-  const categorias = (config?.categorias_inventario ?? '').split(',').map(s => s.trim()).filter(Boolean)
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
 
   // Cálculo automático del precio o % de ganancia según la moneda seleccionada.
@@ -83,6 +84,7 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
         unidad: form.unidad,
         stock: Number(form.stock) || 0,
         stock_minimo: Number(form.stock_minimo) || 0,
+        moneda: monedaProducto,
         precio_costo: form.precio_costo.trim() === '' ? 0 : Number(form.precio_costo),
         precio_venta: form.precio_venta.trim() === '' ? 0 : Number(form.precio_venta),
         id_proveedor: form.id_proveedor,
@@ -118,8 +120,7 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
           <div className="sm:col-span-2"><label className="text-xs text-gray-500">{t('common.nombre')} *</label><Input value={form.nombre} onChange={set('nombre')} placeholder={t('inventario.ejNombre')} /></div>
           <div>
             <label className="text-xs text-gray-500">{t('common.categoria')}</label>
-            <Select value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))}
-              options={[{ value: '', label: t('inventario.sinCategoria') }, ...categorias.map(c => ({ value: c, label: c }))]} />
+            <CategoriaQuickSelect configKey="categorias_inventario" value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} />
           </div>
           <div>
             <label className="text-xs text-gray-500">{t('inventario.unidad')}</label>
@@ -132,7 +133,20 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
           <div><label className="text-xs text-gray-500">{t('inventario.stockMinimoAlerta')}</label><Input type="number" min={0} value={form.stock_minimo} onChange={set('stock_minimo')} placeholder={t('inventario.ej5')} /></div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div><label className="text-xs text-gray-500">{t('inventario.costoCompra')}</label><Input type="number" min={0} step="any" value={form.precio_costo} onChange={set('precio_costo')} placeholder={t('inventario.ejCosto')} /></div>
+          <div>
+            <label className="text-xs text-gray-500">{t('inventario.monedaCotizacion')}</label>
+            <Select value={monedaProducto} onChange={v => setForm(f => ({ ...f, moneda: v }))}
+              options={[...new Set([config?.moneda || 'USD', ...monedas.map(c => c.code), monedaProducto].filter(Boolean))].map(c => {
+                const cur = getCurrency(c)
+                return { value: c, label: `${cur.code} · ${cur.symbol}` }
+              })} />
+          </div>
+          <div className="sm:self-end"><label className="text-xs text-gray-500 opacity-0 select-none">.</label>
+            <p className="text-xs text-muted-foreground -mt-1">{t('inventario.monedaCotizacionAyuda')}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div><label className="text-xs text-gray-500">{t('inventario.costoCompra')} ({getCurrency(monedaProducto).symbol})</label><Input type="number" min={0} step="any" value={form.precio_costo} onChange={set('precio_costo')} placeholder={t('inventario.ejCosto')} /></div>
           <div>
             <label className="text-xs text-gray-500 flex items-center justify-between">
               <span>{t('inventario.precioVentaLabel')}</span>

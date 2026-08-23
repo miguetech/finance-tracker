@@ -77,3 +77,52 @@ export function consolidadoNomina(empleados: Empleado[], detalles: NominaDetalle
     totalNominaMes: round2(tot)
   }
 }
+
+/** Horas trabajadas entre dos marcas de tiempo "HH:MM" (vacío ⇒ 0). */
+export function horasEntre(entrada: string, salida: string): number {
+  if (!entrada || !salida) return 0
+  const [he, me] = entrada.split(':').map(Number)
+  const [hs, ms] = salida.split(':').map(Number)
+  if ([he, me, hs, ms].some(n => Number.isNaN(n))) return 0
+  const min = (hs * 60 + ms) - (he * 60 + me)
+  return min > 0 ? round2(min / 60) : 0
+}
+
+export interface DesgloseEmpleado {
+  empleado: Empleado
+  diasTrabajados: number
+  horasTrabajadas: number
+  horasExtraMes: number
+  montoHorasExtraMes: number
+  sueldosDepositados: number
+}
+
+/**
+ * Desglose consolidado ("expeditillo") de un empleado en un rango/mes:
+ * días y horas desde asistencia, horas extra y pagos desde nómina/gastos.
+ */
+export function desgloseEmpleado(
+  empleado: Empleado,
+  datos: { asistencias: { fecha: string; hora_entrada: string; hora_salida: string }[] }
+    & { detalles?: NominaDetalle[]; gastos?: Gasto[] },
+  mes: string
+): DesgloseEmpleado {
+  let dias = 0
+  let horas = 0
+  for (const a of datos.asistencias.filter(a => a.fecha.slice(0, 7) === mes)) {
+    dias++
+    horas += horasEntre(a.hora_entrada, a.hora_salida)
+  }
+  const det = datos.detalles?.find(d => d.id_empleado === empleado.id_empleado && d.mes === mes) ?? null
+  const pagados = (datos.gastos ?? [])
+    .filter(g => g.categoria === 'Nómina' && String(g.proveedor) === empleado.nombre && g.fecha.slice(0, 7) === mes)
+    .reduce((s, g) => s + Number(g.monto), 0)
+  return {
+    empleado,
+    diasTrabajados: dias,
+    horasTrabajadas: round2(horas),
+    horasExtraMes: det ? Number(det.horas_extra) || 0 : 0,
+    montoHorasExtraMes: det ? Number(det.monto_horas_extra) || 0 : 0,
+    sueldosDepositados: round2(pagados || (det ? Number(det.total) || 0 : 0))
+  }
+}

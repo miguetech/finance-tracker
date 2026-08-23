@@ -17,12 +17,18 @@ export function CuentasPagar() {
   const { canEdit, isAdmin } = usePerms()
   const toast = useToast()
   const [estado, setEstado] = useState('')
+  const [verPagadas, setVerPagadas] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [detalleId, setDetalleId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const moneda = config?.moneda ?? 'USD'
   const hoy = todayLocal()
-  const filtrados = cxps.filter(c => !estado || c.estado === estado)
+  // Las facturas con saldo cero se archivan automáticamente de la vista principal.
+  const ocultarPagadas = !verPagadas && estado !== 'pagada'
+  const filtrados = cxps
+    .filter(c => !estado || c.estado === estado)
+    .filter(c => !ocultarPagadas || Number(c.saldo) > 0)
+  const pagadasCount = cxps.filter(c => Number(c.saldo) <= 0).length
   const tone = (c: { saldo: number; estado: string; fecha_vencimiento: string }) =>
     c.saldo <= 0 ? 'green' as const
     : c.fecha_vencimiento && c.fecha_vencimiento < hoy ? 'red' as const
@@ -41,7 +47,13 @@ export function CuentasPagar() {
           <h1 className="text-xl font-bold">{t('cuentas.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('cuentas.subtitulo')}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {pagadasCount > 0 && (
+            <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer">
+              <input type="checkbox" className="h-4 w-4" checked={verPagadas} onChange={e => setVerPagadas(e.target.checked)} />
+              {t('cuentas.mostrarPagadas')} ({pagadasCount})
+            </label>
+          )}
           <Select value={estado} onChange={setEstado} options={[{ value: 'pendiente', label: t('states.pendiente') }, { value: 'parcial', label: t('states.parcial') }, { value: 'pagada', label: t('states.pagada') }]} placeholder={t('common.estado')} />
           {canEdit('cuentas') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setFormOpen(true)}>{t('cuentas.nuevaCxp')}</Button>)}
         </div>

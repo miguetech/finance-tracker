@@ -4,6 +4,7 @@ import { cx } from '../components'
 import { IconDashboard, IconInvoice, IconClient, IconUsers, IconPayables, IconReceivable, IconProvider, IconExpense, IconReport, IconSettings, IconMenu, IconLogo, IconBox } from '../icons'
 import { useI18n } from '../../i18n'
 import { OfflineBanner } from '../hooks'
+import { RateBubble } from '../RateBubble'
 
 export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuentas' | 'cxc' | 'proveedores' | 'gastos' | 'reportes' | 'configuracion' | 'compartir' | 'inventario'
 
@@ -71,6 +72,7 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
         </header>
         <main className="flex-1 p-4 md:p-8"><div className="max-w-6xl mx-auto">{children}</div></main>
       </div>
+      <RateBubble onNavigate={onNavigate} />
     </div>
   )
 }

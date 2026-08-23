@@ -2,8 +2,14 @@ import React from 'react'
 import type { Factura, FacturaItem, Config } from '../../types/entities'
 import { formatMoney } from '../../currency'
 
-export function InvoicePrint({ factura, items, config, cliente }: { factura: Factura; items: FacturaItem[]; config: Config; cliente?: { rfc?: string; email?: string; telefono?: string; direccion?: string } }) {
+export function InvoicePrint({ factura, items, config, cliente }: { factura: Factura; items: FacturaItem[]; config: Config; cliente?: { rfc?: string; email?: string; telefono?: string; direccion?: string; direccion_pais?: string; direccion_estado?: string; direccion_cp?: string } }) {
   const moneda = factura.moneda || config.moneda
+  // Dirección desglosada del cliente para impresión: exacta + estado/país/código postal.
+  const direccionCliente = [
+    cliente?.direccion,
+    [cliente?.direccion_estado, cliente?.direccion_pais].filter(Boolean).join(', '),
+    cliente?.direccion_cp
+  ].filter(Boolean)
   return (
     <div id="invoice-print">
       <div className="print-header flex justify-between items-start mb-6">
@@ -25,7 +31,7 @@ export function InvoicePrint({ factura, items, config, cliente }: { factura: Fac
         <div className="font-semibold">Cliente</div>
         <p>{factura.nombre_cliente}</p>
         {cliente?.rfc && <p>{cliente.rfc}</p>}
-        {cliente?.direccion && <p>{cliente.direccion}</p>}
+        {direccionCliente.map((linea, i) => <p key={i}>{linea}</p>)}
         {(cliente?.telefono || cliente?.email) && <p>{[cliente?.telefono, cliente?.email].filter(Boolean).join(' · ')}</p>}
       </div>
       <table className="w-full text-sm mb-6">

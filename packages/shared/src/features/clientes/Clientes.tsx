@@ -7,6 +7,9 @@ import { getDocLabel } from '../../taxid'
 import { useI18n } from '../../i18n'
 import { IconPlus, IconEdit, IconTrash } from '../../ui/icons'
 import { ClienteFormModal } from './ClienteFormModal'
+import { ImportarClientes, descargarPlantillaClientes } from './ImportarClientes'
+import { uid } from '../../lib/uid'
+import { todayLocal } from '../../lib/date'
 import type { Cliente } from '../../types/entities'
 
 export function Clientes() {
@@ -21,15 +24,36 @@ export function Clientes() {
   const { config } = useConfig()
   const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.tipo_doc_etiqueta ?? '')
 
-  const filtrados = clientes.filter(c => !busqueda || c.nombre.toLowerCase().includes(busqueda.toLowerCase()) || c.rfc.toLowerCase().includes(busqueda.toLowerCase()))
+  const filtrados = clientes.filter(c => {
+    if (!busqueda) return true
+    const q = busqueda.toLowerCase()
+    return c.nombre.toLowerCase().includes(q)
+      || (c.alias || '').toLowerCase().includes(q)
+      || c.rfc.toLowerCase().includes(q)
+  })
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-xl font-bold">{t('clientes.title')}</h1>
-        <div className="flex gap-2">
-          <Input placeholder={`${t('common.buscar')} ${t('clientes.nombre')} ${t('clientes.o')} ${docLabel}…`} value={busqueda} onChange={e => setBusqueda(e.target.value)} className="sm:w-64" />
-          {canEdit('clientes') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>{t('clientes.nuevo')}</Button>)}
+        <div className="flex gap-2 flex-wrap">
+          <Input placeholder={`${t('common.buscar')} ${t('clientes.nombre')}, ${t('clientes.alias').toLowerCase()} ${t('clientes.o')} ${docLabel}…`} value={busqueda} onChange={e => setBusqueda(e.target.value)} className="sm:w-64" />
+          {canEdit('clientes') && (
+            <>
+              <Button variant="outline" onClick={descargarPlantillaClientes}>{t('contactos.descargarPlantilla')}</Button>
+              <ImportarClientes onImportados={async cs => {
+                let n = 0
+                for (const c of cs) {
+                  const existe = clientes.some(x => x.nombre.trim().toLowerCase() === String(c.nombre).trim().toLowerCase())
+                  if (existe) continue
+                  await saveCliente.mutateAsync({ ...c, id_cliente: uid('cli_'), nombre: String(c.nombre), rfc: '', fecha_registro: todayLocal() } as Cliente)
+                  n++
+                }
+                toast(t('contactos.importados', { n }))
+              }} />
+              <Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>{t('clientes.nuevo')}</Button>
+            </>
+          )}
         </div>
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">

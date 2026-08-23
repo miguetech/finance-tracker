@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { todayLocal } from '../../lib/date'
 import { Dialog, Button, Input, Select, Textarea } from '../../ui/components'
 import { useToast } from '../../ui/components'
-import { useProveedores, useCxp, useCategorias } from '../../store/queries'
+import { CategoriaQuickSelect } from '../../ui/CategoriaSelect'
+import { useProveedores, useCxp } from '../../store/queries'
 import { CurrencySelect } from '../../ui/currency'
 import { IconPlus } from '../../ui/icons'
 import { useI18n } from '../../i18n'
@@ -13,7 +14,6 @@ import type { Proveedor } from '../../types/entities'
 export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useI18n()
   const { proveedores, saveProveedor } = useProveedores()
-  const { data: categorias = [] } = useCategorias('cxp')
   const { createCxp } = useCxp()
   const toast = useToast()
   const [form, setForm] = useState({ id_proveedor: '', folio_documento: '', categoria: '', descripcion: '', fecha_vencimiento: '', monto_total: '', moneda: '', notas: '' })
@@ -66,7 +66,7 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">{t('cuentas.folioDoc')}</label><Input value={form.folio_documento} onChange={set('folio_documento')} /></div>
           <div><label className="text-xs text-gray-500">{t('common.categoria')}</label>
-            <Select value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} options={categorias.map(c => ({ value: c, label: c }))} />
+            <CategoriaQuickSelect configKey="categorias_cxp" value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} />
           </div>
         </div>
         <div><label className="text-xs text-gray-500">{t('cuentas.descripcion')} *</label><Input value={form.descripcion} onChange={set('descripcion')} error={errors.descripcion} /></div>

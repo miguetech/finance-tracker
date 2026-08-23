@@ -349,11 +349,14 @@ function MonedasCard({ config, setForm }: { config: Config; setForm: (fn: (f: Co
           {active.filter(c => c.code !== base).map(c => {
             const tasa = rates?.rates?.[c.code]
             return (
-              <div key={c.code} className="flex items-center gap-2 rounded-lg bg-white border border-gray-100 px-3 py-2">
-                <div className="text-sm font-medium w-24 shrink-0">{c.code} · {c.symbol}</div>
-                <Input className="flex-1" type="number" step="any" min={0} placeholder={tasa ? String(tasa) : 'Tasa'}
-                  value={rateDrafts[c.code] ?? ''} onChange={e => setRateDrafts(d => ({ ...d, [c.code]: e.target.value }))} />
-                <Button size="sm" variant="outline" onClick={() => saveRate(c.code)}>Guardar</Button>
+              <div key={c.code} className="rounded-lg bg-white border border-gray-100 px-3 py-2 space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-medium w-24 shrink-0">{c.code} · {c.symbol}</div>
+                  <Input className="flex-1" type="number" step="any" min={0} placeholder={tasa ? String(tasa) : 'Tasa'}
+                    value={rateDrafts[c.code] ?? ''} onChange={e => setRateDrafts(d => ({ ...d, [c.code]: e.target.value }))} />
+                  <Button size="sm" variant="outline" onClick={() => saveRate(c.code)}>Guardar</Button>
+                </div>
+                <p className="text-xs text-muted-foreground">1 {base} = {tasa ?? '—'} {c.code}</p>
               </div>
             )
           })}
@@ -426,7 +429,6 @@ function TasaDiaCard({ config, setForm, onSaved }: { config: Config; setForm: (f
 function ComisionesCard({ config, setForm }: { config: Config; setForm: (fn: (f: Config) => Config) => void }) {
   const { t } = useI18n()
   const parsed = parseComisiones(config.comisiones_transaccion)
-  const metodos = (config.metodos_pago || '').split(',').map(s => s.trim()).filter(Boolean)
 
   const update = (patch: Partial<ReturnType<typeof parseComisiones>>) => {
     const next = { ...parsed, ...patch }
@@ -449,15 +451,7 @@ function ComisionesCard({ config, setForm }: { config: Config; setForm: (fn: (f:
         {numInput(t('configuracion.comisionCxp'), parsed.cxp, n => update({ cxp: n }))}
         {numInput(t('configuracion.comisionNomina'), parsed.nomina, n => update({ nomina: n }))}
       </div>
-      {metodos.length > 0 && (
-        <div>
-          <div className="text-xs text-muted-foreground mb-2">Métodos de pago</div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {metodos.map(m => numInput(t('configuracion.comisionMetodo', { metodo: m }), parsed.metodos[m] ?? 0,
-              n => update({ metodos: { ...parsed.metodos, [m]: n } })))}
-          </div>
-        </div>
-      )}
+      <p className="text-xs text-muted-foreground">Las comisiones por método de pago se configuran directamente en cada selector de método (ej. al registrar un cobro o abono).</p>
     </div>
   )
 }

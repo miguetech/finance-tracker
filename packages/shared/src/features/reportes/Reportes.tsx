@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { useReportes, useConfig, useReporteFinanciero, useReportesInventario, useRepo } from '../../store/queries'
 import { StatCard, Card, Input } from '../../ui/components'
 import { GroupedBarChart } from '../../ui/charts'
-import { formatMoney } from '../../currency'
+import { formatMoney, convert } from '../../currency'
+import { CurrencySelect } from '../../ui/currency'
 import { useI18n } from '../../i18n'
 import { ReporteFinanciero } from './ReporteFinanciero'
 import { ReporteInventario } from './ReporteInventario'
@@ -33,6 +34,10 @@ export function Reportes({ mes, setMes }: { mes: string; setMes: (m: string) => 
   const fin = useReporteFinanciero(desde, hasta)
   const inv = useReportesInventario(desde, hasta)
 
+  // Moneda de visualización de reportes (por defecto la base).
+  const [vista, setVista] = useState('')
+  const monedaVista = vista || moneda
+
   const tabs = [
     { id: 'resumen', label: t('reportesFin.tabResumen') },
     { id: 'financiero', label: t('reportesFin.tabPL') },
@@ -41,11 +46,24 @@ export function Reportes({ mes, setMes }: { mes: string; setMes: (m: string) => 
     { id: 'gastosFijos', label: t('reportesFin.tabGastosFijos') }
   ] as const
 
+  // Convierte el resumen a la moneda de visualización en un solo punto.
+  const resumenVista = useMemo(() => {
+    if (!reportes || monedaVista === moneda) return reportes
+    const c = (n: number) => convert(n, moneda, monedaVista, config)
+    return {
+      ...reportes,
+      kpis: Object.fromEntries(Object.entries(reportes.kpis).map(([k, v]) => [k, c(Number(v))])),
+      categorias: reportes.categorias.map(x => ({ ...x, total: c(x.total) })),
+      top: reportes.top.map(x => ({ ...x, total: c(x.total) }))
+    } as ReportesData
+  }, [reportes, monedaVista, moneda, config])
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">{t('reportes.title')}</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center flex-wrap">
+          <CurrencySelect value={monedaVista} onChange={setVista} label={t('reportesFin.monedaVista')} />
           <Input type="month" value={mes} onChange={e => setMes(e.target.value)} />
           {(tab === 'financiero' || tab === 'inventario') && (
             <>
@@ -65,8 +83,8 @@ export function Reportes({ mes, setMes }: { mes: string; setMes: (m: string) => 
         ))}
       </div>
 
-      {tab === 'resumen' && <TabResumen mes={mes} isLoading={isLoading} reportes={reportes} moneda={moneda} />}
-      {tab === 'financiero' && <ReporteFinanciero desde={desde} hasta={hasta} data={fin.data} isLoading={fin.isLoading} />}
+      {tab === 'resumen' && <TabResumen mes={mes} isLoading={isLoading} reportes={resumenVista} moneda={monedaVista} />}
+      {tab === 'financiero' && <ReporteFinanciero desde={desde} hasta={hasta} data={fin.data} isLoading={fin.isLoading} monedaVista={monedaVista} />}
       {tab === 'inventario' && <ReporteInventario desde={desde} hasta={hasta} data={inv.data} isLoading={inv.isLoading} />}
       {tab === 'nomina' && <ReporteNomina mes={mes} />}
       {tab === 'gastosFijos' && <GastosFijosProyeccion mes={mes} />}

@@ -8,10 +8,16 @@ export type EstadoFactura = 'pendiente' | 'parcial' | 'pagada'
 export interface Cliente {
   id_cliente: string
   nombre: string
+  /** Alias comercial de uso interno (búsquedas rápidas; no se imprime en factura) */
+  alias?: string
   rfc: string
   email: string
   telefono: string
+  /** Dirección exacta: calle, número, referencias */
   direccion: string
+  direccion_pais?: string
+  direccion_estado?: string
+  direccion_cp?: string
   fecha_registro: string
 }
 
@@ -55,6 +61,19 @@ export interface Empleado {
   hora_salida: string
   esquema_pago: 'semanal' | 'quincenal' | 'mensual' | ''
   tarifa_hora_extra: number
+  /** Días laborales semanales: números ISO separados por coma (1=Lun … 7=Dom) */
+  dias_laborales?: string
+}
+
+/** Registro diario de asistencia de un empleado. */
+export interface Asistencia {
+  id_asistencia: string
+  id_empleado: string
+  nombre_empleado: string
+  fecha: string
+  hora_entrada: string
+  hora_salida: string
+  notas: string
 }
 
 export interface GastoFijo {
@@ -138,6 +157,8 @@ export interface Producto {
   unidad: string
   stock: number
   stock_minimo: number
+  /** Moneda en la que están cotizados precio_costo y precio_venta */
+  moneda: string
   precio_costo: number
   precio_venta: number
   id_proveedor: string
@@ -188,12 +209,16 @@ export interface Config {
   metas_mensuales: string
   /** Comisiones por transacción: JSON { metodos: { [metodo]: % }, gastos: %, cxp: %, nomina: % } */
   comisiones_transaccion: string
+  /** Comisiones avanzadas por método de pago: JSON { [metodo]: { pct?: number, minimo_fijo?: number } } */
+  comisiones_metodos: string
   /** Registro automático de la tasa del día activado */
   tasa_dia_activa: string
   /** Permisos otorgados a Google: JSON { scope: 'granted' | 'revoked' } */
   google_permisos: string
   /** Recordatorios de pago por notificación del navegador */
   notif_gastos_activa: string
+  /** Recordatorios de vencimientos de cobro (CxC) por notificación del navegador */
+  notif_cxc_activa: string
   /** Unidades de medida del inventario separadas por coma */
   unidades_medida: string
 }

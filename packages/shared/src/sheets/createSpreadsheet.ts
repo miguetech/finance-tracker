@@ -33,9 +33,11 @@ const DEFAULT_CONFIG: Config = {
   share_backend_url: '',
   metas_mensuales: '',
   comisiones_transaccion: '',
+  comisiones_metodos: '',
   tasa_dia_activa: 'true',
   google_permisos: '',
   notif_gastos_activa: '',
+  notif_cxc_activa: '',
   unidades_medida: 'pieza,kg,gr,litro,ml,caja,saco,docena,metro'
 }
 
@@ -147,9 +149,11 @@ export function configFromRows(rows: (string | number)[][]): Config {
     share_backend_url: map.get('share_backend_url') ?? '',
     metas_mensuales: map.get('metas_mensuales') ?? '',
     comisiones_transaccion: map.get('comisiones_transaccion') ?? '',
+    comisiones_metodos: map.get('comisiones_metodos') ?? '',
     tasa_dia_activa: map.get('tasa_dia_activa') ?? DEFAULT_CONFIG.tasa_dia_activa,
     google_permisos: map.get('google_permisos') ?? '',
     notif_gastos_activa: map.get('notif_gastos_activa') ?? '',
+    notif_cxc_activa: map.get('notif_cxc_activa') ?? '',
     unidades_medida: map.get('unidades_medida') ?? DEFAULT_CONFIG.unidades_medida
   }
 }

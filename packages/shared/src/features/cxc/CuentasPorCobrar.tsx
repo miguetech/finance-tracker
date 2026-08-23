@@ -1,11 +1,12 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { todayLocal } from '../../lib/date'
 import { useFacturas, useClientes, useConfig } from '../../store/queries'
 import { Table, Button, Select, StatCard, Badge, Input } from '../../ui/components'
 import { useToast } from '../../ui/components'
 import { usePerms } from '../../store/perms'
 import { formatMoneyConverted } from '../../currency'
-import { IconPhone, IconSearch, IconCoins } from '../../ui/icons'
+import { IconPhone, IconSearch, IconCoins, IconBell } from '../../ui/icons'
+import { useNotificaciones } from '../../ui/hooks'
 import { useI18n } from '../../i18n'
 import { whatsappUrl } from '../../lib/contactos'
 import { estadoCxc } from '../../ui/estados'
@@ -17,7 +18,7 @@ export function CuentasPorCobrar() {
   const { t } = useI18n()
   const { facturas } = useFacturas()
   const { clientes } = useClientes()
-  const { config } = useConfig()
+  const { config, saveConfig } = useConfig()
   const { canEdit, isAdmin } = usePerms()
   const toast = useToast()
   const [estado, setEstado] = useState('')
@@ -42,6 +43,40 @@ export function CuentasPorCobrar() {
   const totalPorCobrar = sumaBase(activas)
   const vencidas = activas.filter(f => f.fecha_vencimiento && f.fecha_vencimiento < hoy)
   const porVencer = activas.filter(f => !f.fecha_vencimiento || f.fecha_vencimiento >= hoy)
+
+  // Vencimientos próximos (≤ 3 días) para recordatorios.
+  const en3Dias = new Date(`${hoy}T00:00:00`)
+  en3Dias.setDate(en3Dias.getDate() + 3)
+  const limite = en3Dias.toISOString().slice(0, 10)
+  const proximas = activas.filter(f => f.fecha_vencimiento && f.fecha_vencimiento >= hoy && f.fecha_vencimiento <= limite)
+    .sort((a, b) => String(a.fecha_vencimiento).localeCompare(String(b.fecha_vencimiento)))
+
+  // Alertas flotantes del navegador para vencimientos de cobro.
+  const notif = useNotificaciones()
+  useEffect(() => {
+    if (config?.notif_cxc_activa !== 'true' || !notif.soportadas || Notification.permission !== 'granted') return
+    if (vencidas.length === 0 && proximas.length === 0) return
+    const cuerpo = vencidas.length > 0
+      ? `${vencidas.length} ${t('cxc.vencidas').toLowerCase()} — ${vencidas[0].folio}: ${formatMoneyConverted(Number(vencidas[0].saldo), vencidas[0].moneda, moneda, config)}`
+      : `${proximas[0].folio} (${proximas[0].fecha_vencimiento})`
+    notif.notificar(t('cxc.recordatorioTitulo'), cuerpo)
+  }, [config?.notif_cxc_activa, vencidas.length, proximas.length])
+
+  const toggleNotifCxc = async () => {
+    if (!config) return
+    if (config.notif_cxc_activa === 'true') {
+      await saveConfig.mutateAsync({ ...config, notif_cxc_activa: 'false' })
+      toast(t('common.guardado'))
+      return
+    }
+    await notif.activar()
+    if (Notification.permission === 'granted') {
+      await saveConfig.mutateAsync({ ...config, notif_cxc_activa: 'true' })
+      toast(t('cxc.notifActivada'))
+    } else {
+      toast(t('cxc.notifPermisoDenegado'), 'error')
+    }
+  }
 
   const copiarTel = (idCliente: string) => {
     const c = clientes.find(x => x.id_cliente === idCliente)
@@ -73,6 +108,10 @@ export function CuentasPorCobrar() {
           <p className="text-sm text-muted-foreground">{t('cxc.subtitulo')}</p>
         </div>
         <div className="flex gap-2">
+          <Button variant={config?.notif_cxc_activa === 'true' ? 'primary' : 'outline'} icon={<IconBell className="w-4 h-4" />}
+            onClick={toggleNotifCxc} title={t('cxc.recordatorioTitulo')}>
+            {config?.notif_cxc_activa === 'true' ? t('cxc.notifOn') : t('cxc.notifOff')}
+          </Button>
           <Select value={estado} onChange={setEstado} options={[{ value: t('states.pendiente'), label: t('states.pendiente') }, { value: t('states.parcial'), label: t('states.parcial') }, { value: t('states.vencida'), label: t('states.vencida') }]} placeholder={t('common.estado')} />
         </div>
       </div>

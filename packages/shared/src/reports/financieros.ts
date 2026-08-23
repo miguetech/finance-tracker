@@ -1,7 +1,8 @@
 import type { Factura, Gasto, CuentaPagar, Pago } from '../types/entities'
 import type { Config } from '../types/entities'
 import { round2, roundTo } from '../calc/invoice'
-import { toBase, rateFor, parseRates } from '../currency/rates'
+import { toBase, rateFor, parseRates, convert } from '../currency/rates'
+import { comisionTransaccion, type ComisionMetodo } from './comisiones'
 import type { ResultadoPL, PuntoEquilibrio, ResumenReconversion, VariacionCambiaria, ResultadoFlujoCaja, FlujoMoneda, FlujoMetodo, RangoFecha, LineaPL } from './types'
 
 const CATEGORIAS_FIJAS = ['Renta', 'Alquiler', 'Internet', 'Servicios', 'Nómina', 'Nomina', 'Seguros', 'Telefonía', 'Telefonia']
@@ -19,7 +20,9 @@ function baseMonto(monto: number, tipoCambio: number): number {
 export function estadoResultados(
   facturas: Factura[],
   gastos: Gasto[],
+  cfg: Config,
   productosCosto: Record<string, number>,
+  productosMoneda: Record<string, string>,
   itemsPorFactura: Record<string, { cantidad: number; id_producto?: string; precio_unitario?: number }[]>,
   rango: RangoFecha
 ): ResultadoPL {
@@ -35,10 +38,13 @@ export function estadoResultados(
   }
 
   // Costo directo de mercancía vendida (COGS) a partir de items con producto vinculado.
+  // El costo del producto se convierte desde su moneda de cotización a la base.
   let cogs = 0
   for (const f of facs) {
     for (const it of itemsPorFactura[f.id_factura] ?? []) {
-      if (it.id_producto && productosCosto[it.id_producto] !== undefined) cogs += productosCosto[it.id_producto] * it.cantidad
+      if (!it.id_producto || productosCosto[it.id_producto] === undefined) continue
+      const monedaProd = productosMoneda[it.id_producto] || cfg.moneda
+      cogs += convert(productosCosto[it.id_producto] * it.cantidad, monedaProd, cfg.moneda, cfg)
     }
   }
   cogs = round2(cogs)
@@ -146,11 +152,11 @@ function tasaActual(cfg: Config, moneda: string | undefined): number {
   return rate && rate > 0 ? rate : rateFor(cfg, cfg.moneda, moneda)
 }
 
-/** Flujo de caja por moneda y por método de pago, con comisiones por transacción. */
+/** Flujo de caja por moneda y por método de pago, con comisiones por transacción (% y/o fijo mínimo). */
 export function flujoCaja(
   pagos: Pago[],
   gastos: Gasto[],
-  comisionesMetodo: Record<string, number>,
+  comisionesMetodo: Record<string, ComisionMetodo>,
   rango: RangoFecha
 ): ResultadoFlujoCaja {
   const monedas = new Map<string, FlujoMoneda>()
@@ -164,6 +170,7 @@ export function flujoCaja(
     const key = `${metodo}|${moneda}`
     const fm = metodos.get(key) ?? { metodo_pago: metodo, moneda, entradas: 0, salidas: 0, comisiones: 0 }
     fm.entradas = round2(fm.entradas + montoMoneda)
+    fm.comisiones = round2(fm.comisiones + comisionTransaccion(montoMoneda, comisionesMetodo[fm.metodo_pago]))
     metodos.set(key, fm)
   }
   const addSalida = (moneda: string, metodo: string, montoMoneda: number) => {
@@ -174,6 +181,7 @@ export function flujoCaja(
     const key = `${metodo}|${moneda}`
     const fm = metodos.get(key) ?? { metodo_pago: metodo, moneda, entradas: 0, salidas: 0, comisiones: 0 }
     fm.salidas = round2(fm.salidas + montoMoneda)
+    fm.comisiones = round2(fm.comisiones + comisionTransaccion(montoMoneda, comisionesMetodo[fm.metodo_pago]))
     metodos.set(key, fm)
   }
 
@@ -183,11 +191,6 @@ export function flujoCaja(
   }  for (const g of gastos) {
     if (!enRango(g.fecha, rango)) continue
     addSalida(g.moneda, g.metodo_pago, g.monto)
-  }
-
-  for (const fm of metodos.values()) {
-    const pct = comisionesMetodo[fm.metodo_pago] ?? 0
-    fm.comisiones = round2(((fm.entradas + fm.salidas) * pct) / 100)
   }
 
   let totEnt = 0
@@ -201,5 +204,50 @@ export function flujoCaja(
     porMetodo: [...metodos.values()].sort((a, b) => b.entradas + b.salidas - (a.entradas + a.salidas)),
     totalEntradasBase: round2(totEnt),
     totalSalidasBase: round2(totSal)
+  }
+}
+
+/** Convierte un reporte financiero completo de la moneda base a la moneda de visualización. */
+export function convertirFinData<F extends {
+  pl: ResultadoPL
+  equilibrio: PuntoEquilibrio
+  reconversion: ResumenReconversion
+  flujo: ResultadoFlujoCaja
+}>(d: F, de: string, a: string, cfg: Parameters<typeof convert>[3]): F {
+  if (!de || !a || de === a) return d
+  const c = (n: number) => convert(n, de, a, cfg)
+  return {
+    ...d,
+    pl: {
+      ...d.pl,
+      ingresos_totales: c(d.pl.ingresos_totales),
+      costo_mercancia: c(d.pl.costo_mercancia),
+      gastos_fijos: c(d.pl.gastos_fijos),
+      gastos_variables: c(d.pl.gastos_variables),
+      utilidad_neta: c(d.pl.utilidad_neta),
+      lineas_ingresos: d.pl.lineas_ingresos.map(l => ({ ...l, monto: c(l.monto) })),
+      lineas_costos: d.pl.lineas_costos.map(l => ({ ...l, monto: c(l.monto) }))
+    },
+    equilibrio: {
+      ...d.equilibrio,
+      costos_fijos: c(d.equilibrio.costos_fijos),
+      costos_variables: c(d.equilibrio.costos_variables),
+      ingresos: c(d.equilibrio.ingresos),
+      punto_equilibrio: d.equilibrio.punto_equilibrio < 0 ? d.equilibrio.punto_equilibrio : c(d.equilibrio.punto_equilibrio)
+    },
+    reconversion: {
+      ...d.reconversion,
+      variaciones: d.reconversion.variaciones.map(v => ({ ...v, valor_base_registro: c(v.valor_base_registro), valor_base_actual: c(v.valor_base_actual), diferencia: c(v.diferencia) })),
+      perdida_total: c(d.reconversion.perdida_total),
+      ganancia_total: c(d.reconversion.ganancia_total),
+      neto: c(d.reconversion.neto)
+    },
+    flujo: {
+      // porMoneda/porMetodo muestran montos nativos de cada moneda: no se convierten.
+      porMoneda: d.flujo.porMoneda,
+      porMetodo: d.flujo.porMetodo,
+      totalEntradasBase: c(d.flujo.totalEntradasBase),
+      totalSalidasBase: c(d.flujo.totalSalidasBase)
+    }
   }
 }

@@ -9,14 +9,14 @@ import { createSheetsTableStore, type TableStore } from './tableStore'
 import { uid } from '../lib/uid'
 import { todayLocal } from '../lib/date'
 import { getCurrency } from '../currency'
-import { parseRates } from '../currency/rates'
+import { parseRates, rateFor, convert } from '../currency/rates'
 import { buildFactura, estadoDesdeSaldo, round2 } from '../calc/invoice'
 import { kpisForMonth, topClientes, gastosPorCategoria, type Kpis } from '../calc/kpis'
 import { expandFolioTemplate } from '../calc/folio'
 import { estadoResultados, puntoDeEquilibrio, reconversionMonetaria, flujoCaja } from '../reports/financieros'
-import { productosStockBajo, movimientosPorMes, statsMultiproducto } from '../reports/inventario'
+import { productosStockBajo, movimientosPorMes, statsMultiproducto, historialVentasProducto, type VentaProductoFila } from '../reports/inventario'
 import { metasVsLogros, parseMetas } from '../reports/metas'
-import { parseComisiones } from '../reports/comisiones'
+import { parseComisiones, parseComisionesMetodos } from '../reports/comisiones'
 import type { ResultadoPL, PuntoEquilibrio, ResumenReconversion, ResultadoFlujoCaja, RangoFecha, StatsProducto } from '../reports/types'
 import type { NominaDetalle } from '../reports/nomina'
 
@@ -35,8 +35,8 @@ export interface NominaAvanzadaInput {
   comisiones?: number
   pagos_divididos?: { metodo_pago: string; moneda: string; monto: number }[]
 }
-import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago, Producto, MovimientoStock, TipoMovimiento, CodigoAcceso, Dispositivo, GastoFijo, TasaHistorial } from '../types/entities'
-import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, GastoFijoSchema, TasaHistorialSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema, EmpleadoSchema, NominaInputSchema, NominaDetalleInputSchema, UsuarioSchema, ProductoSchema, MovimientoStockSchema } from '../types/schemas'
+import type { Config, Cliente, Empleado, Asistencia, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, Pago, MetodoPago, Producto, MovimientoStock, TipoMovimiento, CodigoAcceso, Dispositivo, GastoFijo, TasaHistorial } from '../types/entities'
+import { ClienteSchema, ConfigSchema, FacturaInputSchema, GastoSchema, GastoFijoSchema, TasaHistorialSchema, ProveedorSchema, CxpInputSchema, PagoInputSchema, EmpleadoSchema, AsistenciaSchema, NominaInputSchema, NominaDetalleInputSchema, UsuarioSchema, ProductoSchema, MovimientoStockSchema } from '../types/schemas'
 import type { Usuario, UserRole } from '../roles/roles'
 import { assertClienteSinFacturas, assertProveedorSinCxp, enrichNombreProveedor, emailIgual } from './guards'
 import { generarCodigo, prefijoDesdeNombre, CODIGO_ROLES_SIN_ADMIN } from '../lib/codigos'
@@ -55,9 +55,7 @@ export function createRepository(ctx: RepoContext) {
 
   function tipoCambioDe(cfg: Config, moneda: string): number {
     if (!moneda || moneda === cfg.moneda) return 1
-    const r = parseRates(cfg.tasas_cambio)
-    const rate = r && r.base === cfg.moneda ? r.rates[moneda] : undefined
-    return rate && rate > 0 ? rate : 1
+    return rateFor(cfg, cfg.moneda, moneda)
   }
 
   function readTable<T = Record<string, string | number>>(t: keyof typeof TABLES): Promise<T[]> {
@@ -408,6 +406,39 @@ export function createRepository(ctx: RepoContext) {
       return saved
     },
 
+    async listAsistencias(filtro: { id_empleado?: string; desde?: string; hasta?: string } = {}): Promise<Asistencia[]> {
+      let rows = await readTable<Asistencia>('Asistencias')
+      if (filtro.id_empleado) rows = rows.filter(a => a.id_empleado === filtro.id_empleado)
+      if (filtro.desde) rows = rows.filter(a => a.fecha >= filtro.desde!)
+      if (filtro.hasta) rows = rows.filter(a => a.fecha <= filtro.hasta!)
+      return rows.sort((a, b) => b.fecha.localeCompare(a.fecha))
+    },
+
+    async saveAsistencia(input: Omit<Asistencia, 'id_asistencia' | 'nombre_empleado'> & { id_asistencia?: string; nombre_empleado?: string }): Promise<Asistencia> {
+      const parsed = AsistenciaSchema.parse(input)
+      const empleados = await readTable<Empleado>('Empleados')
+      const emp = empleados.find(e => e.id_empleado === parsed.id_empleado)
+      const saved: Asistencia = {
+        ...parsed,
+        id_asistencia: parsed.id_asistencia || uid('asi_'),
+        nombre_empleado: emp?.nombre ?? parsed.nombre_empleado ?? ''
+      }
+      // Un registro por empleado y día: se reemplaza si ya existe.
+      const all = await readTable<Record<string, string | number>>('Asistencias')
+      const existente = all.find(r => r.id_empleado === saved.id_empleado && String(r.fecha) === saved.fecha && r.id_asistencia !== saved.id_asistencia)
+      if (existente) {
+        await replaceTable('Asistencias', all.map(r => (r.id_asistencia === existente.id_asistencia ? (saved as unknown as Record<string, string | number>) : r)))
+      } else {
+        await insertOrReplace('Asistencias', 'id_asistencia', saved)
+      }
+      return saved
+    },
+
+    async deleteAsistencia(id: string): Promise<void> {
+      const all = (await readTable('Asistencias')).filter(r => r.id_asistencia !== id)
+      await replaceTable('Asistencias', all)
+    },
+
     async deleteEmpleado(id: string): Promise<void> {
       const gastos = await readTable('Gastos')
       const emp = (await readTable('Empleados')).find(r => r.id_empleado === id)
@@ -489,15 +520,21 @@ export function createRepository(ctx: RepoContext) {
       const pagosLast = String.fromCharCode(64 + TABLES.Pagos.length)
       return withMutex<Pago>(mutexReadRow, mutexWriteRow, async () => {
         const id = await sid()
-        const [rows, pagos] = await Promise.all([readTable(table), readTable('Pagos')])
+        const [rows, pagos, cfg] = await Promise.all([readTable(table), readTable('Pagos'), readConfig()])
         const target = rows.find(r => r[idKey] === parsed.id_origen)
         if (!target) throw new Error('Origen del pago no existe')
         const saldoActual = Number(target.saldo)
-        if (parsed.monto > saldoActual) throw new Error(`Pago excede saldo disponible (${saldoActual})`)
-        const nuevoSaldo = round2(saldoActual - parsed.monto)
-        const monedaOrigen = String(target.moneda ?? '')
+        // El pago puede efectuarse en una moneda distinta a la del documento: se
+        // convierte a la moneda del documento con la tasa vigente para el saldo.
+        const monedaOrigen = String(target.moneda ?? '') || cfg.moneda
+        const monedaPago = parsed.moneda || monedaOrigen
+        const montoEnMonedaOrigen = monedaPago === monedaOrigen ? parsed.monto : convert(parsed.monto, monedaPago, monedaOrigen, cfg)
+        if (montoEnMonedaOrigen > saldoActual + 0.009) throw new Error(`Pago excede saldo disponible (${saldoActual})`)
+        const nuevoSaldo = round2(saldoActual - montoEnMonedaOrigen)
         const tipoCambioOrigen = Number(target.tipo_cambio) || 1
-        const pagoRow: Pago = { id_pago: uid('pag_'), ...parsed, moneda: monedaOrigen, tipo_cambio: tipoCambioOrigen }
+        // Mismo moneda ⇒ conserva la tasa histórica del documento; moneda distinta ⇒ tasa vigente.
+        const tipoCambioPago = monedaPago === monedaOrigen ? tipoCambioOrigen : tipoCambioDe(cfg, monedaPago)
+        const pagoRow: Pago = { id_pago: uid('pag_'), ...parsed, moneda: monedaPago, tipo_cambio: tipoCambioPago }
         // Al liquidar una cuenta por pagar se traslada contablemente a Gastos Totales.
         let gastoGenerado: Gasto | null = null
         if (table === 'Cuentas_Pagar' && nuevoSaldo <= 0) {
@@ -563,10 +600,12 @@ export function createRepository(ctx: RepoContext) {
     async saveProducto(p: Producto): Promise<Producto> {
       const parsed = ProductoSchema.parse(p)
       const provs = (await readTable('Proveedores')).reduce<Record<string, string>>((m, pr) => { m[String(pr.id_proveedor)] = String(pr.nombre ?? ''); return m }, {})
+      const cfg = await readConfig()
       const saved = {
         ...parsed,
         id_producto: parsed.id_producto || uid('prod_'),
         fecha_registro: parsed.fecha_registro || todayLocal(),
+        moneda: parsed.moneda || cfg.moneda,
         nombre_proveedor: parsed.nombre_proveedor || provs[String(parsed.id_proveedor)] || ''
       } as unknown as Producto
       await insertOrReplace('Productos', 'id_producto', saved)
@@ -711,13 +750,16 @@ export function createRepository(ctx: RepoContext) {
         readTable<FacturaItem & { id_factura: string }>('Factura_Items')
       ])
       const costoPorProducto = productos.reduce<Record<string, number>>((m, p) => { m[p.id_producto] = Number(p.precio_costo) || 0; return m }, {})
+      const monedaPorProducto = productos.reduce<Record<string, string>>((m, p) => { m[p.id_producto] = p.moneda || ''; return m }, {})
       const itemsPorFactura = items.reduce<Record<string, { cantidad: number; id_producto?: string; precio_unitario?: number }[]>>((m, it) => {
         ;(m[it.id_factura] ??= []).push({ cantidad: Number(it.cantidad), id_producto: it.id_producto || undefined, precio_unitario: Number(it.precio_unitario) })
         return m
       }, {})
-      const pl = estadoResultados(facturas, gastos, costoPorProducto, itemsPorFactura, rango)
-      const comisiones = parseComisiones(cfg.comisiones_transaccion)
-      const flujo = flujoCaja(pagos, gastos, comisiones.metodos, rango)
+      const pl = estadoResultados(facturas, gastos, cfg, costoPorProducto, monedaPorProducto, itemsPorFactura, rango)
+      // Comisiones por método de pago: configuración avanzada por método (pct y/o fijo mínimo).
+      const legacyPct = Object.fromEntries(Object.entries(parseComisiones(cfg.comisiones_transaccion).metodos).map(([k, pct]) => [k, { pct }]))
+      const comisionesMetodo = { ...legacyPct, ...parseComisionesMetodos(cfg.comisiones_metodos) }
+      const flujo = flujoCaja(pagos, gastos, comisionesMetodo, rango)
       return {
         pl,
         equilibrio: puntoDeEquilibrio(pl),
@@ -742,6 +784,15 @@ export function createRepository(ctx: RepoContext) {
         movimientosMensuales: movimientosPorMes(movimientos, rango),
         statsProductos: statsMultiproducto({ productos, items, facturas, movimientos, ids, rango })
       }
+    },
+
+    /** Historial de ventas de un producto individual en un rango. */
+    async getVentasProducto(idProducto: string, rango: RangoFecha): Promise<VentaProductoFila[]> {
+      const [items, facturas] = await Promise.all([
+        readTable<FacturaItem & { id_factura: string }>('Factura_Items'),
+        readTable<Factura>('Facturas')
+      ])
+      return historialVentasProducto(items, facturas, idProducto, rango)
     },
 
     /** Metas vs logros por mes (facturación convertida a base). */

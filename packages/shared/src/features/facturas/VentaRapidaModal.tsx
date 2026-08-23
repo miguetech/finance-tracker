@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { todayLocal } from '../../lib/date'
-import { Dialog, Button, Input, Select } from '../../ui/components'
+import { Dialog, Button, Input, Select, SearchSelect } from '../../ui/components'
 import { useClientes, useFacturas, useRegisterPago, useProductos, useMetodosPago, useConfig } from '../../store/queries'
 import { useToast } from '../../ui/components'
 import { CurrencySelect } from '../../ui/currency'
-import { formatMoney, getCurrency } from '../../currency'
+import { formatMoney, getCurrency, convert } from '../../currency'
 import { buildFactura } from '../../calc/invoice'
 import { useI18n } from '../../i18n'
 
@@ -41,7 +41,12 @@ export function VentaRapidaModal({ open, onClose, onSaved }: { open: boolean; on
     const prod = productos.find(x => x.id_producto === id)
     if (prod) {
       setDescripcion(prod.nombre)
-      setPrecio(String(prod.precio_venta))
+      // Producto cotizado en otra moneda: se convierte a la moneda de la venta.
+      const monedaProd = prod.moneda || config?.moneda || monedaSel
+      const precioVenta = monedaProd !== monedaSel
+        ? convert(Number(prod.precio_venta) || 0, monedaProd, monedaSel, config)
+        : Number(prod.precio_venta) || 0
+      setPrecio(String(precioVenta))
     }
   }
 
@@ -76,7 +81,7 @@ export function VentaRapidaModal({ open, onClose, onSaved }: { open: boolean; on
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div>
           <label className="text-xs text-gray-500">{t('facturas.productoInventario')}</label>
-          <Select value={id_producto} onChange={onProducto}
+          <SearchSelect value={id_producto} onChange={onProducto}
             options={productos.filter(p => String(p.activo) !== 'false').map(p => ({ value: p.id_producto, label: `${p.nombre} — ${p.precio_venta} (${t('facturas.stockLabel')}: ${p.stock} ${p.unidad || 'pieza'})` }))}
             placeholder={t('facturas.oEscribir')} />
         </div>
@@ -96,6 +101,11 @@ export function VentaRapidaModal({ open, onClose, onSaved }: { open: boolean; on
           <span>{t('facturas.totalIva', { iva: config?.iva_porcentaje ?? 16 })}</span>
           <b>{formatMoney(totals.total, monedaSel)}</b>
         </div>
+        {monedaSel !== (config?.moneda || 'USD') && totals.total > 0 && (
+          <p className="text-right text-xs text-emerald-700">
+            ≈ {formatMoney(convert(totals.total, monedaSel, config?.moneda || 'USD', config), config?.moneda || 'USD')} {t('facturas.equivalenciaBase')}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">{t('facturas.ventaInfo')} {id_producto ? t('facturas.stockDescuenta') : ''}</p>
       </div>
     </Dialog>

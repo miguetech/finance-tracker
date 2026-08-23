@@ -53,6 +53,7 @@ const en: Partial<Dict> = {
     stockLabel: 'stock', oEscribir: 'Or type a concept below…',
     ejConcepto: 'E.g. sweet bread, car wash…', precioUnitario: 'Unit price',
     metodoPago: 'Payment method', totalIva: 'Total (VAT {iva}% incl.)',
+    equivalenciaBase: 'in base currency',
     ventaInfo: 'Creates an invoice with customer "Counter sale" and records full payment immediately.',
     stockDescuenta: 'Product stock is deducted automatically.',
     saldoDisponible: 'Available balance:', fechaEmision: 'Issue date',
@@ -100,6 +101,7 @@ const en: Partial<Dict> = {
     subtitulo: 'Outstanding obligations with suppliers — money you still owe and has not left your account.',
     nuevaCxp: 'New AP', nuevaPorPagar: 'New account payable', totalPorPagar: 'Total payable',
     activas: 'Active accounts', vence: 'Due', sinCxp: 'No AP recorded',
+    mostrarPagadas: 'Show paid',
     fechaVencimiento: 'Due date', monedaDeuda: 'Debt currency', registrarAbono: 'Record payment',
     cxpAbrev: 'AP', creada: 'Account payable created', eliminarTitulo: 'Delete AP',
     eliminarMensaje: 'The account and its payments will be deleted. Continue?',
@@ -111,7 +113,12 @@ const en: Partial<Dict> = {
     totalPorCobrar: 'Total receivable', buscarPlaceholder: 'Search by folio or customer…',
     copiarTelefono: 'Copy customer phone', nadaPorCobrar: 'Nothing to collect. All up to date.',
     clienteSinTelefono: 'Customer has no phone', telefonoCon: 'Phone: {telefono}',
-    soloLectura: 'Read only: request edit permissions to record collections.'
+    soloLectura: 'Read only: request edit permissions to record collections.',
+    recordatorioTitulo: 'Collection due dates',
+    notifOn: 'Reminders ON',
+    notifOff: 'Reminders OFF',
+    notifActivada: 'Collection reminders enabled',
+    notifPermisoDenegado: 'Notification permission denied'
   },
   proveedores: {
     title: 'Suppliers', nuevo: 'New supplier', editar: 'Edit supplier',
@@ -143,6 +150,8 @@ const en: Partial<Dict> = {
     ejNombre: 'E.g. Tomato, 50kg cement, 2.5mm cable…', sinCategoria: 'No category',
     stockMinimoAlerta: 'Min stock (alert)', ej5: 'E.g. 5', costoCompra: 'Purchase cost',
     ejCosto: 'How much it costs you', precioVentaLabel: 'Sale price',
+    monedaCotizacion: 'Quotation currency',
+    monedaCotizacionAyuda: 'Prices are recorded in this currency and converted automatically to the base one in reports.',
     ejVenta: 'How much you sell it for', proveedorPedir: 'Supplier (to order goods)',
     telefonoContactar: 'Phone (to contact)', stockOk: 'OK', stockBajo: 'Low', stockCritico: 'Critical',
     imagen: 'Image'
@@ -277,7 +286,27 @@ const en: Partial<Dict> = {
   },
   pago: {
     montoInvalido: 'Invalid amount', superaSaldo: 'Exceeds available balance',
-    saldoDisponible: 'Available balance:'
+    saldoDisponible: 'Available balance:',
+    monedaPago: 'Payment currency',
+    segunTasa: 'at today\'s rate',
+    comisionTitulo: 'Fee',
+    comisionDe: '"{metodo}" fee',
+    comisionPct: 'Percentage per transaction',
+    comisionMinimo: 'Fixed minimum amount',
+    comisionInfo: 'The greater of the % or the fixed minimum is charged per transaction with this method.',
+    comisionPreview: 'Estimated fee',
+    comisionGuardada: 'Method fee saved'
+  },
+  tasas: {
+    tasaDia: 'Daily rate',
+    actualizar: 'Refresh',
+    configurar: 'Configure currencies',
+    alDia: 'Rates up to date',
+    desactualizada: 'Rates from'
+  },
+  historial: {
+    abonos: 'Payment history',
+    saldoRestante: 'Remaining balance'
   }
 }
 

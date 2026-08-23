@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import { useConfig, useReportesInventario, useProductos } from '../../store/queries'
 import { useI18n } from '../../i18n'
-import { Card, StatCard, Button, Badge, Input } from '../../ui/components'
+import { Card, StatCard, Button, Badge, Input, SearchSelect } from '../../ui/components'
+import { useVentasProducto } from '../../store/queries'
 import { GroupedBarChart, HBarChart, DonutChart, CHART_COLORS } from '../../ui/charts'
 import { formatMoney } from '../../currency'
 import { exportCSV, exportPDF } from '../../export/export'
@@ -16,11 +17,12 @@ export function ReporteInventario({ desde, hasta, data, isLoading }: {
   isLoading: boolean
 }) {
   const { t } = useI18n()
-  const [tab, setTab] = useState<'stockBajo' | 'movimientos' | 'multiproducto'>('multiproducto')
+  const [tab, setTab] = useState<'stockBajo' | 'movimientos' | 'multiproducto' | 'producto'>('multiproducto')
   const tabs = [
     { id: 'stockBajo', label: t('reportesFin.stockBajoTitulo') },
     { id: 'movimientos', label: t('reportesFin.movimientosTitulo') },
-    { id: 'multiproducto', label: t('reportesFin.tabMultiproducto') }
+    { id: 'multiproducto', label: t('reportesFin.tabMultiproducto') },
+    { id: 'producto', label: t('reportesFin.tabProducto') }
   ] as const
 
   if (isLoading || !data) return <div className="p-8 text-gray-500">{t('common.cargando')}</div>
@@ -38,6 +40,79 @@ export function ReporteInventario({ desde, hasta, data, isLoading }: {
       {tab === 'stockBajo' && <TabStockBajo data={data} hasta={hasta} />}
       {tab === 'movimientos' && <TabMovimientos data={data} />}
       {tab === 'multiproducto' && <TabMultiproducto data={data} desde={desde} hasta={hasta} />}
+      {tab === 'producto' && <TabProductoIndividual data={data} desde={desde} hasta={hasta} />}
+    </div>
+  )
+}
+
+/** Reporte individual por producto: métricas del período e historial de ventas. */
+function TabProductoIndividual({ data, desde, hasta }: { data: InvData; desde: string; hasta: string }) {
+  const { t } = useI18n()
+  const { config } = useConfig()
+  const moneda = config?.moneda ?? 'USD'
+  const { productos } = useProductos()
+  const [idProducto, setIdProducto] = useState('')
+  const activos = productos.filter(p => p.activo !== 'false')
+  const producto = activos.find(p => p.id_producto === idProducto)
+  const stats = data.statsProductos.find(s => s.id_producto === idProducto)
+  const ventasQ = useVentasProducto(idProducto || null, { desde, hasta })
+  const ventas = ventasQ.data ?? []
+  const totalIngresos = ventas.reduce((s, v) => s + v.importe_base, 0)
+  const totalUnidades = ventas.reduce((s, v) => s + v.cantidad, 0)
+
+  return (
+    <div className="space-y-4">
+      <Card title={t('reportesFin.tabProducto')}>
+        <SearchSelect value={idProducto} onChange={setIdProducto}
+          options={activos.map(p => ({ value: p.id_producto, label: `${p.nombre}${p.categoria ? ` · ${p.categoria}` : ''}` }))}
+          placeholder={t('facturas.buscarProducto')} />
+      </Card>
+      {!idProducto && <p className="p-6 text-sm text-gray-500">{t('reportesFin.seleccionaProducto')}</p>}
+      {idProducto && (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard label={t('reportesFin.stockActual')} value={`${producto ? Number(producto.stock).toLocaleString() : '—'} ${producto?.unidad ?? ''}`} />
+            <StatCard label={t('reportesFin.unidadesVendidas')} value={totalUnidades.toLocaleString()} />
+            <StatCard label={t('reportes.facturado')} value={formatMoney(totalIngresos, moneda)} tone="positive" />
+            <StatCard label={t('reportesFin.rotacion')} value={`${stats?.rotacion ?? 0}×`} />
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-card">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted text-left text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3">{t('common.fecha')}</th>
+                  <th className="px-4 py-3">{t('facturas.folio')}</th>
+                  <th className="px-4 py-3">{t('facturas.cliente')}</th>
+                  <th className="px-4 py-3 text-right">{t('facturas.cant')}</th>
+                  <th className="px-4 py-3 text-right">{t('facturas.precio')}</th>
+                  <th className="px-4 py-3 text-right">{t('facturas.importe')} ({moneda})</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ventas.map((v, i) => (
+                  <tr key={i} className="border-t border-gray-100 hover:bg-muted/50">
+                    <td className="px-4 py-2 whitespace-nowrap">{v.fecha}</td>
+                    <td className="px-4 py-2">{v.folio}</td>
+                    <td className="px-4 py-2 max-w-40 truncate" title={v.cliente}>{v.cliente}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{v.cantidad}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{formatMoney(v.precio_unitario, moneda)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums font-medium">{formatMoney(v.importe_base, moneda)}</td>
+                  </tr>
+                ))}
+                {ventas.length === 0 && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-500">{t('reportesFin.sinVentasProducto')}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          {ventas.length > 0 && (
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={() => exportCSV(`ventas_${producto?.nombre ?? idProducto}_${desde}_${hasta}`, ventas, [
+                { key: 'fecha', header: t('common.fecha') }, { key: 'folio', header: t('facturas.folio') }, { key: 'cliente', header: t('facturas.cliente') },
+                { key: 'cantidad', header: t('facturas.cant') }, { key: 'precio_unitario', header: t('facturas.precio') }, { key: 'importe_base', header: `${t('facturas.importe')} (${moneda})` }
+              ])}>{t('reportesFin.exportarCSV')}</Button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

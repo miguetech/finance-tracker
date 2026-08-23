@@ -8,10 +8,14 @@ export const MetodoPagoSchema = z.string().default('Efectivo')
 export const ClienteSchema = z.object({
   id_cliente: z.string().optional(),
   nombre: z.string().min(1, 'Nombre obligatorio'),
+  alias: z.string().default(''),
   rfc: z.string().default(''),
   email: z.string().default(''),
   telefono: z.string().default(''),
   direccion: z.string().default(''),
+  direccion_pais: z.string().default(''),
+  direccion_estado: z.string().default(''),
+  direccion_cp: z.string().default(''),
   fecha_registro: z.string().default('')
 })
 
@@ -66,7 +70,19 @@ export const EmpleadoSchema = z.object({
   hora_entrada: z.string().default(''),
   hora_salida: z.string().default(''),
   esquema_pago: z.enum(['semanal', 'quincenal', 'mensual']).or(z.literal('')).default('mensual'),
-  tarifa_hora_extra: z.number().nonnegative().default(0)
+  tarifa_hora_extra: z.number().nonnegative().default(0),
+  /** Días laborales semanales: números ISO separados por coma (1=Lun … 7=Dom) */
+  dias_laborales: z.string().default('')
+})
+
+export const AsistenciaSchema = z.object({
+  id_asistencia: z.string().optional(),
+  id_empleado: z.string().min(1, 'Empleado obligatorio'),
+  nombre_empleado: z.string().default(''),
+  fecha: z.string().min(1, 'Fecha obligatoria'),
+  hora_entrada: z.string().default(''),
+  hora_salida: z.string().default(''),
+  notas: z.string().default('')
 })
 
 export const NominaInputSchema = z.object({
@@ -107,6 +123,7 @@ export const ProductoSchema = z.object({
   unidad: z.string().default('pieza'),
   stock: z.number().nonnegative('Stock >= 0').default(0),
   stock_minimo: z.number().nonnegative('Stock mínimo >= 0').default(0),
+  moneda: z.string().default(''),
   precio_costo: z.number().nonnegative('Costo >= 0').default(0),
   precio_venta: z.number().nonnegative('Precio >= 0').default(0),
   id_proveedor: z.string().default(''),
@@ -155,7 +172,9 @@ export const PagoInputSchema = z.object({
   fecha: z.string().min(1),
   monto: z.number().positive('Monto > 0'),
   metodo_pago: MetodoPagoSchema.default('Efectivo'),
-  notas: z.string().default('')
+  notas: z.string().default(''),
+  /** Moneda en la que se efectúa el pago; por defecto la del documento origen */
+  moneda: z.string().optional()
 })
 
 export const ConfigSchema = z.object({
@@ -184,9 +203,11 @@ export const ConfigSchema = z.object({
   share_backend_url: z.string().default(''),
   metas_mensuales: z.string().default(''),
   comisiones_transaccion: z.string().default(''),
+  comisiones_metodos: z.string().default(''),
   tasa_dia_activa: z.string().default(''),
   google_permisos: z.string().default(''),
   notif_gastos_activa: z.string().default(''),
+  notif_cxc_activa: z.string().default(''),
   unidades_medida: z.string().default('pieza,kg,gr,litro,ml,caja,saco,docena,metro')
 })
 

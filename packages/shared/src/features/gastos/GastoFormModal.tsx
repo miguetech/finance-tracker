@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { todayLocal } from '../../lib/date'
-import { Dialog, Button, Input, Select } from '../../ui/components'
-import { useGastos, useCategorias, useMetodosPago } from '../../store/queries'
+import { Dialog, Button, Input, Select  } from '../../ui/components'
+import { useGastos, useMetodosPago } from '../../store/queries'
 import { useToast } from '../../ui/components'
+import { CategoriaQuickSelect } from '../../ui/CategoriaSelect'
 import { CurrencySelect } from '../../ui/currency'
 import { useI18n } from '../../i18n'
 import type { Gasto } from '../../types/entities'
@@ -10,7 +11,6 @@ import type { Gasto } from '../../types/entities'
 export function GastoFormModal({ open, onClose, initial }: { open: boolean; onClose: () => void; initial: Gasto | null }) {
   const { t } = useI18n()
   const { saveGasto } = useGastos()
-  const { data: categorias = [] } = useCategorias('gastos')
   const metodos = useMetodosPago()
   const toast = useToast()
   const [form, setForm] = useState({ fecha: todayLocal(), categoria: '', descripcion: '', monto: '', metodo_pago: 'Efectivo', proveedor: '', moneda: '' })
@@ -44,7 +44,7 @@ export function GastoFormModal({ open, onClose, initial }: { open: boolean; onCl
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">{t('common.fecha')}</label><Input type="date" value={form.fecha} onChange={set('fecha')} /></div>
           <div><label className="text-xs text-gray-500">{t('common.categoria')}</label>
-            <Select value={form.categoria} onChange={setCategoria} options={categorias.map(c => ({ value: c, label: c }))} />
+            <CategoriaQuickSelect configKey="categorias_gastos" value={form.categoria} onChange={setCategoria} />
           </div>
         </div>
         <div><label className="text-xs text-gray-500">{t('gastos.descripcion')} *</label><Input value={form.descripcion} onChange={set('descripcion')} /></div>

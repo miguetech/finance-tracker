@@ -86,7 +86,7 @@ function cfg(overrides: Partial<Config> = {}): Config {
     empresa_nombre: 'E', empresa_rfc: '', empresa_direccion: '', empresa_telefono: '', empresa_email: '', empresa_logo: '',
     empresa_cp: '', empresa_ciudad: '', empresa_pais: '', prefijo_folio: 'FAC-', contador_folio: 1, moneda: 'USD', iva_porcentaje: 16,
     categorias_gastos: '', categorias_cxp: '', categorias_inventario: '', monedas_activas: '', monedas_custom: '', tasas_cambio: '', metodos_pago: 'Efectivo,Transferencia,Tarjeta',
-    tipo_doc: 'RFC', tipo_doc_etiqueta: '', share_backend_url: '', metas_mensuales: '', comisiones_transaccion: '', tasa_dia_activa: '', google_permisos: '', notif_gastos_activa: '', ...overrides
+    tipo_doc: 'RFC', tipo_doc_etiqueta: '', share_backend_url: '', metas_mensuales: '', comisiones_transaccion: '', comisiones_metodos: '', tasa_dia_activa: '', google_permisos: '', notif_gastos_activa: '', notif_cxc_activa: '', ...overrides
   }
 }
 
@@ -212,6 +212,27 @@ describe('moneda en registros', () => {
     expect(f.grid.get('Facturas')![1][9]).toBe(60)
   })
 
+  it('registerPago en otra moneda descuenta saldo convertido y guarda moneda del pago', async () => {
+    const f = fakeApi({ Facturas: [[], ['f1', 'FAC-001', 'c1', 'Ana', '2026-08-15', '', 100, 0, 100, 100, '', '', 'VES', 73.5]] })
+    const repo = makeRepo(f)
+    await repo.saveConfig(cfg({ tasas_cambio: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":50}}' }))
+    // Paga 1 USD con tasa 1 USD = 50 VES ⇒ saldo baja de 100 a 50 VES
+    await repo.registerPago({ tipo: 'cobro', id_origen: 'f1', fecha: '2026-08-15', monto: 1, metodo_pago: 'Zelle', notas: '', moneda: 'USD' })
+    expect(f.grid.get('Facturas')![1][9]).toBe(50)
+    const pago = (f.grid.get('Pagos') ?? []).find(r => String(r[0]).startsWith('pag_'))
+    expect(pago).toBeTruthy()
+    expect(pago![7]).toBe('USD')
+    expect(pago![8]).toBe(1)
+  })
+
+  it('registerPago en otra moneda rechaza sobre-pago convertido', async () => {
+    const f = fakeApi({ Facturas: [[], ['f1', 'FAC-001', 'c1', 'Ana', '2026-08-15', '', 100, 0, 100, 100, '', '', 'VES', 73.5]] })
+    const repo = makeRepo(f)
+    await repo.saveConfig(cfg({ tasas_cambio: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":50}}' }))
+    // 3 USD = 150 VES > saldo 100 VES
+    await expect(repo.registerPago({ tipo: 'cobro', id_origen: 'f1', fecha: '2026-08-15', monto: 3, metodo_pago: 'Zelle', notas: '', moneda: 'USD' })).rejects.toThrow(/excede/)
+  })
+
   it('kpis convierte montos de otra moneda a base', async () => {
     const { kpisForMonth } = await import('../src/calc/kpis')
     const { round2 } = await import('../src/calc/invoice')
@@ -224,7 +245,7 @@ describe('moneda en registros', () => {
 
 describe('esquema tablas inventario', () => {
   it('TABLES incluye Productos y Movimientos_Stock', () => {
-    expect(TABLES.Productos.map(c => c.key)).toEqual(['id_producto', 'nombre', 'categoria', 'unidad', 'stock', 'stock_minimo', 'precio_costo', 'precio_venta', 'id_proveedor', 'nombre_proveedor', 'imagen', 'notas', 'activo', 'fecha_registro'])
+    expect(TABLES.Productos.map(c => c.key)).toEqual(['id_producto', 'nombre', 'categoria', 'unidad', 'stock', 'stock_minimo', 'precio_costo', 'precio_venta', 'id_proveedor', 'nombre_proveedor', 'imagen', 'notas', 'activo', 'fecha_registro', 'moneda'])
     expect(TABLES.Movimientos_Stock.map(c => c.key)).toEqual(['id_movimiento', 'id_producto', 'tipo', 'cantidad', 'motivo', 'id_proveedor', 'fecha'])
   })
 })

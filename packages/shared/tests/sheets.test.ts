@@ -5,9 +5,9 @@ import { SheetsApi } from '../src/sheets/api'
 import { createInitialSpreadsheet, ensureTables } from '../src/sheets/createSpreadsheet'
 
 describe('tables', () => {
-  it('define esquema de 17 tablas', () => {
+  it('define esquema de 18 tablas', () => {
     const names = Object.keys(TABLES)
-    expect(names).toHaveLength(17)
+    expect(names).toHaveLength(18)
     expect(sheetName('Facturas')).toBe('Facturas')
   })
   it('Factura incluye saldo', () => {
@@ -103,7 +103,7 @@ describe('ensureTables', () => {
     const addSheets = calls.filter(c => c.url.includes(':batchUpdate') && !c.url.includes('values:batchUpdate'))
     expect(addSheets.length).toBe(1)
     const body = JSON.parse(String(addSheets[0].init?.body)) as { requests: { addSheet: { properties: { title: string } } }[] }
-    expect(body.requests.map(r => r.addSheet.properties.title)).toEqual(['Empleados', 'Productos', 'Movimientos_Stock', 'Codigos_Acceso', 'Dispositivos', 'Gastos_Fijos', 'Tasas_Historial', 'Nomina_Detalles'])
+    expect(body.requests.map(r => r.addSheet.properties.title)).toEqual(['Empleados', 'Productos', 'Movimientos_Stock', 'Codigos_Acceso', 'Dispositivos', 'Gastos_Fijos', 'Tasas_Historial', 'Nomina_Detalles', 'Asistencias'])
     const headerWrites = calls.filter(c => c.url.includes('values:batchUpdate'))
     expect(headerWrites.length).toBe(1)
     expect(String(headerWrites[0].init?.body)).toContain('id_empleado')

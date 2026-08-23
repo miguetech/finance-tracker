@@ -5,6 +5,7 @@ import { usePerms } from '../../store/perms'
 import { formatMoney } from '../../currency'
 import { useI18n } from '../../i18n'
 import { PagoModal } from '../facturas/PagoModal'
+import { HistorialAbonos } from '../facturas/HistorialAbonos'
 
 export function CxpDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const { t } = useI18n()
@@ -28,9 +29,7 @@ export function CxpDetail({ id, onClose }: { id: string; onClose: () => void }) 
         <div>{t('cuentas.descripcion')}: {cxp.descripcion}</div>
         <div className="flex justify-between"><span>{t('facturas.total')}</span><b>{formatMoney(cxp.monto_total, monedaCxp)}</b></div>
         <div className="flex justify-between"><span>{t('facturas.saldo')}</span><b>{formatMoney(cxp.saldo, monedaCxp)}</b></div>
-        {pagos.map(p => (
-          <div key={p.id_pago} className="flex justify-between border-b border-gray-50 py-1"><span>{p.fecha} · {p.metodo_pago}</span><span>{formatMoney(p.monto, p.moneda || monedaCxp)}</span></div>
-        ))}
+        <HistorialAbonos pagos={pagos} totalDoc={cxp.monto_total} monedaDoc={monedaCxp} />
       </div>
       {abonoOpen && <PagoModal origen={{ id: cxp.id_cxp, tipo: 'abono', saldo: cxp.saldo, moneda: monedaCxp }} onClose={() => { setAbonoOpen(false); onClose() }} />}
     </Dialog>

@@ -2,7 +2,8 @@ import React, { createContext, useContext } from 'react'
 import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Repository } from '../data/repository'
 import { useAppStore } from './appStore'
-import type { Config, Cliente, Empleado, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, MetodoPago, Producto, TipoMovimiento, CodigoAcceso, GastoFijo, TasaHistorial } from '../types/entities'
+import type { Config, Cliente, Empleado, Asistencia, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, MetodoPago, Producto, TipoMovimiento, CodigoAcceso, GastoFijo, TasaHistorial } from '../types/entities'
+import type { VentaProductoFila } from '../reports/inventario'
 import type { Usuario } from '../roles/roles'
 import { DEFAULT_METODOS_PAGO } from '../types/schemas'
 import { getCurrency, registerCurrency, parseCustomCurrencies, type Currency } from '../currency'
@@ -92,6 +93,26 @@ export function useEmpleados() {
   const save = useMutation({ mutationFn: (e: Empleado) => repo.saveEmpleado(e), onSuccess: invalidate })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteEmpleado(id), onSuccess: invalidate })
   return { empleados: q.data ?? [], isLoading: q.isLoading, saveEmpleado: save, deleteEmpleado: del }
+}
+
+export function useAsistencias(filtro: { id_empleado?: string; desde?: string; hasta?: string } = {}) {
+  const repo = useRepo()
+  const qc = useQueryClient()
+  const key = JSON.stringify(filtro)
+  const q = useQuery({ queryKey: ['asistencias', key], queryFn: () => repo.listAsistencias(filtro) })
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['asistencias'] })
+  const save = useMutation({ mutationFn: (a: Omit<Asistencia, 'id_asistencia' | 'nombre_empleado'> & { id_asistencia?: string; nombre_empleado?: string }) => repo.saveAsistencia(a), onSuccess: invalidate })
+  const del = useMutation({ mutationFn: (id: string) => repo.deleteAsistencia(id), onSuccess: invalidate })
+  return { asistencias: q.data ?? [], isLoading: q.isLoading, saveAsistencia: save, deleteAsistencia: del }
+}
+
+export function useVentasProducto(idProducto: string | null, rango: { desde: string; hasta: string }) {
+  const repo = useRepo()
+  return useQuery({
+    queryKey: ['ventasProducto', idProducto, rango.desde, rango.hasta],
+    queryFn: () => (idProducto ? repo.getVentasProducto(idProducto, rango) : Promise.resolve([] as VentaProductoFila[])),
+    enabled: !!idProducto
+  })
 }
 
 export function useRegisterNomina() {

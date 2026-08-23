@@ -1,4 +1,4 @@
-export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Usuarios' | 'Productos' | 'Movimientos_Stock' | 'Codigos_Acceso' | 'Dispositivos' | 'Gastos_Fijos' | 'Tasas_Historial' | 'Nomina_Detalles'
+export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Usuarios' | 'Productos' | 'Movimientos_Stock' | 'Codigos_Acceso' | 'Dispositivos' | 'Gastos_Fijos' | 'Tasas_Historial' | 'Nomina_Detalles' | 'Asistencias'
 
 export interface ColumnSpec {
   key: string
@@ -22,7 +22,11 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'email', header: 'email', type: S },
     { key: 'telefono', header: 'telefono', type: S },
     { key: 'direccion', header: 'direccion', type: S },
-    { key: 'fecha_registro', header: 'fecha_registro', type: D }
+    { key: 'fecha_registro', header: 'fecha_registro', type: D },
+    { key: 'alias', header: 'alias', type: S },
+    { key: 'direccion_pais', header: 'direccion_pais', type: S },
+    { key: 'direccion_estado', header: 'direccion_estado', type: S },
+    { key: 'direccion_cp', header: 'direccion_cp', type: S }
   ],
   Empleados: [
     { key: 'id_empleado', header: 'id_empleado', type: S },
@@ -131,7 +135,8 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'imagen', header: 'imagen', type: S },
     { key: 'notas', header: 'notas', type: S },
     { key: 'activo', header: 'activo', type: S },
-    { key: 'fecha_registro', header: 'fecha_registro', type: D }
+    { key: 'fecha_registro', header: 'fecha_registro', type: D },
+    { key: 'moneda', header: 'moneda', type: S }
   ],
   Movimientos_Stock: [
     { key: 'id_movimiento', header: 'id_movimiento', type: S },
@@ -198,6 +203,15 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'pagos_divididos', header: 'pagos_divididos', type: S },
     { key: 'fecha', header: 'fecha', type: D },
     { key: 'id_gasto', header: 'id_gasto', type: S }
+  ],
+  Asistencias: [
+    { key: 'id_asistencia', header: 'id_asistencia', type: S },
+    { key: 'id_empleado', header: 'id_empleado', type: S },
+    { key: 'nombre_empleado', header: 'nombre_empleado', type: S },
+    { key: 'fecha', header: 'fecha', type: D },
+    { key: 'hora_entrada', header: 'hora_entrada', type: S },
+    { key: 'hora_salida', header: 'hora_salida', type: S },
+    { key: 'notas', header: 'notas', type: S }
   ]
 }
 

@@ -4,22 +4,32 @@ import { useI18n } from '../../i18n'
 import { Card, StatCard, Button, Badge } from '../../ui/components'
 import { BarChart, HBarChart, Gauge, DonutChart } from '../../ui/charts'
 import { formatMoney } from '../../currency'
+import { convertirFinData } from '../../reports/financieros'
 import { exportCSV, exportPDF } from '../../export/export'
 
 type FinData = NonNullable<ReturnType<typeof useReporteFinanciero>['data']>
 
-/** Tabs financieros: P&L, punto de equilibrio, reconversión monetaria y flujo de caja. */
-export function ReporteFinanciero({ desde, hasta, data, isLoading }: {
+/** Tabs financieros: P&L, punto de equilibrio, reconversión monetaria y flujo de caja.
+ *  `monedaVista` permite visualizar el reporte en una moneda distinta a la base. */
+export function ReporteFinanciero({ desde, hasta, data, isLoading, monedaVista }: {
   desde: string
   hasta: string
   data?: FinData
   isLoading: boolean
+  monedaVista?: string
 }) {
   const { t } = useI18n()
   const { config } = useConfig()
   const moneda = config?.moneda ?? 'USD'
   const empresa = config?.empresa_nombre ?? ''
   const [tab, setTab] = useState<'pl' | 'equilibrio' | 'reconversion' | 'flujo'>('pl')
+  const vista = monedaVista || moneda
+
+  // Convierte todo el reporte a la moneda de visualización en un solo punto.
+  const dataVista = useMemo(
+    () => (data ? convertirFinData(data, moneda, vista, config) : undefined),
+    [data, moneda, vista, config]
+  )
 
   const tabs = [
     { id: 'pl', label: t('reportesFin.tabPL') },
@@ -28,7 +38,7 @@ export function ReporteFinanciero({ desde, hasta, data, isLoading }: {
     { id: 'flujo', label: t('reportesFin.tabFlujo') }
   ] as const
 
-  if (isLoading || !data) return <div className="p-8 text-gray-500">{t('common.cargando')}</div>
+  if (isLoading || !dataVista) return <div className="p-8 text-gray-500">{t('common.cargando')}</div>
 
   return (
     <div className="space-y-4">
@@ -41,12 +51,15 @@ export function ReporteFinanciero({ desde, hasta, data, isLoading }: {
             </button>
           ))}
         </div>
-        <ExportButtonsFin data={data} desde={desde} hasta={hasta} moneda={moneda} empresa={empresa} titulo={tabs.find(x => x.id === tab)?.label ?? ''} />
+        <ExportButtonsFin data={dataVista} desde={desde} hasta={hasta} moneda={vista} empresa={empresa} titulo={tabs.find(x => x.id === tab)?.label ?? ''} />
       </div>
-      {tab === 'pl' && <TabPL data={data} moneda={moneda} />}
-      {tab === 'equilibrio' && <TabEquilibrio data={data} moneda={moneda} />}
-      {tab === 'reconversion' && <TabReconversion data={data} moneda={moneda} desde={desde} hasta={hasta} empresa={empresa} />}
-      {tab === 'flujo' && <TabFlujo data={data} moneda={moneda} desde={desde} hasta={hasta} empresa={empresa} />}
+      {vista !== moneda && (
+        <p className="text-xs text-muted-foreground">{t('reportesFin.monedaVista')} ({moneda} → {vista})</p>
+      )}
+      {tab === 'pl' && <TabPL data={dataVista} moneda={vista} />}
+      {tab === 'equilibrio' && <TabEquilibrio data={dataVista} moneda={vista} />}
+      {tab === 'reconversion' && <TabReconversion data={dataVista} moneda={vista} desde={desde} hasta={hasta} empresa={empresa} />}
+      {tab === 'flujo' && <TabFlujo data={dataVista} moneda={vista} desde={desde} hasta={hasta} empresa={empresa} />}
     </div>
   )
 }
