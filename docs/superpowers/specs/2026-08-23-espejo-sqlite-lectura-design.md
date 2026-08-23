@@ -123,6 +123,31 @@ pull(tablas[]) ──► mutex interno ──► batchGet Sheets (1 request/tabl
 | Cuota API en pulls frecuentes | Hash evita reescrituras; batchGet agrupa; pulls solo de calientes |
 | Rollback | Flag `VITE_ESPEJO=off` restaura ruta Sheets-directa |
 
+## 9. Sesión offline
+
+El login actual es Google OAuth y exige red. Para que el espejo sea accesible
+con la PC sin conexión se añade:
+
+1. **Sesión local persistente**: tras el primer login OAuth exitoso se guarda
+   localmente (chrome.storage / localStorage) un registro `{ cuenta,
+   creado_en, ultimo_pull }`. La app arranca mostrando "Continuar como
+   <cuenta>" sin tocar la red.
+2. **Desbloqueo sin red**: si Google no responde o no hay red, se ofrece
+   **Modo offline** protegido por PIN local de 4–6 dígitos (hash con PBKDF2
+   vía WebCrypto). Sin PIN configurado, el modo offline requiere haber tenido
+   sesión en las últimas 24 h.
+3. **Revalidación al volver la red**: renovado el token Google, se compara la
+   cuenta OAuth contra la del registro local; si difiere, se descarta el
+   desbloqueo offline y se exige login limpio.
+4. **Cifrado opcional del espejo** (Fase C): clave derivada del PIN con
+   PBKDF2 cifra el volcado sql.js/OPFS. Por defecto el espejo queda sin
+   cifrar (mismo criterio de confianza que los datos del navegador hoy).
+5. **Escrituras en modo offline**: quedan en cola local (Fase B); la UI las
+   marca como pendientes de sincronizar.
+
+Riesgo aceptado: quien tenga acceso físico a la sesión del navegador
+desbloqueada ve el espejo (idéntico a cualquier app web con "mantener sesión").
+
 Fuera de alcance (Fases B/C): cola de escrituras offline, reconciliación de
 conflictos, folios locales.
 
