@@ -15,24 +15,28 @@ export function suiteContratoStore(nombre: string, factory: () => EspejoStore) {
 
     it('replaceTable + getAllRows roundtrip', async () => {
       const s = factory()
-      await s.init([])
+      await s.init(ddlDesdeTables().flatMap(d => [d.create, ...d.indexes]))
       await s.replaceTable('Clientes', [{ id_cliente: 'c1', nombre: 'Ana' }])
-      expect(await s.getAllRows('Clientes')).toEqual([{ id_cliente: 'c1', nombre: 'Ana' }])
+      const filas = await s.getAllRows('Clientes')
+      expect(filas).toHaveLength(1)
+      expect(filas[0]).toMatchObject({ id_cliente: 'c1', nombre: 'Ana' })
       await s.close()
     })
 
     it('reemplazo borra filas previas (full sync)', async () => {
       const s = factory()
-      await s.init([])
+      await s.init(ddlDesdeTables().flatMap(d => [d.create, ...d.indexes]))
       await s.replaceTable('Pagos', [{ id_pago: 'p1' }, { id_pago: 'p2' }])
       await s.replaceTable('Pagos', [{ id_pago: 'p3' }])
-      expect(await s.getAllRows('Pagos')).toEqual([{ id_pago: 'p3' }])
+      const restantes = await s.getAllRows('Pagos')
+      expect(restantes).toHaveLength(1)
+      expect(restantes[0].id_pago).toBe('p3')
       await s.close()
     })
 
     it('getAllRows de tabla sin cargar devuelve vacío', async () => {
       const s = factory()
-      await s.init([])
+      await s.init(ddlDesdeTables().flatMap(d => [d.create, ...d.indexes]))
       expect(await s.getAllRows('Empleados')).toEqual([])
       await s.close()
     })

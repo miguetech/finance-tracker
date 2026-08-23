@@ -6,7 +6,9 @@ import { useI18n } from '../../i18n'
 import { OfflineBanner } from '../hooks'
 import { RateBubble } from '../RateBubble'
 import { EspejoProvider } from '../../store/espejoContext'
-import { crearStoreMemoria } from '../../sync/stores/memoria'
+import { crearStoreEspejo } from '../../sync/stores/sqlite'
+import type { EspejoStore } from '../../sync/espejo'
+import { useEffect } from 'react'
 
 export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuentas' | 'cxc' | 'proveedores' | 'gastos' | 'reportes' | 'configuracion' | 'compartir' | 'inventario'
 
@@ -79,8 +81,15 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
   )
   // El espejo se activa con VITE_ESPEJO=on; por defecto queda en ruta directa a Sheets.
   const flag = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_ESPEJO ?? 'off'
+  const [espejoStore, setEspejoStore] = useState<EspejoStore | null>(null)
+  useEffect(() => {
+    if (flag !== 'on') return
+    let vivo = true
+    void crearStoreEspejo().then(s => { if (vivo) setEspejoStore(s) })
+    return () => { vivo = false }
+  }, [flag])
   return (
-    <EspejoProvider flag={flag} store={crearStoreMemoria()}>
+    <EspejoProvider flag={flag} store={espejoStore}>
       {contenido}
     </EspejoProvider>
   )

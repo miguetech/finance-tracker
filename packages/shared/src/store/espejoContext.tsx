@@ -36,15 +36,15 @@ function fetchTableDesdeRepo(repo: ReturnType<typeof useRepo>, t: TableName): Pr
   return r[metodo]() as Promise<Record<string, string | number>[]>
 }
 
-export function EspejoProvider({ flag, store, fetchTable, children }: {
+export function EspejoProvider({ flag, store = null, fetchTable, children }: {
   flag?: string
-  store: EspejoStore
+  store?: EspejoStore | null
   /** Override para tests; por defecto usa las listX del repositorio. */
   fetchTable?: (t: TableName) => Promise<Record<string, string | number>[]>
   children: React.ReactNode
 }) {
   const repo = useContext(RepoCtx) // puede ser null en tests; fetchTable override lo evita
-  const activo = flag === 'on'
+  const activo = flag === 'on' && !!store
   const [ultimoPull, setUltimoPull] = useState(0)
   const ultimoRef = useRef(0)
 
