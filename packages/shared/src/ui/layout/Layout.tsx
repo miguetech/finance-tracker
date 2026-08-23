@@ -14,13 +14,15 @@ export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuen
 
 export interface NavItem { key: NavKey; label: string; Icon: (p: { className?: string }) => ReactNode }
 
-export function Layout({ current, onNavigate, children, headerExtra, filterNav, extraItems }: {
+export function Layout({ current, onNavigate, children, headerExtra, filterNav, extraItems, espejoForzado }: {
   current: NavKey
   onNavigate: (k: NavKey) => void
   children: ReactNode
   headerExtra?: ReactNode
   filterNav?: (key: NavKey) => boolean
   extraItems?: NavItem[]
+  /** Sesión offline: activa el espejo aunque el flag de entorno esté off. */
+  espejoForzado?: boolean
 }) {
   const { t } = useI18n()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -79,8 +81,10 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
       <RateBubble onNavigate={onNavigate} />
     </div>
   )
-  // El espejo se activa con VITE_ESPEJO=on; por defecto queda en ruta directa a Sheets.
-  const flag = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_ESPEJO ?? 'off'
+  // El espejo se activa con VITE_ESPEJO=on (o forzado en sesión offline); por
+  // defecto queda en ruta directa a Sheets.
+  const flagEntorno = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_ESPEJO ?? 'off'
+  const flag = espejoForzado ? 'on' : flagEntorno
   const [espejoStore, setEspejoStore] = useState<EspejoStore | null>(null)
   useEffect(() => {
     if (flag !== 'on') return

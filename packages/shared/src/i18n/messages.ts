@@ -622,6 +622,19 @@ export const messages = {
     sincronizarAhora: 'Sincronizar ahora',
     modoOffline: 'Modo offline'
   },
+  authOffline: {
+    titulo: 'Sesión guardada',
+    continuarComo: 'Continuar como',
+    entrarSinConexion: 'Entrar sin conexión',
+    pedirPin: 'Ingresa tu PIN para continuar sin conexión',
+    pin: 'PIN (4–6 dígitos)',
+    pinInvalido: 'PIN incorrecto',
+    sesionExpirada: 'No configuraste un PIN y la última sincronización fue hace más de 24 h. Conéctate a internet para continuar.',
+    configurarPin: 'Configura un PIN para poder entrar sin conexión la próxima vez:',
+    guardarPin: 'Guardar PIN',
+    pinGuardado: 'PIN guardado',
+    ultimaSync: 'Última sincronización'
+  },
   offline: {
     banner: '⚠ Trabajando sin conexión — verifica tu red para sincronizar con la hoja de cálculo'
   },

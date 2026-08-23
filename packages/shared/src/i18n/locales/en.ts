@@ -312,6 +312,19 @@ const en: Partial<Dict> = {
     sincronizado: 'Data synced',
     sincronizarAhora: 'Sync now',
     modoOffline: 'Offline mode'
+  },
+  authOffline: {
+    titulo: 'Saved session',
+    continuarComo: 'Continue as',
+    entrarSinConexion: 'Enter offline',
+    pedirPin: 'Enter your PIN to continue offline',
+    pin: 'PIN (4–6 digits)',
+    pinInvalido: 'Incorrect PIN',
+    sesionExpirada: 'No PIN was configured and the last sync was over 24 hours ago. Connect to the internet to continue.',
+    configurarPin: 'Set a PIN to be able to enter offline next time:',
+    guardarPin: 'Save PIN',
+    pinGuardado: 'PIN saved',
+    ultimaSync: 'Last sync'
   }
 }
 

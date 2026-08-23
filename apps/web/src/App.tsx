@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input } from '@ft/shared'
-import type { NavKey, NavItem, ModuleKey, PermsInfo } from '@ft/shared'
+import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion } from '@ft/shared'
+import type { NavKey, NavItem, ModuleKey, PermsInfo, RegistroSesion } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
 import { loadShareParams, saveShareParams, clearShareParams, loadSessionToken, saveSessionToken, clearSessionToken, saveDeviceToken, loadDeviceToken } from './mode'
+import { SesionOffline } from './offline/SesionOffline'
 
 const NAV_MODULE: Partial<Record<NavKey, ModuleKey>> = {
   dashboard: 'dashboard', facturas: 'facturas', clientes: 'clientes', empleados: 'empleados',
@@ -11,7 +12,9 @@ const NAV_MODULE: Partial<Record<NavKey, ModuleKey>> = {
 }
 
 function OwnerShell() {
-  const [sheet, setSheet] = useState<{ id: string } | null>(null)
+  const [idHoja, setIdHoja] = useState<string | null>(null)
+  const [sesionLocal, setSesionLocal] = useState<RegistroSesion | null>(null)
+  const [modoOffline, setModoOffline] = useState(false)
   const [nav, setNav] = useState<NavKey>(() => (sessionStorage.getItem('ft_nav') as NavKey) || 'dashboard')
   const [mes, setMes] = useState(() => sessionStorage.getItem('ft_mes') || monthLocal())
   const [error, setError] = useState('')
@@ -22,7 +25,7 @@ function OwnerShell() {
 
   useEffect(() => {
     if (window.self !== window.top) return
-    (async () => {
+    ;(async () => {
       try {
         clearShareParams()
         let id = await localStorageAdapter.get(KEYS.spreadsheetId)
@@ -38,21 +41,61 @@ function OwnerShell() {
             id = connected.spreadsheetId
           }
         }
-        await ensureTables(makeApi(), id)
-        setSheet({ id })
+        setIdHoja(id)
+        try {
+          await ensureTables(makeApi(), id)
+          const email = (await webAuth.getSignedInUser())?.email
+          if (email) void guardarRegistroSesion(localStorageAdapter, { cuenta: email })
+        } catch {
+          // Sin red (o Sheets sin responder): se ofrece modo offline si hubo sesión.
+          setSesionLocal(await cargarRegistroSesion(localStorageAdapter))
+        }
       } catch (e) { setError((e as Error).message) }
     })()
   }, [])
 
+  // Revalidación al volver la red: si la cuenta OAuth difiere del registro
+  // local, se descarta el desbloqueo offline y se exige login limpio (§9.3).
+  useEffect(() => {
+    if (!modoOffline) return
+    const revalidar = async () => {
+      try {
+        await webAuth.getIdToken(false)
+        const email = (await webAuth.getSignedInUser())?.email
+        const reg = await cargarRegistroSesion(localStorageAdapter)
+        if (email && reg && email !== reg.cuenta) {
+          await borrarRegistroSesion(localStorageAdapter)
+          window.location.reload()
+        }
+      } catch { /* aún sin red */ }
+    }
+    const alVisible = () => { if (document.visibilityState === 'visible') void revalidar() }
+    window.addEventListener('online', revalidar)
+    document.addEventListener('visibilitychange', alVisible)
+    return () => {
+      window.removeEventListener('online', revalidar)
+      document.removeEventListener('visibilitychange', alVisible)
+    }
+  }, [modoOffline])
+
   if (error) return <div className="p-8 text-red-600">{error}</div>
-  if (!sheet) return <div className="p-8">Conectando a Google Sheets…</div>
-  const repo = createRepository({ api: makeApi(), storage: localStorageAdapter, getSpreadsheetId: async () => sheet.id })
+  if (!idHoja) return <div className="p-8">Conectando a Google Sheets…</div>
+  if (!modoOffline && sesionLocal) {
+    return (
+      <SesionOffline
+        registro={sesionLocal}
+        onEntrar={() => setModoOffline(true)}
+        onLoginGoogle={() => { void webAuth.getToken(true).catch(() => {}) }}
+      />
+    )
+  }
+  const repo = createRepository({ api: makeApi(), storage: localStorageAdapter, getSpreadsheetId: async () => idHoja })
   const extraItems: NavItem[] = [{ key: 'compartir', label: 'Compartir', Icon: IconShare }]
   return (
     <AppProvider repo={repo}>
       <PermsProvider perms={adminPerms()}>
         <Toaster>
-          <Layout current={nav} onNavigate={navigate} extraItems={extraItems}>
+          <Layout current={nav} onNavigate={navigate} extraItems={extraItems} espejoForzado={modoOffline}>
             {nav === 'dashboard' && <Dashboard mes={mes} onNavigate={navigate} />}
             {nav === 'facturas' && <Facturas />}
             {nav === 'clientes' && <Clientes />}
