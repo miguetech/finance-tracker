@@ -1,23 +1,27 @@
-import React, { createContext, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { crearEspejo, TABLAS_CALIENTES, type EspejoStore } from '../sync/espejo'
 import { espejoBus } from '../sync/espejoBus'
 import type { TableName } from '../sheets/tables'
 import { useRepo, _repoCtx as RepoCtx } from './queries'
+import { EspejoCtx, type EspejoCtxValue } from './espejoReact'
 import { useContext } from 'react'
 
 /** TTL de refresco de tablas calientes. */
 export const TABLAS_CALIENTES_TTL_MS = 60_000
 
-interface EspejoCtx {
-  activo: boolean
-  espejo: ReturnType<typeof crearEspejo> | null
-  ultimoPull: number
-  sincronizarAhora: (tablas?: TableName[]) => Promise<void>
+/** Query keys de react-query que se invalidan cuando el pull detecta
+ *  cambios en cada tabla del espejo. */
+export const QUERY_KEYS_POR_TABLA: Partial<Record<TableName, readonly string[]>> = {
+  Clientes: ['clientes'],
+  Empleados: ['empleados'],
+  Asistencias: ['asistencias'],
+  Facturas: ['facturas', 'factura'],
+  Factura_Items: ['factura'],
+  Pagos: ['pagos'],
+  Gastos: ['gastos'],
+  Productos: ['productos']
 }
-
-const Ctx = createContext<EspejoCtx>({ activo: false, espejo: null, ultimoPull: 0, sincronizarAhora: async () => {} })
-
-export function useEspejo() { return useContext(Ctx) }
 
 function fetchTableDesdeRepo(repo: ReturnType<typeof useRepo> | null, t: TableName): Promise<Record<string, string | number>[] | null> {
   const r = repo as unknown as Record<string, (a?: unknown) => Promise<unknown[]>> | null
@@ -38,7 +42,8 @@ function fetchTableDesdeRepo(repo: ReturnType<typeof useRepo> | null, t: TableNa
     Nomina_Detalles: 'listNominaDetalles',
     Usuarios: 'listUsuarios',
     Codigos_Acceso: 'listCodigos',
-    Dispositivos: 'listDispositivos'
+    Dispositivos: 'listDispositivos',
+    Asistencias: 'listAsistencias'
   }
   // Config (clave/valor) y Movimientos_Stock (requiere id) quedan fuera del espejo en Fase A.
   const metodo = mapa[t]
@@ -54,7 +59,9 @@ export function EspejoProvider({ flag, store = null, fetchTable, children }: {
   children: React.ReactNode
 }) {
   const repo = useContext(RepoCtx) // puede ser null en tests; fetchTable override lo evita
-  const activo = flag === 'on' && !!store
+  const qc = useQueryClient()
+  const habilitado = flag === 'on'
+  const activo = habilitado && !!store
   const [ultimoPull, setUltimoPull] = useState(0)
   const ultimoRef = useRef(0)
 
@@ -62,9 +69,16 @@ export function EspejoProvider({ flag, store = null, fetchTable, children }: {
     if (!activo) return null
     return crearEspejo({
       store,
-      fetchTable: fetchTable ?? ((t) => (repo ? fetchTableDesdeRepo(repo, t) : Promise.resolve([])))
+      fetchTable: fetchTable ?? ((t) => (repo ? fetchTableDesdeRepo(repo, t) : Promise.resolve([]))),
+      onCambio: (tablas) => {
+        for (const t of tablas) {
+          const keys = QUERY_KEYS_POR_TABLA[t]
+          if (!keys) continue
+          for (const key of keys) void qc.invalidateQueries({ queryKey: [key] })
+        }
+      }
     })
-  }, [activo, store, fetchTable])
+  }, [activo, store, fetchTable, repo, qc])
 
   const sincronizarAhora = async (tablas?: TableName[]) => {
     if (!espejo) return
@@ -90,5 +104,8 @@ export function EspejoProvider({ flag, store = null, fetchTable, children }: {
     }
   }, [activo, espejo])
 
-  return <Ctx.Provider value={{ activo, espejo, ultimoPull, sincronizarAhora }}>{children}</Ctx.Provider>
+  const value: EspejoCtxValue = { habilitado, activo, espejo, ultimoPull, sincronizarAhora }
+  return <EspejoCtx.Provider value={value}>{children}</EspejoCtx.Provider>
 }
+
+export { useEspejo } from './espejoReact'

@@ -1,6 +1,6 @@
 import type { crearEspejo } from '../sync/espejo'
 import type { TableName } from '../sheets/tables'
-import type { Cliente, Empleado, Asistencia, Factura, Gasto, Pago, Producto } from '../types/entities'
+import type { Cliente, Empleado, Asistencia, Factura, FacturaItem, Gasto, Pago, Producto } from '../types/entities'
 
 type Espejo = ReturnType<typeof crearEspejo>
 
@@ -33,9 +33,23 @@ export async function listPagosEspejo(e: Espejo, idOrigen?: string): Promise<Pag
   return rows
 }
 
-export async function listGastosEspejo(e: Espejo, filtro: { mes?: string } = {}): Promise<Gasto[]> {
+/** Mismo contrato que repo.getFactura: null si no existe. */
+export async function getFacturaEspejo(e: Espejo, id: string): Promise<{ factura: Factura; items: FacturaItem[] } | null> {
+  const facturas = await leer<Factura>(e, 'Facturas')
+  const factura = facturas.find(f => f.id_factura === id)
+  if (!factura) return null
+  type ItemConOrigen = FacturaItem & { id_factura: string }
+  const items = await leer<ItemConOrigen>(e, 'Factura_Items')
+  return { factura, items: items.filter(i => i.id_factura === id).map(i => ({
+    descripcion: String(i.descripcion), cantidad: Number(i.cantidad), precio_unitario: Number(i.precio_unitario), importe: Number(i.importe),
+    ...(i.id_producto ? { id_producto: String(i.id_producto) } : {})
+  })) }
+}
+
+export async function listGastosEspejo(e: Espejo, filtro: { mes?: string; categoria?: string } = {}): Promise<Gasto[]> {
   let rows = await leer<Gasto>(e, 'Gastos')
   if (filtro.mes) rows = rows.filter(g => String(g.fecha).slice(0, 7) === filtro.mes)
+  if (filtro.categoria) rows = rows.filter(g => g.categoria === filtro.categoria)
   return rows
 }
 
