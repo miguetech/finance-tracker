@@ -16,7 +16,8 @@ export const TABLAS_CALIENTES: TableName[] = ['Facturas', 'Factura_Items', 'Pago
 
 export interface EspejoDeps {
   store: EspejoStore
-  fetchTable(t: TableName): Promise<Row[]>
+  /** Devuelve las filas de la tabla, o `null` si la tabla no está soportada por este origen. */
+  fetchTable(t: TableName): Promise<Row[] | null>
   ahora?: () => number
   onCambio?: (tablas: TableName[]) => void
 }
@@ -45,6 +46,7 @@ export function crearEspejo(deps: EspejoDeps) {
 
   async function pullUna(t: TableName, cambiadas: TableName[]): Promise<void> {
     const filas = await fetchTable(t)
+    if (filas === null) return // tabla sin origen: no se envenena su hash
     const h = hashTabla(filas)
     if (hashes.get(t) !== h) {
       hashes.set(t, h)

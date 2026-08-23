@@ -4,6 +4,13 @@ import type { Repository } from '../data/repository'
 import { useAppStore } from './appStore'
 import type { Config, Cliente, Empleado, Asistencia, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, MetodoPago, Producto, TipoMovimiento, CodigoAcceso, GastoFijo, TasaHistorial } from '../types/entities'
 import type { VentaProductoFila } from '../reports/inventario'
+import { espejoBus } from '../sync/espejoBus'
+import type { TableName } from '../sheets/tables'
+
+/** Avisa al espejo activo que ciertas tablas cambiaron en Sheets. */
+function invalidarEspejo(...tablas: TableName[]) {
+  try { espejoBus.onEscritura?.(tablas) } catch { /* sin provider montado */ }
+}
 import type { Usuario } from '../roles/roles'
 import { DEFAULT_METODOS_PAGO } from '../types/schemas'
 import { getCurrency, registerCurrency, parseCustomCurrencies, type Currency } from '../currency'
@@ -53,8 +60,8 @@ export function useClientes() {
   const repo = useRepo()
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['clientes'], queryFn: () => repo.listClientes() })
-  const saveCliente = useMutation({ mutationFn: (c: Cliente) => repo.saveCliente(c), onSuccess: () => qc.invalidateQueries({ queryKey: ['clientes'] }) })
-  const deleteCliente = useMutation({ mutationFn: (id: string) => repo.deleteCliente(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['clientes'] }) })
+  const saveCliente = useMutation({ mutationFn: (c: Cliente) => repo.saveCliente(c), onSuccess: () => { qc.invalidateQueries({ queryKey: ['clientes'] }); invalidarEspejo('Clientes') } })
+  const deleteCliente = useMutation({ mutationFn: (id: string) => repo.deleteCliente(id), onSuccess: () => { qc.invalidateQueries({ queryKey: ['clientes'] }); invalidarEspejo('Clientes') } })
   return { clientes: q.data ?? [], isLoading: q.isLoading, saveCliente, deleteCliente }
 }
 
@@ -62,7 +69,7 @@ export function useFacturas(filtro?: { estado?: string; mes?: string }) {
   const repo = useRepo()
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['facturas', filtro], queryFn: () => repo.listFacturas(filtro) })
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['facturas'] })
+  const invalidate = () => { qc.invalidateQueries({ queryKey: ['facturas'] }); invalidarEspejo('Facturas', 'Factura_Items') }
   const create = useMutation({ mutationFn: (i: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }) => repo.createFactura(i), onSuccess: invalidate })
   const update = useMutation({ mutationFn: (i: { id: string; data: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string } }) => repo.updateFactura(i.id, i.data), onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ['factura'] }) } })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteFactura(id), onSuccess: invalidate })
@@ -155,7 +162,7 @@ export function useRegisterPago() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (p: { tipo: 'cobro' | 'abono'; id_origen: string; fecha: string; monto: number; metodo_pago: MetodoPago; notas: string }) => repo.registerPago(p),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['facturas'] }); qc.invalidateQueries({ queryKey: ['cxp'] }); qc.invalidateQueries({ queryKey: ['pagos'] }) }
+    onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ['facturas'] }); qc.invalidateQueries({ queryKey: ['cxp'] }); qc.invalidateQueries({ queryKey: ['pagos'] }); invalidarEspejo('Pagos', v.tipo === 'cobro' ? 'Facturas' : 'Cuentas_Pagar') }
   })
 }
 

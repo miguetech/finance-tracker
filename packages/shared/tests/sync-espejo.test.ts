@@ -100,3 +100,22 @@ describe('pipeline del espejo', () => {
     expect(new Set(fetchTable.mock.calls.map(c => c[0]))).toEqual(new Set(TABLAS_CALIENTES))
   })
 })
+
+describe('tablas sin origen (fetchTable → null)', () => {
+  it('se omiten: no se guardan, no cuentan como cambio ni envenenan hash', async () => {
+    const store = storeMemoria()
+    const onCambio = vi.fn()
+    const soportadas = new Set(['Facturas'])
+    const fetchTable = vi.fn(async (t: TableName) => (soportadas.has(t) ? [{ id_factura: 'x' }] : null))
+    const espejo = crearEspejo({ store, fetchTable, onCambio })
+    await espejo.init()
+    const cambiadas = await espejo.pull()
+    expect(cambiadas).toEqual(['Facturas'])
+    expect(onCambio).toHaveBeenCalledWith(['Facturas'])
+    // Segundo pull calientes: solo calientes vuelven a descargarse
+    fetchTable.mockClear()
+    await espejo.pull()
+    const llamadas = fetchTable.mock.calls.map(c => c[0])
+    expect(new Set(llamadas)).toEqual(new Set(TABLAS_CALIENTES))
+  })
+})

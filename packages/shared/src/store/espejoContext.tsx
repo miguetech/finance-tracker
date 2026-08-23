@@ -1,5 +1,6 @@
 import React, { createContext, useEffect, useMemo, useRef, useState } from 'react'
 import { crearEspejo, TABLAS_CALIENTES, type EspejoStore } from '../sync/espejo'
+import { espejoBus } from '../sync/espejoBus'
 import type { TableName } from '../sheets/tables'
 import { useRepo, _repoCtx as RepoCtx } from './queries'
 import { useContext } from 'react'
@@ -18,8 +19,10 @@ const Ctx = createContext<EspejoCtx>({ activo: false, espejo: null, ultimoPull: 
 
 export function useEspejo() { return useContext(Ctx) }
 
-function fetchTableDesdeRepo(repo: ReturnType<typeof useRepo>, t: TableName): Promise<Record<string, string | number>[]> {
-  const r = repo as unknown as Record<string, (a?: unknown) => Promise<unknown[]>>
+function fetchTableDesdeRepo(repo: ReturnType<typeof useRepo> | null, t: TableName): Promise<Record<string, string | number>[] | null> {
+  const r = repo as unknown as Record<string, (a?: unknown) => Promise<unknown[]>> | null
+  if (!r) return Promise.resolve(null)
+  // Tablas con listX directo en el repositorio.
   const mapa: Partial<Record<TableName, string>> = {
     Clientes: 'listClientes',
     Proveedores: 'listProveedores',
@@ -29,10 +32,17 @@ function fetchTableDesdeRepo(repo: ReturnType<typeof useRepo>, t: TableName): Pr
     Pagos: 'listPagos',
     Gastos: 'listGastos',
     Productos: 'listProductos',
-    Cuentas_Pagar: 'listCxp'
+    Cuentas_Pagar: 'listCxp',
+    Gastos_Fijos: 'listGastosFijos',
+    Tasas_Historial: 'listTasasHistorial',
+    Nomina_Detalles: 'listNominaDetalles',
+    Usuarios: 'listUsuarios',
+    Codigos_Acceso: 'listCodigos',
+    Dispositivos: 'listDispositivos'
   }
+  // Config (clave/valor) y Movimientos_Stock (requiere id) quedan fuera del espejo en Fase A.
   const metodo = mapa[t]
-  if (!metodo || typeof r[metodo] !== 'function') return Promise.resolve([])
+  if (!metodo || typeof r[metodo] !== 'function') return Promise.resolve(null)
   return r[metodo]() as Promise<Record<string, string | number>[]>
 }
 
@@ -40,7 +50,7 @@ export function EspejoProvider({ flag, store = null, fetchTable, children }: {
   flag?: string
   store?: EspejoStore | null
   /** Override para tests; por defecto usa las listX del repositorio. */
-  fetchTable?: (t: TableName) => Promise<Record<string, string | number>[]>
+  fetchTable?: (t: TableName) => Promise<Record<string, string | number>[] | null>
   children: React.ReactNode
 }) {
   const repo = useContext(RepoCtx) // puede ser null en tests; fetchTable override lo evita
@@ -70,9 +80,14 @@ export function EspejoProvider({ flag, store = null, fetchTable, children }: {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
       if (Date.now() - ultimoRef.current >= TABLAS_CALIENTES_TTL_MS) void sincronizarAhora(TABLAS_CALIENTES)
     }
+    espejoBus.onEscritura = (tablas) => { void sincronizarAhora(tablas) }
     document.addEventListener('visibilitychange', alFoco)
     const timer = setInterval(alFoco, TABLAS_CALIENTES_TTL_MS)
-    return () => { document.removeEventListener('visibilitychange', alFoco); clearInterval(timer) }
+    return () => {
+      espejoBus.onEscritura = undefined
+      document.removeEventListener('visibilitychange', alFoco)
+      clearInterval(timer)
+    }
   }, [activo, espejo])
 
   return <Ctx.Provider value={{ activo, espejo, ultimoPull, sincronizarAhora }}>{children}</Ctx.Provider>
