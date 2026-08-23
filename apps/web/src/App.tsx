@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo, SesionOffline, PantallaPinCifrado } from '@ft/shared'
 import type { NavKey, NavItem, ModuleKey, PermsInfo, RegistroSesion, EspejoStore } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
@@ -22,16 +22,31 @@ function OwnerShell() {
   const [mes, setMes] = useState(() => sessionStorage.getItem('ft_mes') || monthLocal())
   const [error, setError] = useState('')
 
+  const navigate = (k: NavKey) => { sessionStorage.setItem('ft_nav', k); setNav(k) }
+  const cambiarMes = (m: string) => { sessionStorage.setItem('ft_mes', m); setMes(m) }
+  const makeApi = () => new SheetsApi(async () => { try { return await webAuth.getToken(false) } catch { return await webAuth.getToken(true) } })
+
+  // Hooks SIEMPRE antes de cualquier return temprano (Rules of Hooks).
+  const repoBase = useMemo(
+    () => createRepository({ api: makeApi(), storage: localStorageAdapter, getSpreadsheetId: async () => idHoja ?? '' }),
+    [idHoja]
+  )
+  // En modo offline las escrituras se encolan localmente y se reproducen al volver la red.
+  const repo = useMemo(
+    () => conColaEscrituras(repoBase, {
+      storage: localStorageAdapter,
+      activo: () => modoOffline,
+      configActual: () => useAppStore.getState().config ?? null
+    }),
+    [repoBase, modoOffline]
+  )
+
   useEffect(() => {
     if (!claveEspejo || storeCifrado) return
     let vivo = true
     void crearStoreEspejo({ clave: claveEspejo }).then(s => { if (vivo) setStoreCifrado(s) })
     return () => { vivo = false }
   }, [claveEspejo, storeCifrado])
-
-  const navigate = (k: NavKey) => { sessionStorage.setItem('ft_nav', k); setNav(k) }
-  const cambiarMes = (m: string) => { sessionStorage.setItem('ft_mes', m); setMes(m) }
-  const makeApi = () => new SheetsApi(async () => { try { return await webAuth.getToken(false) } catch { return await webAuth.getToken(true) } })
 
   useEffect(() => {
     if (window.self !== window.top) return
@@ -118,24 +133,10 @@ function OwnerShell() {
     )
   }
   if (claveEspejo && !storeCifrado) return <div className="p-8">Preparando datos locales…</div>
-  const repoBase = useMemo(
-    () => createRepository({ api: makeApi(), storage: localStorageAdapter, getSpreadsheetId: async () => idHoja }),
-    [idHoja]
-  )
-  // En modo offline las escrituras se encolan localmente y se reproducen al volver la red.
-  const repo = useMemo(
-    () => conColaEscrituras(repoBase, {
-      storage: localStorageAdapter,
-      activo: () => modoOffline,
-      configActual: () => useAppStore.getState().config ?? null
-    }),
-    [repoBase, modoOffline]
-  )
-  const sincronizarCola = useCallback(() => modoOffline, [modoOffline])
   const extraItems: NavItem[] = [{ key: 'compartir', label: 'Compartir', Icon: IconShare }]
   return (
     <AppProvider repo={repo}>
-      {modoOffline && <SincronizadorCola almacen={localStorageAdapter} repo={repoBase} activo={sincronizarCola} />}
+      {modoOffline && <SincronizadorCola almacen={localStorageAdapter} repo={repoBase} activo={() => modoOffline} />}
       <PermsProvider perms={adminPerms()}>
         <Toaster>
           <Layout current={nav} onNavigate={navigate} extraItems={extraItems} espejoForzado={modoOffline} storeExterno={storeCifrado}>
