@@ -111,3 +111,19 @@ export async function desactivarCifradoEspejo(almacen: StorageAdapter): Promise<
   if (!reg) return
   await almacen.set(KEY_SESION_LOCAL, JSON.stringify({ ...reg, cifrado: false }))
 }
+
+// ── Desbloqueo recordado durante la sesión de pestaña (sessionStorage) ──────
+
+const KEY_DESBLOQUEO_SESION = 'ft_offline_desbloqueada'
+
+export function marcarDesbloqueoSesion(): void {
+  try { sessionStorage.setItem(KEY_DESBLOQUEO_SESION, '1') } catch { /* sin sessionStorage */ }
+}
+
+export function hayDesbloqueoSesion(): boolean {
+  try { return sessionStorage.getItem(KEY_DESBLOQUEO_SESION) === '1' } catch { return false }
+}
+
+export function limpiarDesbloqueoSesion(): void {
+  try { sessionStorage.removeItem(KEY_DESBLOQUEO_SESION) } catch { /* noop */ }
+}

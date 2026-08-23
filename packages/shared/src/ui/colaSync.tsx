@@ -34,29 +34,47 @@ export function ColaBubble({ onReintentar, onDescartar }: {
 }
 
 /**
- * Vacía la cola de escrituras cuando vuelve la red (o al recuperar foco)
- * y refresca espejo + queries con lo reproducido. Montar solo en modo offline.
+ * Reaplica los ecos de la cola pendiente sobre el espejo local (sin red).
+ * Tras una recarga de página, los registros guardados offline vuelven a
+ * pintarse aunque el snapshot del espejo sea anterior a esos registros.
  */
-export function SincronizadorCola({ almacen, repo, activo }: {
+export async function repetirEcosLocales(almacen: StorageAdapter): Promise<number> {
+  const ops = await cargarCola(almacen)
+  for (const op of ops) {
+    try { espejoBus.onEscrituraLocal?.(op.metodo, op.args) } catch { /* noop */ }
+  }
+  return ops.length
+}
+
+/**
+ * Vacía la cola de escrituras cuando vuelve la red (o al recuperar foco)
+ * y refresca espejo + queries con lo reproducido. Sin red se limita a
+ * re-aplicar los ecos locales. Montar SIEMPRE: es quien flushea la cola
+ * sobreviviente a recargas de página.
+ */
+export function SincronizadorCola({ almacen, repo }: {
   almacen: StorageAdapter
   repo: Repository
-  activo: () => boolean
 }) {
   const qc = useQueryClient()
   const vaciar = useCallback(async () => {
-    if (!activo()) return
-    const antes = await cargarCola(almacen)
+    const ops = await cargarCola(almacen)
+    if (!ops.length) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      await repetirEcosLocales(almacen)
+      return
+    }
     const res = await vaciarCola(almacen, repo)
     if (res.ejecutadas > 0) {
       qc.invalidateQueries()
-      const tablas = new Set(antes.flatMap(op => TABLAS_POR_METODO[op.metodo] ?? []))
+      const tablas = new Set(ops.flatMap(op => TABLAS_POR_METODO[op.metodo] ?? []))
       if (tablas.size) espejoBus.onEscritura?.([...tablas])
     }
-  }, [activo, almacen, repo, qc])
+  }, [almacen, repo, qc])
 
   useEffect(() => {
     void refrescarEstadoCola(almacen)
-    if (typeof navigator !== 'undefined' && navigator.onLine) void vaciar()
+    void vaciar()
     const alVisible = () => { if (document.visibilityState === 'visible') void vaciar() }
     const reintentar = async () => { await reencolarErrores(almacen); await vaciar() }
     const descartar = () => { void descartarErrores(almacen).then(() => refrescarEstadoCola(almacen)) }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { ensureSheet, getChromeToken } from '../../src/onboarding'
-import { ensureTables } from '@ft/shared'
+import { ensureTables, hayDesbloqueoSesion, desbloqueoPermitido, limpiarDesbloqueoSesion } from '@ft/shared'
 import { createRepository, chromeStorageAdapter, KEYS, SheetsApi, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Toaster, useConfig, PermsProvider, adminPerms, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo, SesionOffline, PantallaPinCifrado, chromeIdentityAuth } from '@ft/shared'
 import type { NavKey, RegistroSesion, EspejoStore } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
@@ -51,7 +51,11 @@ function Boot() {
           if (reg?.cifrado) setPendientePinCifrado(reg)
         } catch {
           // Sin red: se ofrece modo offline si hubo sesión previa.
-          setSesionLocal(await cargarRegistroSesion(chromeStorageAdapter))
+          const reg = await cargarRegistroSesion(chromeStorageAdapter)
+          if (reg) {
+            setSesionLocal(reg)
+            if (!reg.cifrado && hayDesbloqueoSesion() && desbloqueoPermitido(reg)) setModoOffline(true)
+          }
         }
       } catch (e) { setErr((e as Error).message) }
       setLoading(false)
@@ -70,6 +74,7 @@ function Boot() {
         const reg = await cargarRegistroSesion(chromeStorageAdapter)
         if (email && reg && email !== reg.cuenta) {
           await borrarRegistroSesion(chromeStorageAdapter)
+          limpiarDesbloqueoSesion()
           window.location.reload()
         }
       } catch { /* aún sin red */ }
@@ -122,7 +127,7 @@ function Boot() {
 
   return (
     <AppProvider repo={repo}>
-      {modoOffline && <SincronizadorCola almacen={chromeStorageAdapter} repo={repoBase} activo={() => modoOffline} />}
+      <SincronizadorCola almacen={chromeStorageAdapter} repo={repoBase} />
       <PermsProvider perms={adminPerms()}>
         <Toaster>
           <SyncOnOpen />

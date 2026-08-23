@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { cifrarVolcado, descifrarVolcado, crearPersistorStorage } from '../src/sync/cifrado'
 import { crearSqliteStore } from '../src/sync/stores/sqlite'
 import { ddlDesdeTables } from '../src/sync/ddl'
-import type { PersistorEspejo, VolcadoCifrado } from '../src/sync/cifrado'
+import type { PersistorEspejo } from '../src/sync/cifrado'
 import type { StorageAdapter } from '../src/data/storage'
 
 const DDL = ddlDesdeTables().flatMap(d => [d.create, ...d.indexes])
@@ -17,11 +17,11 @@ function kvFalso(): StorageAdapter & { mapa: Map<string, string> } {
   }
 }
 
-function persistorMemoria(): PersistorEspejo & { blob: VolcadoCifrado | null } {
+function persistorMemoria(): PersistorEspejo & { blob: string | null } {
   return {
     blob: null,
     cargar: async function () { return this.blob },
-    guardar: async function (v) { this.blob = v },
+    guardar: async function (json) { this.blob = json },
     borrar: async function () { this.blob = null }
   }
 }
@@ -50,8 +50,10 @@ describe('store sqlite con volcado cifrado', () => {
     await s1.replaceTable('Clientes', [{ id_cliente: 'c1', nombre: 'Ana' }])
     await s1.close()
     expect(persistor.blob).toBeTruthy()
+    const sobre = JSON.parse(persistor.blob!) as { salt?: string }
+    expect(sobre.salt).toBeTruthy() // sobre cifrado, no plano
     // El volcado cifrado no se abre con un PIN equivocado.
-    await expect(descifrarVolcado('0000', persistor.blob!)).rejects.toThrow()
+    await expect(descifrarVolcado('0000', JSON.parse(persistor.blob!))).rejects.toThrow()
 
     const s2 = crearSqliteStore('/t.db3', { persistor, clave })
     await s2.init([]) // reabre desde el volcado descifrado
@@ -59,6 +61,21 @@ describe('store sqlite con volcado cifrado', () => {
     expect(filas).toHaveLength(1)
     expect(filas[0].id_cliente).toBe('c1')
     expect(filas[0].nombre).toBe('Ana')
+    await s2.close()
+  })
+
+  it('sin clave persiste plano y sobrevive a la recarga (vfs idb)', async () => {
+    const persistor = persistorMemoria()
+    const s1 = crearSqliteStore('/t.db3', { persistor })
+    await s1.init(DDL)
+    expect(s1.vfs()).toBe('idb')
+    await s1.replaceTable('Clientes', [{ id_cliente: 'c2', nombre: 'Beto' }])
+    await s1.close()
+
+    const s2 = crearSqliteStore('/t.db3', { persistor })
+    await s2.init([])
+    const filas = await s2.getAllRows('Clientes')
+    expect(filas.some(f => f.id_cliente === 'c2' && f.nombre === 'Beto')).toBe(true)
     await s2.close()
   })
 
@@ -75,12 +92,11 @@ describe('store sqlite con volcado cifrado', () => {
     await s2.close()
   })
 
-  it('persistor sobre StorageAdapter guarda JSON del volcado', async () => {
+  it('persistor sobre StorageAdapter guarda el string del volcado', async () => {
     const s = kvFalso()
     const p = crearPersistorStorage(s)
-    await p.guardar({ v: 1, salt: 'cw==', iv: 'AA==', datos: 'aG9sYQ==' })
-    expect(await p.cargar()).toMatchObject({ v: 1, datos: 'aG9sYQ==' })
-    expect(JSON.parse(s.mapa.get('ft_espejo_volcado')!)).toMatchObject({ v: 1 })
+    await p.guardar('{"v":1,"plano":true,"datos":"aG9sYQ=="}')
+    expect(await p.cargar()).toBe('{"v":1,"plano":true,"datos":"aG9sYQ=="}')
     await p.borrar()
     expect(await p.cargar()).toBeNull()
   })

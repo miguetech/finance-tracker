@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo, SesionOffline, PantallaPinCifrado } from '@ft/shared'
+import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo, SesionOffline, PantallaPinCifrado, hayDesbloqueoSesion, desbloqueoPermitido, limpiarDesbloqueoSesion } from '@ft/shared'
 import type { NavKey, NavItem, ModuleKey, PermsInfo, RegistroSesion, EspejoStore } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
@@ -76,7 +76,12 @@ function OwnerShell() {
           if (reg?.cifrado) setPendientePinCifrado(reg)
         } catch {
           // Sin red (o Sheets sin responder): se ofrece modo offline si hubo sesión.
-          setSesionLocal(await cargarRegistroSesion(localStorageAdapter))
+          const reg = await cargarRegistroSesion(localStorageAdapter)
+          if (reg) {
+            setSesionLocal(reg)
+            // Misma pestaña ya desbloqueada y sin cifrado: continuar directo.
+            if (!reg.cifrado && hayDesbloqueoSesion() && desbloqueoPermitido(reg)) setModoOffline(true)
+          }
         }
       } catch (e) { setError((e as Error).message) }
     })()
@@ -93,6 +98,7 @@ function OwnerShell() {
         const reg = await cargarRegistroSesion(localStorageAdapter)
         if (email && reg && email !== reg.cuenta) {
           await borrarRegistroSesion(localStorageAdapter)
+          limpiarDesbloqueoSesion()
           window.location.reload()
         }
       } catch { /* aún sin red */ }
@@ -136,7 +142,7 @@ function OwnerShell() {
   const extraItems: NavItem[] = [{ key: 'compartir', label: 'Compartir', Icon: IconShare }]
   return (
     <AppProvider repo={repo}>
-      {modoOffline && <SincronizadorCola almacen={localStorageAdapter} repo={repoBase} activo={() => modoOffline} />}
+      <SincronizadorCola almacen={localStorageAdapter} repo={repoBase} />
       <PermsProvider perms={adminPerms()}>
         <Toaster>
           <Layout current={nav} onNavigate={navigate} extraItems={extraItems} espejoForzado={modoOffline} storeExterno={storeCifrado}>

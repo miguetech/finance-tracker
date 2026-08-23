@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Input, useI18n, configurarPin, verificarPin, desbloqueoPermitido, activarCifradoEspejo } from '@ft/shared'
+import { Button, Input, useI18n, configurarPin, verificarPin, desbloqueoPermitido, activarCifradoEspejo, marcarDesbloqueoSesion } from '@ft/shared'
 import type { RegistroSesion, StorageAdapter } from '@ft/shared'
 
 /** Puerta de entrada sin red (spec espejo §9): "Continuar como <cuenta>",
@@ -28,6 +28,7 @@ export function SesionOffline({ almacen, registro, onEntrar, onLoginGoogle }: {
     if (cifrar && !registro.cifrado) {
       try { await activarCifradoEspejo(almacen, pin) } catch { /* ya verificado */ }
     }
+    marcarDesbloqueoSesion()
     onEntrar(pin)
   }
 
@@ -74,7 +75,7 @@ export function SesionOffline({ almacen, registro, onEntrar, onLoginGoogle }: {
                 <Button type="submit" className="w-full" disabled={!pin}>{t('authOffline.entrarSinConexion')}</Button>
               </form>
             ) : (
-              <Button className="w-full" onClick={() => onEntrar()}>{t('authOffline.entrarSinConexion')}</Button>
+              <Button className="w-full" onClick={() => { marcarDesbloqueoSesion(); onEntrar() }}>{t('authOffline.entrarSinConexion')}</Button>
             )}
 
             {!registro.pin && (

@@ -2,8 +2,8 @@ import sqlite3InitModule from '@sqlite.org/sqlite-wasm'
 import type { EspejoStore, Row } from '../espejo'
 import { TABLES, type TableName } from '../../sheets/tables'
 import { cifrarVolcado, descifrarVolcado, crearPersistorIdb } from '../cifrado'
-import type { PersistorEspejo } from '../cifrado'
-
+import type { PersistorEspejo, VolcadoCifrado } from '../cifrado'
+import { codificarPlano, decodificar, deB64 } from './volcado'
 type SqliteDb = {
   exec(sql: string): void
   prepare(sql: string): {
@@ -63,9 +63,9 @@ function cargarModulo(): Promise<Sqlite3> {
 }
 
 /**
- * Store del espejo sobre SQLite WASM con persistencia en OPFS cuando el
- * entorno la ofrece; con `persistor` + `clave`, en volcado cifrado; si no,
- * base en memoria de sesión.
+ * Store del espejo sobre SQLite WASM. Persistencia, en orden de preferencia:
+ * OPFS nativo; volcado cifrado en IndexedDB (persistor + clave); volcado
+ * plano en IndexedDB (persistor); memoria de sesión.
  */
 export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones: OpcionesSqliteStore = {}): EspejoStore & { vfs: () => string } {
   const { persistor, clave } = opciones
@@ -78,16 +78,21 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
     if (db) return db
     const sqlite3 = await cargarModulo()
     sqlite3Ref = sqlite3
-    if (persistor && clave) {
-      vfsUsado = 'cifrado'
+    if (persistor) {
+      vfsUsado = clave ? 'cifrado' : 'idb'
       db = new sqlite3.oo1.DB(':memory:')
       try {
-        const volcado = await persistor.cargar()
-        if (volcado) {
-          const bytes = await descifrarVolcado(await clave(), volcado)
-          cargarImagen(sqlite3, db, bytes)
+        const json = await persistor.cargar()
+        if (json) {
+          const volcado = decodificar(json)
+          if (volcado) {
+            const bytes = volcado.cifrado && clave
+              ? await descifrarVolcado(await clave(), JSON.parse(json) as VolcadoCifrado)
+              : (volcado.cifrado ? null : deB64(volcado.datosB64))
+            if (bytes) cargarImagen(sqlite3, db, bytes)
+          }
         }
-      } catch { /* PIN distinto o blob corrupto: espejo nuevo desechable */ }
+      } catch { /* blob corrupto o PIN distinto: espejo nuevo desechable */ }
       return db
     }
     try {
@@ -103,12 +108,13 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
     return db
   }
 
-  /** Vuelca la base cifrada al persistor tras escrituras (best-effort). */
+  /** Vuelca la base al persistor tras escrituras (best-effort). */
   async function persistir(): Promise<void> {
-    if (!db || !persistor || !clave || !sucio || !sqlite3Ref) return
+    if (!db || !persistor || !sucio || !sqlite3Ref) return
     try {
       const bytes = volcarBytes(sqlite3Ref, db)
-      await persistor.guardar(await cifrarVolcado(await clave(), bytes))
+      if (clave) await persistor.guardar(JSON.stringify(await cifrarVolcado(await clave(), bytes)))
+      else await persistor.guardar(codificarPlano(bytes))
       sucio = false
     } catch { /* se reintenta en la siguiente escritura */ }
   }
@@ -191,20 +197,18 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
 
 import { crearStoreMemoria } from './memoria'
 
-/** Store persistente si el entorno soporta SQLite/OPFS; con `clave`, volcado
- *  cifrado en IndexedDB; si no, memoria de sesión. */
+/** Store persistente: OPFS si existe; si no, volcado en IndexedDB (cifrado
+ *  con `clave`, plano sin ella); memoria de sesión como último recurso. */
 export async function crearStoreEspejo(opciones: OpcionesSqliteStore & { ruta?: string } = {}): Promise<EspejoStore> {
   const ruta = opciones.ruta ?? '/finance-tracker-espejo.db3'
-  if (opciones.clave) {
-    const persistor = crearPersistorIdb()
-    if (persistor) {
-      try {
-        const s = crearSqliteStore(ruta, { persistor, clave: opciones.clave })
-        await s.init([]) // fuerza carga del módulo WASM y apertura
-        return s
-      } catch { /* cae a memoria abajo */ }
+  try {
+    const persistor = opciones.persistor ?? crearPersistorIdb() ?? undefined
+    if (persistor || opciones.clave) {
+      const s = crearSqliteStore(ruta, { persistor, clave: opciones.clave })
+      await s.init([])
+      return s
     }
-  }
+  } catch { /* cae a OPFS/memoria abajo */ }
   try {
     const s = crearSqliteStore(ruta)
     await s.init([]) // fuerza carga del módulo WASM y apertura

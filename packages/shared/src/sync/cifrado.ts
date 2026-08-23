@@ -55,19 +55,17 @@ export async function descifrarVolcado(pin: string, volcado: VolcadoCifrado): Pr
 /** Persistencia binaria simple sobre un StorageAdapter (IndexedDB en pro-
  *  ducción vía adaptador; en tests, mapa en memoria). */
 export interface PersistorEspejo {
-  cargar(): Promise<VolcadoCifrado | null>
-  guardar(v: VolcadoCifrado): Promise<void>
+  cargar(): Promise<string | null>
+  guardar(json: string): Promise<void>
   borrar(): Promise<void>
 }
 
 export function crearPersistorStorage(almacen: StorageAdapter, claveKv = 'ft_espejo_volcado'): PersistorEspejo {
   return {
     async cargar() {
-      const raw = await almacen.get(claveKv)
-      if (!raw) return null
-      try { return JSON.parse(raw) as VolcadoCifrado } catch { return null }
+      return almacen.get(claveKv)
     },
-    async guardar(v) { await almacen.set(claveKv, JSON.stringify(v)) },
+    async guardar(json) { await almacen.set(claveKv, json) },
     async borrar() { await almacen.remove(claveKv) }
   }
 }
@@ -111,15 +109,15 @@ export function crearPersistorIdb(nombre = 'ft-espejo'): PersistorEspejo | null 
       return new Promise((resolve, reject) => {
         const tx = db.transaction('volcado', 'readonly')
         const req = tx.objectStore('volcado').get('blob')
-        tx.oncomplete = () => resolve((req.result as VolcadoCifrado | undefined) ?? null)
+        tx.oncomplete = () => resolve((req.result as string | undefined) ?? null)
         tx.onerror = () => reject(new Error('IndexedDB leer falló'))
       })
     },
-    async guardar(v) {
+    async guardar(json) {
       const db = await abrir()
       return new Promise((resolve, reject) => {
         const tx = db.transaction('volcado', 'readwrite')
-        tx.objectStore('volcado').put(v, 'blob')
+        tx.objectStore('volcado').put(json, 'blob')
         tx.oncomplete = () => resolve()
         tx.onerror = () => reject(new Error('IndexedDB escribir falló'))
       })
