@@ -37,29 +37,29 @@ export function ColaBubble({ onReintentar, onDescartar }: {
  * Vacía la cola de escrituras cuando vuelve la red (o al recuperar foco)
  * y refresca espejo + queries con lo reproducido. Montar solo en modo offline.
  */
-export function SincronizadorCola({ storage, repo, activo }: {
-  storage: StorageAdapter
+export function SincronizadorCola({ almacen, repo, activo }: {
+  almacen: StorageAdapter
   repo: Repository
   activo: () => boolean
 }) {
   const qc = useQueryClient()
   const vaciar = useCallback(async () => {
     if (!activo()) return
-    const antes = await cargarCola(storage)
-    const res = await vaciarCola(storage, repo)
+    const antes = await cargarCola(almacen)
+    const res = await vaciarCola(almacen, repo)
     if (res.ejecutadas > 0) {
       qc.invalidateQueries()
       const tablas = new Set(antes.flatMap(op => TABLAS_POR_METODO[op.metodo] ?? []))
       if (tablas.size) espejoBus.onEscritura?.([...tablas])
     }
-  }, [activo, storage, repo, qc])
+  }, [activo, almacen, repo, qc])
 
   useEffect(() => {
-    void refrescarEstadoCola(storage)
+    void refrescarEstadoCola(almacen)
     if (typeof navigator !== 'undefined' && navigator.onLine) void vaciar()
     const alVisible = () => { if (document.visibilityState === 'visible') void vaciar() }
-    const reintentar = async () => { await reencolarErrores(storage); await vaciar() }
-    const descartar = () => { void descartarErrores(storage).then(() => refrescarEstadoCola(storage)) }
+    const reintentar = async () => { await reencolarErrores(almacen); await vaciar() }
+    const descartar = () => { void descartarErrores(almacen).then(() => refrescarEstadoCola(almacen)) }
     window.addEventListener('online', vaciar)
     document.addEventListener('visibilitychange', alVisible)
     window.addEventListener('ft-cola-reintentar', reintentar as EventListener)
@@ -72,7 +72,7 @@ export function SincronizadorCola({ storage, repo, activo }: {
       window.removeEventListener('ft-cola-descartar', descartar as EventListener)
       clearInterval(timer)
     }
-  }, [vaciar, storage])
+  }, [vaciar, almacen])
   return null
 }
 

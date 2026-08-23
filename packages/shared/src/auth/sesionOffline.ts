@@ -43,8 +43,8 @@ export function pinValido(pin: string): boolean {
   return /^[0-9]{4,6}$/.test(pin)
 }
 
-export async function cargarRegistroSesion(storage: StorageAdapter): Promise<RegistroSesion | null> {
-  const raw = await storage.get(KEY_SESION_LOCAL)
+export async function cargarRegistroSesion(almacen: StorageAdapter): Promise<RegistroSesion | null> {
+  const raw = await almacen.get(KEY_SESION_LOCAL)
   if (!raw) return null
   try {
     const reg = JSON.parse(raw) as RegistroSesion
@@ -53,8 +53,8 @@ export async function cargarRegistroSesion(storage: StorageAdapter): Promise<Reg
 }
 
 /** Guarda/actualiza el registro conservando el PIN ya configurado. */
-export async function guardarRegistroSesion(storage: StorageAdapter, datos: { cuenta: string; creado_en?: number; ultimo_pull?: number }): Promise<RegistroSesion> {
-  const previo = await cargarRegistroSesion(storage)
+export async function guardarRegistroSesion(almacen: StorageAdapter, datos: { cuenta: string; creado_en?: number; ultimo_pull?: number }): Promise<RegistroSesion> {
+  const previo = await cargarRegistroSesion(almacen)
   const ahora = Date.now()
   const reg: RegistroSesion = {
     cuenta: datos.cuenta,
@@ -62,27 +62,27 @@ export async function guardarRegistroSesion(storage: StorageAdapter, datos: { cu
     ultimo_pull: datos.ultimo_pull ?? ahora,
     ...(previo?.pin ? { pin: previo.pin } : {})
   }
-  await storage.set(KEY_SESION_LOCAL, JSON.stringify(reg))
+  await almacen.set(KEY_SESION_LOCAL, JSON.stringify(reg))
   return reg
 }
 
 /** Descarta la sesión local (cambio de cuenta o cierre explícito). */
-export async function borrarRegistroSesion(storage: StorageAdapter): Promise<void> {
-  await storage.remove(KEY_SESION_LOCAL)
+export async function borrarRegistroSesion(almacen: StorageAdapter): Promise<void> {
+  await almacen.remove(KEY_SESION_LOCAL)
 }
 
-export async function configurarPin(storage: StorageAdapter, pin: string): Promise<void> {
+export async function configurarPin(almacen: StorageAdapter, pin: string): Promise<void> {
   if (!pinValido(pin)) throw new Error('PIN inválido: 4 a 6 dígitos')
   const salt = aB64(crypto.getRandomValues(new Uint8Array(16)))
   const hash = await derivarPin(pin, salt, ITERACIONES_PBKDF2)
-  const previo = await cargarRegistroSesion(storage)
+  const previo = await cargarRegistroSesion(almacen)
   if (!previo) throw new Error('Sin sesión local que proteger')
   const reg: RegistroSesion = { ...previo, pin: { salt, hash, iteraciones: ITERACIONES_PBKDF2 } }
-  await storage.set(KEY_SESION_LOCAL, JSON.stringify(reg))
+  await almacen.set(KEY_SESION_LOCAL, JSON.stringify(reg))
 }
 
-export async function verificarPin(storage: StorageAdapter, pin: string): Promise<boolean> {
-  const reg = await cargarRegistroSesion(storage)
+export async function verificarPin(almacen: StorageAdapter, pin: string): Promise<boolean> {
+  const reg = await cargarRegistroSesion(almacen)
   const almacenado = reg?.pin
   if (!almacenado || !pinValido(pin)) return false
   const hash = await derivarPin(pin, almacenado.salt, almacenado.iteraciones)
@@ -99,15 +99,15 @@ export function desbloqueoPermitido(reg: RegistroSesion, ahora = Date.now()): bo
 }
 
 /** Fase C: marca el espejo como cifrado; exige PIN ya verificado. */
-export async function activarCifradoEspejo(storage: StorageAdapter, pin: string): Promise<void> {
-  const reg = await cargarRegistroSesion(storage)
+export async function activarCifradoEspejo(almacen: StorageAdapter, pin: string): Promise<void> {
+  const reg = await cargarRegistroSesion(almacen)
   if (!reg?.pin) throw new Error('Configura un PIN antes de cifrar')
-  if (!(await verificarPin(storage, pin))) throw new Error('PIN incorrecto')
-  await storage.set(KEY_SESION_LOCAL, JSON.stringify({ ...reg, cifrado: true }))
+  if (!(await verificarPin(almacen, pin))) throw new Error('PIN incorrecto')
+  await almacen.set(KEY_SESION_LOCAL, JSON.stringify({ ...reg, cifrado: true }))
 }
 
-export async function desactivarCifradoEspejo(storage: StorageAdapter): Promise<void> {
-  const reg = await cargarRegistroSesion(storage)
+export async function desactivarCifradoEspejo(almacen: StorageAdapter): Promise<void> {
+  const reg = await cargarRegistroSesion(almacen)
   if (!reg) return
-  await storage.set(KEY_SESION_LOCAL, JSON.stringify({ ...reg, cifrado: false }))
+  await almacen.set(KEY_SESION_LOCAL, JSON.stringify({ ...reg, cifrado: false }))
 }

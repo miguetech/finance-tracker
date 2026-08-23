@@ -23,8 +23,8 @@ export interface OperacionEnCola {
   error?: string
 }
 
-export async function cargarCola(storage: StorageAdapter): Promise<OperacionEnCola[]> {
-  const raw = await storage.get(KEY_COLA)
+export async function cargarCola(almacen: StorageAdapter): Promise<OperacionEnCola[]> {
+  const raw = await almacen.get(KEY_COLA)
   if (!raw) return []
   try {
     const ops = JSON.parse(raw) as OperacionEnCola[]
@@ -32,33 +32,33 @@ export async function cargarCola(storage: StorageAdapter): Promise<OperacionEnCo
   } catch { return [] }
 }
 
-async function guardarCola(storage: StorageAdapter, ops: OperacionEnCola[]): Promise<void> {
-  await storage.set(KEY_COLA, JSON.stringify(ops))
+async function guardarCola(almacen: StorageAdapter, ops: OperacionEnCola[]): Promise<void> {
+  await almacen.set(KEY_COLA, JSON.stringify(ops))
 }
 
-async function encolarOp(storage: StorageAdapter, metodo: string, args: unknown[]): Promise<OperacionEnCola> {
-  const ops = await cargarCola(storage)
+async function encolarOp(almacen: StorageAdapter, metodo: string, args: unknown[]): Promise<OperacionEnCola> {
+  const ops = await cargarCola(almacen)
   const op: OperacionEnCola = { id_op: uid('op_'), metodo, args, creado_en: Date.now(), estado: 'pendiente' }
-  await guardarCola(storage, [...ops, op])
+  await guardarCola(almacen, [...ops, op])
   return op
 }
 
-async function quitarOp(storage: StorageAdapter, idOp: string): Promise<void> {
-  await guardarCola(storage, (await cargarCola(storage)).filter(o => o.id_op !== idOp))
+async function quitarOp(almacen: StorageAdapter, idOp: string): Promise<void> {
+  await guardarCola(almacen, (await cargarCola(almacen)).filter(o => o.id_op !== idOp))
 }
 
-async function marcarErrorOp(storage: StorageAdapter, idOp: string, error: string): Promise<void> {
-  const ops = await cargarCola(storage)
-  await guardarCola(storage, ops.map(o => (o.id_op === idOp ? { ...o, estado: 'error' as const, error } : o)))
+async function marcarErrorOp(almacen: StorageAdapter, idOp: string, error: string): Promise<void> {
+  const ops = await cargarCola(almacen)
+  await guardarCola(almacen, ops.map(o => (o.id_op === idOp ? { ...o, estado: 'error' as const, error } : o)))
 }
 
-export async function reencolarErrores(storage: StorageAdapter): Promise<void> {
-  const ops = await cargarCola(storage)
-  await guardarCola(storage, ops.map(o => (o.estado === 'error' ? { ...o, estado: 'pendiente' as const, error: undefined } : o)))
+export async function reencolarErrores(almacen: StorageAdapter): Promise<void> {
+  const ops = await cargarCola(almacen)
+  await guardarCola(almacen, ops.map(o => (o.estado === 'error' ? { ...o, estado: 'pendiente' as const, error: undefined } : o)))
 }
 
-export async function descartarErrores(storage: StorageAdapter): Promise<void> {
-  await guardarCola(storage, (await cargarCola(storage)).filter(o => o.estado !== 'error'))
+export async function descartarErrores(almacen: StorageAdapter): Promise<void> {
+  await guardarCola(almacen, (await cargarCola(almacen)).filter(o => o.estado !== 'error'))
 }
 
 /** Errores de transporte (reintentables) vs errores de negocio (permanentes). */
@@ -76,7 +76,7 @@ export interface ResultadoVaciado { ejecutadas: number; fallidas: number; restan
  * fallida y continúa con las siguientes.
  */
 export async function vaciarCola(
-  storage: StorageAdapter,
+  almacen: StorageAdapter,
   repo: Repository,
   opts: { sigueEnLinea?: () => boolean; esErrorRed?: (e: unknown) => boolean } = {}
 ): Promise<ResultadoVaciado> {
@@ -84,23 +84,23 @@ export async function vaciarCola(
   const red = opts.esErrorRed ?? esErrorRed
   let ejecutadas = 0
   let fallidas = 0
-  for (const op of await cargarCola(storage)) {
+  for (const op of await cargarCola(almacen)) {
     if (!enLinea()) break
     if (op.estado === 'error') continue // requiere reintento o descarte manual
     try {
       const fn = (repo as unknown as Record<string, (...a: unknown[]) => unknown>)[op.metodo]
       if (typeof fn !== 'function') throw new Error(`Método desconocido: ${op.metodo}`)
       await fn.apply(repo, op.args)
-      await quitarOp(storage, op.id_op)
+      await quitarOp(almacen, op.id_op)
       ejecutadas++
     } catch (e) {
       if (red(e)) break
-      await marcarErrorOp(storage, op.id_op, e instanceof Error ? e.message : String(e))
+      await marcarErrorOp(almacen, op.id_op, e instanceof Error ? e.message : String(e))
       fallidas++
     }
   }
-  const restantes = (await cargarCola(storage)).filter(o => o.estado === 'pendiente').length
-  notificarCola(await resumirCola(storage))
+  const restantes = (await cargarCola(almacen)).filter(o => o.estado === 'pendiente').length
+  notificarCola(await resumirCola(almacen))
   return { ejecutadas, fallidas, restantes }
 }
 
@@ -126,16 +126,16 @@ function notificarCola(e: EstadoCola): void {
   for (const fn of suscriptores) fn(e)
 }
 
-export async function resumirCola(storage: StorageAdapter): Promise<EstadoCola> {
-  const ops = await cargarCola(storage)
+export async function resumirCola(almacen: StorageAdapter): Promise<EstadoCola> {
+  const ops = await cargarCola(almacen)
   return {
     pendientes: ops.filter(o => o.estado === 'pendiente').length,
     errores: ops.filter(o => o.estado === 'error').length
   }
 }
 
-export async function refrescarEstadoCola(storage: StorageAdapter): Promise<void> {
-  notificarCola(await resumirCola(storage))
+export async function refrescarEstadoCola(almacen: StorageAdapter): Promise<void> {
+  notificarCola(await resumirCola(almacen))
 }
 
 // ── Repositorio con cola ────────────────────────────────────────────────────

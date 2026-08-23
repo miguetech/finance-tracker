@@ -60,15 +60,15 @@ export interface PersistorEspejo {
   borrar(): Promise<void>
 }
 
-export function crearPersistorStorage(storage: StorageAdapter, claveKv = 'ft_espejo_volcado'): PersistorEspejo {
+export function crearPersistorStorage(almacen: StorageAdapter, claveKv = 'ft_espejo_volcado'): PersistorEspejo {
   return {
     async cargar() {
-      const raw = await storage.get(claveKv)
+      const raw = await almacen.get(claveKv)
       if (!raw) return null
       try { return JSON.parse(raw) as VolcadoCifrado } catch { return null }
     },
-    async guardar(v) { await storage.set(claveKv, JSON.stringify(v)) },
-    async borrar() { await storage.remove(claveKv) }
+    async guardar(v) { await almacen.set(claveKv, JSON.stringify(v)) },
+    async borrar() { await almacen.remove(claveKv) }
   }
 }
 

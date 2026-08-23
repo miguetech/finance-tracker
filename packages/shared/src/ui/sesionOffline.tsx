@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { Button, Input, useI18n, localStorageAdapter, configurarPin, verificarPin, desbloqueoPermitido, activarCifradoEspejo } from '@ft/shared'
-import type { RegistroSesion } from '@ft/shared'
+import { Button, Input, useI18n, configurarPin, verificarPin, desbloqueoPermitido, activarCifradoEspejo } from '@ft/shared'
+import type { RegistroSesion, StorageAdapter } from '@ft/shared'
 
 /** Puerta de entrada sin red (spec espejo §9): "Continuar como <cuenta>",
- *  desbloqueo por PIN local o ventana de 24 h si no hay PIN. */
-export function SesionOffline({ registro, onEntrar, onLoginGoogle }: {
+ *  desbloqueo por PIN local o ventana de 24 h si no hay PIN.
+ *  Compartida por web (localStorage) y extensión (chrome.storage). */
+export function SesionOffline({ almacen, registro, onEntrar, onLoginGoogle }: {
+  almacen: StorageAdapter
   registro: RegistroSesion
   onEntrar: (pin?: string) => void
   onLoginGoogle: () => void
@@ -19,19 +21,19 @@ export function SesionOffline({ registro, onEntrar, onLoginGoogle }: {
   const permitido = desbloqueoPermitido(registro)
 
   const entrarConPin = async () => {
-    if (!(await verificarPin(localStorageAdapter, pin))) {
+    if (!(await verificarPin(almacen, pin))) {
       setError(t('authOffline.pinInvalido'))
       return
     }
     if (cifrar && !registro.cifrado) {
-      try { await activarCifradoEspejo(localStorageAdapter, pin) } catch { /* ya verificado */ }
+      try { await activarCifradoEspejo(almacen, pin) } catch { /* ya verificado */ }
     }
     onEntrar(pin)
   }
 
   const guardarNuevoPin = async () => {
     try {
-      await configurarPin(localStorageAdapter, nuevoPin)
+      await configurarPin(almacen, nuevoPin)
       setNuevoPin('')
       setError('')
       setAviso(t('authOffline.pinGuardado'))
@@ -96,8 +98,9 @@ export function SesionOffline({ registro, onEntrar, onLoginGoogle }: {
   )
 }
 
-/** Desbloqueo del espejo cifrado al arrancar con red (Fase C). */
-export function PantallaPinCifrado({ registro, onOk, onCancelar }: {
+/** Desbloqueo del espejo cifrado al arrancar (Fase C). */
+export function PantallaPinCifrado({ almacen, registro, onOk, onCancelar }: {
+  almacen: StorageAdapter
   registro: RegistroSesion
   onOk: (pin: string) => void
   onCancelar: () => void
@@ -107,7 +110,7 @@ export function PantallaPinCifrado({ registro, onOk, onCancelar }: {
   const [error, setError] = useState('')
 
   const desbloquear = async () => {
-    if (await verificarPin(localStorageAdapter, pin)) onOk(pin)
+    if (await verificarPin(almacen, pin)) onOk(pin)
     else setError(t('authOffline.pinInvalido'))
   }
 

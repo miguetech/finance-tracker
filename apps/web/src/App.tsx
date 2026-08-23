@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo } from '@ft/shared'
+import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo, SesionOffline, PantallaPinCifrado } from '@ft/shared'
 import type { NavKey, NavItem, ModuleKey, PermsInfo, RegistroSesion, EspejoStore } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
 import { loadShareParams, saveShareParams, clearShareParams, loadSessionToken, saveSessionToken, clearSessionToken, saveDeviceToken, loadDeviceToken } from './mode'
-import { SesionOffline, PantallaPinCifrado } from './offline/SesionOffline'
 
 const NAV_MODULE: Partial<Record<NavKey, ModuleKey>> = {
   dashboard: 'dashboard', facturas: 'facturas', clientes: 'clientes', empleados: 'empleados',
@@ -97,6 +96,7 @@ function OwnerShell() {
   if (!modoOffline && sesionLocal) {
     return (
       <SesionOffline
+        almacen={localStorageAdapter}
         registro={sesionLocal}
         onEntrar={(pinEntrado) => {
           setModoOffline(true)
@@ -110,6 +110,7 @@ function OwnerShell() {
   if (!modoOffline && pendientePinCifrado && !claveEspejo) {
     return (
       <PantallaPinCifrado
+        almacen={localStorageAdapter}
         registro={pendientePinCifrado}
         onOk={pin => { setClaveEspejo(() => async () => pin); setPendientePinCifrado(null) }}
         onCancelar={() => setPendientePinCifrado(null)}
@@ -134,7 +135,7 @@ function OwnerShell() {
   const extraItems: NavItem[] = [{ key: 'compartir', label: 'Compartir', Icon: IconShare }]
   return (
     <AppProvider repo={repo}>
-      {modoOffline && <SincronizadorCola storage={localStorageAdapter} repo={repoBase} activo={sincronizarCola} />}
+      {modoOffline && <SincronizadorCola almacen={localStorageAdapter} repo={repoBase} activo={sincronizarCola} />}
       <PermsProvider perms={adminPerms()}>
         <Toaster>
           <Layout current={nav} onNavigate={navigate} extraItems={extraItems} espejoForzado={modoOffline} storeExterno={storeCifrado}>

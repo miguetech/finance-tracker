@@ -2,6 +2,9 @@ import { defineConfig } from 'wxt'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
+  // Auto-imports de WXT desactivados: colisionan con identificadores
+  // (`storage`) del código compartido, que usa imports explícitos.
+  imports: false,
   vite: () => ({ plugins: [tailwindcss()] }),
   manifest: {
     name: 'FinanceTracker',
