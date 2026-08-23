@@ -786,6 +786,10 @@ export function createRepository(ctx: RepoContext) {
       }
     },
 
+    async listFacturasItems(): Promise<(FacturaItem & { id_factura: string })[]> {
+      return readTable<FacturaItem & { id_factura: string }>('Factura_Items')
+    },
+
     /** Historial de ventas de un producto individual en un rango. */
     async getVentasProducto(idProducto: string, rango: RangoFecha): Promise<VentaProductoFila[]> {
       const [items, facturas] = await Promise.all([

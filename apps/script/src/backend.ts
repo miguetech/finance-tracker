@@ -556,6 +556,9 @@ function route(action: string, payload: any, p: Perms): unknown {
     case 'listFacturas':
       if (!p.canView('facturas')) return denied()
       return listFacturasFiltro(payload ?? {})
+    case 'listFacturasItems':
+      if (!p.canView('facturas')) return denied()
+      return readTable('Factura_Items')
     case 'getFactura': {
       if (!p.canView('facturas')) return denied()
       const facturas = readTable<Factura>('Facturas')

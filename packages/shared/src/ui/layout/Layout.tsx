@@ -5,6 +5,8 @@ import { IconDashboard, IconInvoice, IconClient, IconUsers, IconPayables, IconRe
 import { useI18n } from '../../i18n'
 import { OfflineBanner } from '../hooks'
 import { RateBubble } from '../RateBubble'
+import { EspejoProvider } from '../../store/espejoContext'
+import { crearStoreMemoria } from '../../sync/stores/memoria'
 
 export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuentas' | 'cxc' | 'proveedores' | 'gastos' | 'reportes' | 'configuracion' | 'compartir' | 'inventario'
 
@@ -55,7 +57,7 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
       ))}
     </nav>
   )
-  return (
+  const contenido = (
     <div className="min-h-screen bg-muted md:flex">
       <OfflineBanner />
       <aside className="hidden md:flex md:flex-col md:w-60 md:min-h-screen bg-surface border-r border-gray-100">{nav}</aside>
@@ -74,5 +76,12 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
       </div>
       <RateBubble onNavigate={onNavigate} />
     </div>
+  )
+  // El espejo se activa con VITE_ESPEJO=on; por defecto queda en ruta directa a Sheets.
+  const flag = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_ESPEJO ?? 'off'
+  return (
+    <EspejoProvider flag={flag} store={crearStoreMemoria()}>
+      {contenido}
+    </EspejoProvider>
   )
 }

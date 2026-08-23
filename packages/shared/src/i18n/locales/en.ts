@@ -307,6 +307,11 @@ const en: Partial<Dict> = {
   historial: {
     abonos: 'Payment history',
     saldoRestante: 'Remaining balance'
+  },
+  espejo: {
+    sincronizado: 'Data synced',
+    sincronizarAhora: 'Sync now',
+    modoOffline: 'Offline mode'
   }
 }
 

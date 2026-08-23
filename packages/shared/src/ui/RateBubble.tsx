@@ -4,7 +4,24 @@ import { activeCurrencies, parseRates, tasasFrescas, fetchExchangeRates } from '
 import { Button } from './components'
 import { IconCoins } from './icons'
 import { useI18n } from '../i18n'
+import { useEspejo } from '../store/espejoContext'
 import type { NavKey } from './layout/Layout'
+
+/** Indicador de frescura del espejo + sincronización manual (visible si activo). */
+function FrescuraEspejo() {
+  const { t } = useI18n()
+  const { activo, ultimoPull, sincronizarAhora } = useEspejo()
+  if (!activo) return null
+  return (
+    <div className="flex items-center justify-between gap-2 text-xs">
+      <span className="text-muted-foreground">{t('espejo.sincronizado')}: {ultimoPull ? new Date(ultimoPull).toLocaleTimeString() : '—'}</span>
+      <button type="button" onClick={() => void sincronizarAhora()}
+        className="text-primary underline decoration-dotted underline-offset-2 hover:text-primary-hover">
+        ⟳ {t('espejo.sincronizarAhora')}
+      </button>
+    </div>
+  )
+}
 
 /** Burbuja flotante persistente con la tasa del día y actualización rápida. */
 export function RateBubble({ onNavigate }: { onNavigate?: (k: NavKey) => void }) {
@@ -72,8 +89,9 @@ export function RateBubble({ onNavigate }: { onNavigate?: (k: NavKey) => void })
               {frescas ? t('tasas.alDia') : t('tasas.desactualizada')}: {rates.fecha}
             </p>
           )}
+          <FrescuraEspejo />
           {error && <p className="text-xs text-red-600">{error}</p>}
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button size="sm" variant="outline" onClick={actualizar} disabled={actualizando}>
               {actualizando ? t('imagenes.subiendo') : t('tasas.actualizar')}
             </Button>

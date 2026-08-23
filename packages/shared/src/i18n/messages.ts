@@ -617,6 +617,11 @@ export const messages = {
     abonos: 'Historial de abonos',
     saldoRestante: 'Saldo restante'
   },
+  espejo: {
+    sincronizado: 'Datos sincronizados',
+    sincronizarAhora: 'Sincronizar ahora',
+    modoOffline: 'Modo offline'
+  },
   offline: {
     banner: '⚠ Trabajando sin conexión — verifica tu red para sincronizar con la hoja de cálculo'
   },

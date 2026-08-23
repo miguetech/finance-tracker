@@ -9,6 +9,8 @@ import { DEFAULT_METODOS_PAGO } from '../types/schemas'
 import { getCurrency, registerCurrency, parseCustomCurrencies, type Currency } from '../currency'
 
 const RepoCtx = createContext<Repository | null>(null)
+/** Acceso interno para contextos derivados (espejo). */
+export const _repoCtx = RepoCtx
 export function useRepo(): Repository {
   const repo = useContext(RepoCtx)
   if (!repo) throw new Error('useRepo fuera de AppProvider')
