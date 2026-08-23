@@ -324,7 +324,9 @@ const en: Partial<Dict> = {
     configurarPin: 'Set a PIN to be able to enter offline next time:',
     guardarPin: 'Save PIN',
     pinGuardado: 'PIN saved',
-    ultimaSync: 'Last sync'
+    ultimaSync: 'Last sync',
+    cifrarDatos: 'Encrypt local data with this PIN (recommended on shared computers)',
+    pedirPinCifrado: 'Enter your PIN to unlock the encrypted local data'
   },
   cola: {
     pendientes: '{n} pending changes to sync',

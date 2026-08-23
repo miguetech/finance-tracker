@@ -633,7 +633,9 @@ export const messages = {
     configurarPin: 'Configura un PIN para poder entrar sin conexión la próxima vez:',
     guardarPin: 'Guardar PIN',
     pinGuardado: 'PIN guardado',
-    ultimaSync: 'Última sincronización'
+    ultimaSync: 'Última sincronización',
+    cifrarDatos: 'Cifrar los datos locales con este PIN (recomendado si compartes equipo)',
+    pedirPinCifrado: 'Ingresa tu PIN para desbloquear los datos locales cifrados'
   },
   cola: {
     pendientes: '{n} pendientes de sincronizar',

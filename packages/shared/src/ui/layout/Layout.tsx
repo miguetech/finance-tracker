@@ -15,7 +15,7 @@ export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuen
 
 export interface NavItem { key: NavKey; label: string; Icon: (p: { className?: string }) => ReactNode }
 
-export function Layout({ current, onNavigate, children, headerExtra, filterNav, extraItems, espejoForzado }: {
+export function Layout({ current, onNavigate, children, headerExtra, filterNav, extraItems, espejoForzado, storeExterno }: {
   current: NavKey
   onNavigate: (k: NavKey) => void
   children: ReactNode
@@ -24,6 +24,8 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
   extraItems?: NavItem[]
   /** Sesión offline: activa el espejo aunque el flag de entorno esté off. */
   espejoForzado?: boolean
+  /** Store ya creado por el host (p. ej. espejo cifrado con PIN). */
+  storeExterno?: EspejoStore | null
 }) {
   const { t } = useI18n()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -84,16 +86,17 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
     </div>
   )
   // El espejo se activa con VITE_ESPEJO=on (o forzado en sesión offline); por
-  // defecto queda en ruta directa a Sheets.
+  // defecto queda en ruta directa a Sheets. Un store externo (cifrado) manda.
   const flagEntorno = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_ESPEJO ?? 'off'
-  const flag = espejoForzado ? 'on' : flagEntorno
-  const [espejoStore, setEspejoStore] = useState<EspejoStore | null>(null)
+  const flag = storeExterno || espejoForzado ? 'on' : flagEntorno
+  const [espejoStore, setEspejoStore] = useState<EspejoStore | null>(storeExterno ?? null)
   useEffect(() => {
+    if (storeExterno) { setEspejoStore(storeExterno); return }
     if (flag !== 'on') return
     let vivo = true
     void crearStoreEspejo().then(s => { if (vivo) setEspejoStore(s) })
     return () => { vivo = false }
-  }, [flag])
+  }, [flag, storeExterno])
   return (
     <EspejoProvider flag={flag} store={espejoStore}>
       {contenido}

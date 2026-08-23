@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore } from '@ft/shared'
-import type { NavKey, NavItem, ModuleKey, PermsInfo, RegistroSesion } from '@ft/shared'
+import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo } from '@ft/shared'
+import type { NavKey, NavItem, ModuleKey, PermsInfo, RegistroSesion, EspejoStore } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
 import { loadShareParams, saveShareParams, clearShareParams, loadSessionToken, saveSessionToken, clearSessionToken, saveDeviceToken, loadDeviceToken } from './mode'
-import { SesionOffline } from './offline/SesionOffline'
+import { SesionOffline, PantallaPinCifrado } from './offline/SesionOffline'
 
 const NAV_MODULE: Partial<Record<NavKey, ModuleKey>> = {
   dashboard: 'dashboard', facturas: 'facturas', clientes: 'clientes', empleados: 'empleados',
@@ -15,9 +15,20 @@ function OwnerShell() {
   const [idHoja, setIdHoja] = useState<string | null>(null)
   const [sesionLocal, setSesionLocal] = useState<RegistroSesion | null>(null)
   const [modoOffline, setModoOffline] = useState(false)
+  // Clave del espejo cifrado: derivada del PIN y retenida solo en memoria.
+  const [claveEspejo, setClaveEspejo] = useState<(() => Promise<string>) | null>(null)
+  const [storeCifrado, setStoreCifrado] = useState<EspejoStore | null>(null)
+  const [pendientePinCifrado, setPendientePinCifrado] = useState<RegistroSesion | null>(null)
   const [nav, setNav] = useState<NavKey>(() => (sessionStorage.getItem('ft_nav') as NavKey) || 'dashboard')
   const [mes, setMes] = useState(() => sessionStorage.getItem('ft_mes') || monthLocal())
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!claveEspejo || storeCifrado) return
+    let vivo = true
+    void crearStoreEspejo({ clave: claveEspejo }).then(s => { if (vivo) setStoreCifrado(s) })
+    return () => { vivo = false }
+  }, [claveEspejo, storeCifrado])
 
   const navigate = (k: NavKey) => { sessionStorage.setItem('ft_nav', k); setNav(k) }
   const cambiarMes = (m: string) => { sessionStorage.setItem('ft_mes', m); setMes(m) }
@@ -46,6 +57,9 @@ function OwnerShell() {
           await ensureTables(makeApi(), id)
           const email = (await webAuth.getSignedInUser())?.email
           if (email) void guardarRegistroSesion(localStorageAdapter, { cuenta: email })
+          const reg = await cargarRegistroSesion(localStorageAdapter)
+          // Espejo cifrado de sesión anterior: exige PIN antes de abrirlo.
+          if (reg?.cifrado) setPendientePinCifrado(reg)
         } catch {
           // Sin red (o Sheets sin responder): se ofrece modo offline si hubo sesión.
           setSesionLocal(await cargarRegistroSesion(localStorageAdapter))
@@ -84,11 +98,25 @@ function OwnerShell() {
     return (
       <SesionOffline
         registro={sesionLocal}
-        onEntrar={() => setModoOffline(true)}
+        onEntrar={(pinEntrado) => {
+          setModoOffline(true)
+          if (sesionLocal.cifrado && pinEntrado) setClaveEspejo(() => async () => pinEntrado)
+        }}
         onLoginGoogle={() => { void webAuth.getToken(true).catch(() => {}) }}
       />
     )
   }
+  // Espejo cifrado de la sesión anterior: desbloqueo por PIN antes de abrir.
+  if (!modoOffline && pendientePinCifrado && !claveEspejo) {
+    return (
+      <PantallaPinCifrado
+        registro={pendientePinCifrado}
+        onOk={pin => { setClaveEspejo(() => async () => pin); setPendientePinCifrado(null) }}
+        onCancelar={() => setPendientePinCifrado(null)}
+      />
+    )
+  }
+  if (claveEspejo && !storeCifrado) return <div className="p-8">Preparando datos locales…</div>
   const repoBase = useMemo(
     () => createRepository({ api: makeApi(), storage: localStorageAdapter, getSpreadsheetId: async () => idHoja }),
     [idHoja]
@@ -109,7 +137,7 @@ function OwnerShell() {
       {modoOffline && <SincronizadorCola storage={localStorageAdapter} repo={repoBase} activo={sincronizarCola} />}
       <PermsProvider perms={adminPerms()}>
         <Toaster>
-          <Layout current={nav} onNavigate={navigate} extraItems={extraItems} espejoForzado={modoOffline}>
+          <Layout current={nav} onNavigate={navigate} extraItems={extraItems} espejoForzado={modoOffline} storeExterno={storeCifrado}>
             {nav === 'dashboard' && <Dashboard mes={mes} onNavigate={navigate} />}
             {nav === 'facturas' && <Facturas />}
             {nav === 'clientes' && <Clientes />}

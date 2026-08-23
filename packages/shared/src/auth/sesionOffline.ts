@@ -15,6 +15,8 @@ export interface RegistroSesion {
   creado_en: number
   ultimo_pull: number
   pin?: PinAlmacenado
+  /** Fase C: volcado del espejo cifrado con clave derivada del PIN. */
+  cifrado?: boolean
 }
 
 function aB64(bytes: Uint8Array): string {
@@ -94,4 +96,18 @@ export async function verificarPin(storage: StorageAdapter, pin: string): Promis
 export function desbloqueoPermitido(reg: RegistroSesion, ahora = Date.now()): boolean {
   if (reg.pin) return true
   return ahora - reg.ultimo_pull < VENTANA_OFFLINE_MS
+}
+
+/** Fase C: marca el espejo como cifrado; exige PIN ya verificado. */
+export async function activarCifradoEspejo(storage: StorageAdapter, pin: string): Promise<void> {
+  const reg = await cargarRegistroSesion(storage)
+  if (!reg?.pin) throw new Error('Configura un PIN antes de cifrar')
+  if (!(await verificarPin(storage, pin))) throw new Error('PIN incorrecto')
+  await storage.set(KEY_SESION_LOCAL, JSON.stringify({ ...reg, cifrado: true }))
+}
+
+export async function desactivarCifradoEspejo(storage: StorageAdapter): Promise<void> {
+  const reg = await cargarRegistroSesion(storage)
+  if (!reg) return
+  await storage.set(KEY_SESION_LOCAL, JSON.stringify({ ...reg, cifrado: false }))
 }
