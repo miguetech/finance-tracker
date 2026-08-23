@@ -5,6 +5,7 @@ import { buildFactura } from '../calc/invoice'
 import { getCurrency } from '../currency'
 import type { Config, Cliente, CodigoAcceso } from '../types/entities'
 import type { TableName } from '../sheets/tables'
+import { espejoBus } from './espejoBus'
 
 /** Cola local de escrituras para modo offline (spec espejo §9.5).
  *  Las mutaciones se guardan en orden y se reproducen contra Sheets al
@@ -65,7 +66,7 @@ export async function descartarErrores(almacen: StorageAdapter): Promise<void> {
 export function esErrorRed(e: unknown): boolean {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
   const msg = e instanceof Error ? `${e.message}` : String(e)
-  return /fetch|network|Failed to fetch|NetworkError|ERR_INTERNET|token|401|403|500|503/i.test(msg)
+  return /fetch|network|Failed to fetch|NetworkError|ERR_INTERNET|token|401|403|429|500|503/i.test(msg)
 }
 
 export interface ResultadoVaciado { ejecutadas: number; fallidas: number; restantes: number }
@@ -241,6 +242,28 @@ function args0<T>(args: Args): T {
   return args[0] as T
 }
 
+/** Eco visible de una operación encolada (null si no lo modela). */
+export function ecoDe(metodo: string, args: Args, ctx: { configActual?: () => Config | null } = {}): Record<string, unknown> | null {
+  const conf = METODOS_COLA[metodo]
+  if (!conf?.eco) return null
+  const eco = conf.eco(args, { configActual: ctx.configActual })
+  return eco && typeof eco === 'object' ? (eco as Record<string, unknown>) : null
+}
+
+/** Clave id de cada tabla espejo, para insertar/reemplazar la fila del eco. */
+export const ID_POR_TABLA: Partial<Record<TableName, string>> = {
+  Clientes: 'id_cliente',
+  Proveedores: 'id_proveedor',
+  Empleados: 'id_empleado',
+  Facturas: 'id_factura',
+  Pagos: 'id_pago',
+  Gastos: 'id_gasto',
+  Productos: 'id_producto',
+  Cuentas_Pagar: 'id_cxp',
+  Gastos_Fijos: 'id_gastofijo',
+  Asistencias: 'id_asistencia'
+}
+
 export interface OpcionesColaRepo {
   /** Devuelve true mientras la app esté en modo offline (o sin red). */
   activo?: () => boolean
@@ -264,6 +287,8 @@ export function conColaEscrituras(repo: Repository, opciones: OpcionesColaRepo):
       const normales = conf && METODOS_COLA[metodo]?.normalizar ? METODOS_COLA[metodo].normalizar!(args) : args
       await encolarOp(opciones.storage, metodo, normales)
       refrescarEstadoCola(opciones.storage)
+      // El provider aplica el eco al espejo local para que la fila se vea ya guardada.
+      try { espejoBus.onEscrituraLocal?.(metodo, normales) } catch { /* sin provider montado */ }
       return METODOS_COLA[metodo]?.eco ? METODOS_COLA[metodo].eco!(normales, { configActual: opciones.configActual }) : undefined
     }
   }

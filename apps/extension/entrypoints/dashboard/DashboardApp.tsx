@@ -116,7 +116,7 @@ function Boot() {
   // En modo offline las escrituras se encolan localmente y se reproducen al volver la red.
   const repo = conColaEscrituras(repoBase, {
     storage: chromeStorageAdapter,
-    activo: () => modoOffline,
+    activo: () => modoOffline || (typeof navigator !== 'undefined' && navigator.onLine === false),
     configActual: () => useAppStore.getState().config ?? null
   })
 

@@ -35,7 +35,7 @@ function OwnerShell() {
   const repo = useMemo(
     () => conColaEscrituras(repoBase, {
       storage: localStorageAdapter,
-      activo: () => modoOffline,
+      activo: () => modoOffline || (typeof navigator !== 'undefined' && navigator.onLine === false),
       configActual: () => useAppStore.getState().config ?? null
     }),
     [repoBase, modoOffline]

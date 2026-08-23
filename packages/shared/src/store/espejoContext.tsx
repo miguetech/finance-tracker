@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { crearEspejo, TABLAS_CALIENTES, type EspejoStore } from '../sync/espejo'
+import { ddlDesdeTables } from '../sync/ddl'
 import { espejoBus } from '../sync/espejoBus'
+import { TABLAS_POR_METODO, ecoDe, ID_POR_TABLA } from '../sync/colaEscrituras'
 import type { TableName } from '../sheets/tables'
 import { useRepo, _repoCtx as RepoCtx } from './queries'
 import { EspejoCtx, type EspejoCtxValue } from './espejoReact'
+import { useAppStore } from './appStore'
 import { useContext } from 'react'
 
 /** TTL de refresco de tablas calientes. */
@@ -82,9 +85,34 @@ export function EspejoProvider({ flag, store = null, fetchTable, children }: {
 
   const sincronizarAhora = async (tablas?: TableName[]) => {
     if (!espejo) return
+    // Sin red: los pulls solo generan errores (y tormenta de 429 al volver).
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
     await espejo.pull(tablas ?? (ultimoRef.current === 0 ? undefined : TABLAS_CALIENTES))
     ultimoRef.current = espejo.estado().ultimoPull
     setUltimoPull(ultimoRef.current)
+  }
+
+  /** Escritura encolada offline: inserta/reemplaza la fila del eco en el
+   *  espejo local para que la UI la muestre ya guardada. El próximo pull
+   *  con red reescribe las tablas tocadas con la verdad de Sheets. */
+  const aplicarEscrituraLocal = async (metodo: string, args: unknown[]) => {
+    if (!store) return
+    const tablas = TABLAS_POR_METODO[metodo]
+    if (!tablas?.length) return
+    const eco = ecoDe(metodo, args, { configActual: () => useAppStore.getState().config ?? null })
+    if (!eco) return
+    const tabla = tablas.find(t => ID_POR_TABLA[t])
+    if (!tabla) return
+    const idKey = ID_POR_TABLA[tabla]!
+    try {
+      await store.init(ddlDesdeTables().flatMap(d => [d.create, ...d.indexes]))
+      const filas = await store.getAllRows(tabla)
+      const nueva = { ...eco } as Record<string, string | number>
+      const resto = filas.filter(f => String(f[idKey]) !== String(nueva[idKey]))
+      await store.replaceTable(tabla, [...resto, nueva])
+      for (const key of QUERY_KEYS_POR_TABLA[tabla] ?? []) void qc.invalidateQueries({ queryKey: [key] })
+      if (tabla === 'Facturas') void qc.invalidateQueries({ queryKey: ['facturas'] })
+    } catch { /* espejo no disponible: la fila aparecerá tras sincronizar */ }
   }
 
   useEffect(() => {
@@ -95,10 +123,12 @@ export function EspejoProvider({ flag, store = null, fetchTable, children }: {
       if (Date.now() - ultimoRef.current >= TABLAS_CALIENTES_TTL_MS) void sincronizarAhora(TABLAS_CALIENTES)
     }
     espejoBus.onEscritura = (tablas) => { void sincronizarAhora(tablas) }
+    espejoBus.onEscrituraLocal = (metodo, args) => { void aplicarEscrituraLocal(metodo, args) }
     document.addEventListener('visibilitychange', alFoco)
     const timer = setInterval(alFoco, TABLAS_CALIENTES_TTL_MS)
     return () => {
       espejoBus.onEscritura = undefined
+      espejoBus.onEscrituraLocal = undefined
       document.removeEventListener('visibilitychange', alFoco)
       clearInterval(timer)
     }

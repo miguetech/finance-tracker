@@ -173,6 +173,33 @@ describe('conColaEscrituras — envoltorio del repositorio', () => {
 describe('esErrorRed', () => {
   it('distingue transporte de negocio', () => {
     expect(esErrorRed(new Error('Failed to fetch'))).toBe(true)
+    expect(esErrorRed(new Error('Sheets API 429: quota'))).toBe(true)
     expect(esErrorRed(new Error('Pago excede saldo disponible'))).toBe(false)
+  })
+})
+
+describe('escritura encolada dispara eco local en el bus', () => {
+  it('onEscrituraLocal recibe metodo y args normalizados (id asignado)', async () => {
+    const { espejoBus } = await import('../src/sync/espejoBus')
+    const vistas: Array<{ metodo: string; args: unknown[] }> = []
+    espejoBus.onEscrituraLocal = (metodo, args) => { vistas.push({ metodo, args }) }
+    const s = kvFalso()
+    const envuelto = conColaEscrituras(repoFalso(), { storage: s, activo: () => true, configActual: () => configFake })
+    await envuelto.saveCliente({ nombre: 'Ana' } as never)
+    espejoBus.onEscrituraLocal = undefined
+    expect(vistas).toHaveLength(1)
+    expect(vistas[0].metodo).toBe('saveCliente')
+    expect((vistas[0].args[0] as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
+  })
+
+  it('fuera de modo offline no toca el bus', async () => {
+    const { espejoBus } = await import('../src/sync/espejoBus')
+    let llamadas = 0
+    espejoBus.onEscrituraLocal = () => { llamadas++ }
+    const s = kvFalso()
+    const envuelto = conColaEscrituras(repoFalso(), { storage: s, activo: () => false })
+    await envuelto.deleteGasto('g1')
+    espejoBus.onEscrituraLocal = undefined
+    expect(llamadas).toBe(0)
   })
 })
