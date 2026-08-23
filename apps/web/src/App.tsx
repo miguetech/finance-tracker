@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion } from '@ft/shared'
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore } from '@ft/shared'
 import type { NavKey, NavItem, ModuleKey, PermsInfo, RegistroSesion } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
@@ -89,10 +89,24 @@ function OwnerShell() {
       />
     )
   }
-  const repo = createRepository({ api: makeApi(), storage: localStorageAdapter, getSpreadsheetId: async () => idHoja })
+  const repoBase = useMemo(
+    () => createRepository({ api: makeApi(), storage: localStorageAdapter, getSpreadsheetId: async () => idHoja }),
+    [idHoja]
+  )
+  // En modo offline las escrituras se encolan localmente y se reproducen al volver la red.
+  const repo = useMemo(
+    () => conColaEscrituras(repoBase, {
+      storage: localStorageAdapter,
+      activo: () => modoOffline,
+      configActual: () => useAppStore.getState().config ?? null
+    }),
+    [repoBase, modoOffline]
+  )
+  const sincronizarCola = useCallback(() => modoOffline, [modoOffline])
   const extraItems: NavItem[] = [{ key: 'compartir', label: 'Compartir', Icon: IconShare }]
   return (
     <AppProvider repo={repo}>
+      {modoOffline && <SincronizadorCola storage={localStorageAdapter} repo={repoBase} activo={sincronizarCola} />}
       <PermsProvider perms={adminPerms()}>
         <Toaster>
           <Layout current={nav} onNavigate={navigate} extraItems={extraItems} espejoForzado={modoOffline}>

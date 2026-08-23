@@ -325,6 +325,12 @@ const en: Partial<Dict> = {
     guardarPin: 'Save PIN',
     pinGuardado: 'PIN saved',
     ultimaSync: 'Last sync'
+  },
+  cola: {
+    pendientes: '{n} pending changes to sync',
+    conError: '{n} failed operations',
+    reintentar: 'Retry',
+    descartar: 'Discard'
   }
 }
 

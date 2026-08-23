@@ -5,6 +5,7 @@ import { IconDashboard, IconInvoice, IconClient, IconUsers, IconPayables, IconRe
 import { useI18n } from '../../i18n'
 import { OfflineBanner } from '../hooks'
 import { RateBubble } from '../RateBubble'
+import { ColaBubble } from '../colaSync'
 import { EspejoProvider } from '../../store/espejoContext'
 import { crearStoreEspejo } from '../../sync/stores/sqlite'
 import type { EspejoStore } from '../../sync/espejo'
@@ -79,6 +80,7 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
         <main className="flex-1 p-4 md:p-8"><div className="max-w-6xl mx-auto">{children}</div></main>
       </div>
       <RateBubble onNavigate={onNavigate} />
+      <ColaBubble />
     </div>
   )
   // El espejo se activa con VITE_ESPEJO=on (o forzado en sesión offline); por

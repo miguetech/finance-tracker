@@ -635,6 +635,12 @@ export const messages = {
     pinGuardado: 'PIN guardado',
     ultimaSync: 'Última sincronización'
   },
+  cola: {
+    pendientes: '{n} pendientes de sincronizar',
+    conError: '{n} operaciones con error',
+    reintentar: 'Reintentar',
+    descartar: 'Descartar'
+  },
   offline: {
     banner: '⚠ Trabajando sin conexión — verifica tu red para sincronizar con la hoja de cálculo'
   },
