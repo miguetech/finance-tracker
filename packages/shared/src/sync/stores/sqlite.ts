@@ -287,7 +287,11 @@ export async function crearStoreEspejo(opciones: OpcionesSqliteStore & { ruta?: 
       await s.init([])
       creado = s
     }
-  } catch { /* cae a OPFS/memoria abajo */ }
+  } catch (e) {
+    // Con clave pedida este fallo es GRAVE (no hay fallback seguro que pueda
+    // descifrar); dejarlo en silencio fingía un espejo vacío "normal".
+    console.error('[espejo] apertura del volcado FALLÓ:', e)
+  }
   if (!creado) {
     try {
       const s = crearSqliteStore(ruta)
