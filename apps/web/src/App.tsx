@@ -24,7 +24,9 @@ function OwnerShell() {
 
   const navigate = (k: NavKey) => { sessionStorage.setItem('ft_nav', k); setNav(k) }
   const cambiarMes = (m: string) => { sessionStorage.setItem('ft_mes', m); setMes(m) }
-  const makeApi = () => new SheetsApi(async () => { try { return await webAuth.getToken(false) } catch { return await webAuth.getToken(true) } })
+  // Sin cascada a interactivo: un token vencido en mitad de una escritura
+  // no debe navegar a accounts.google.com; falla y la cola local guarda.
+  const makeApi = () => new SheetsApi(async () => webAuth.getToken(false))
 
   // Hooks SIEMPRE antes de cualquier return temprano (Rules of Hooks).
   const repoBase = useMemo(
@@ -176,7 +178,7 @@ function VisitorInner({ apiUrl }: { apiUrl: string }) {
   const cambiarMes = (m: string) => setMes(m)
   const repo = useMemo(() => createRemoteRepository({
     apiUrl,
-    getIdToken: async () => { try { return await webAuth.getIdToken(false) } catch { return await webAuth.getIdToken(true) } },
+    getIdToken: async () => webAuth.getIdToken(false),
     getSessionToken: async () => loadSessionToken()
   }), [apiUrl])
   const filterNav = (k: NavKey) => k === 'configuracion' ? false : (NAV_MODULE[k] ? canView(NAV_MODULE[k]!) : true)
@@ -212,7 +214,7 @@ function VisitorShell({ apiUrl }: { apiUrl: string }) {
   const [entrando, setEntrando] = useState(false)
   const repo = useMemo(() => createRemoteRepository({
     apiUrl,
-    getIdToken: async () => { try { return await webAuth.getIdToken(false) } catch { return await webAuth.getIdToken(true) } },
+    getIdToken: async () => webAuth.getIdToken(false),
     getSessionToken: async () => loadSessionToken()
   }), [apiUrl])
 
