@@ -32,7 +32,10 @@ export function createSheetsTableStore(api: SheetsApi, sid: () => Promise<string
     async getAll<T = Record<string, string | number>>(t: TableName): Promise<T[]> {
       const id = await sid()
       const res = await api.batchGet(id, [rangeOf(t)])
-      return (res[Object.keys(res)[0]] ?? []) as unknown as T[] ? parseTabla<T>(t, res[Object.keys(res)[0]] ?? []) : []
+      if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) {
+        console.debug(`[sheets] getAll ${t}`)
+      }
+      return parseTabla<T>(t, res[Object.keys(res)[0]] ?? [])
     },
     async getVarias<T = Record<string, string | number>>(ts: TableName[]): Promise<Partial<Record<TableName, T[]>>> {
       if (!ts.length) return {}

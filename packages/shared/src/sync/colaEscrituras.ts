@@ -87,9 +87,13 @@ export async function vaciarCola(
   const red = opts.esErrorRed ?? esErrorRed
   let ejecutadas = 0
   let fallidas = 0
-  for (const op of await cargarCola(almacen)) {
+  const pendientesAlEntrar = await cargarCola(storage)
+  for (const [i, op] of pendientesAlEntrar.entries()) {
     if (!enLinea()) break
     if (op.estado === 'error') continue // requiere reintento o descarte manual
+    // Pacing: cada op lee+escribe su tabla; sin pausa la ráfaga del flush
+    // vuelve a quemar la cuota justo al reconectar.
+    if (i > 0) await new Promise(r => setTimeout(r, 500))
     try {
       const fn = (repo as unknown as Record<string, (...a: unknown[]) => unknown>)[op.metodo]
       if (typeof fn !== 'function') throw new Error(`Método desconocido: ${op.metodo}`)
