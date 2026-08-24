@@ -324,6 +324,23 @@ const en: Partial<Dict> = {
     creada: 'Sheet created and connected',
     hint: 'Use a distinctive name (e.g. "FinanceTracker — Your Company") to make the link obvious; if one of your sheets already has that name it connects to it and validates edit permissions.'
   },
+  seguridad: {
+    titulo: 'Local PIN & encryption',
+    descripcion: 'Protects data stored on this device.',
+    sinSesion: 'Sign in once to configure the PIN.',
+    pinActual: 'Current PIN',
+    pinNuevo: 'New PIN (4–6 digits)',
+    cambiarPin: 'Change PIN',
+    configurarPin: 'Set PIN',
+    pinGuardado: 'PIN updated',
+    pinActualIncorrecto: 'Current PIN does not match',
+    activarCifrado: 'Enable encryption',
+    desactivarCifrado: 'Disable encryption',
+    actualizado: 'Preferences updated',
+    cifradoActivo: 'Mirror encryption: ON',
+    cifradoInactivo: 'Mirror encryption: off',
+    sinEmail: 'The PIN is local to this device; email recovery is not possible.'
+  },
   authOffline: {
     titulo: 'Saved session',
     continuarComo: 'Continue as',

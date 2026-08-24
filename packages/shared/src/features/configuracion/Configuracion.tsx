@@ -3,6 +3,9 @@ import { todayLocal } from '../../lib/date'
 import { useConfig, useRepo } from '../../store/queries'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Repository } from '../../data/repository'
+import { cargarRegistroSesion, configurarPin, verificarPin, activarCifradoEspejo, desactivarCifradoEspejo } from '../../auth/sesionOffline'
+import { localStorageAdapter } from '../../data/storage'
+import type { RegistroSesion } from '../../auth/sesionOffline'
 import { Card, Button, Input, Select, Dialog, Tooltip, useToast } from '../../ui/components'
 import { IconPlus, IconX, IconAlert, IconSwap, IconCoins } from '../../ui/icons'
 import { CURRENCIES, parseRates, tasasFrescas, fetchExchangeRates, parseCustomCurrencies, registerCurrency } from '../../currency'
@@ -25,6 +28,34 @@ export function Configuracion() {
   const qc = useQueryClient()
   const hojaQ = useQuery({ queryKey: ['hojaActual'], queryFn: () => (repo as Repository).hojaActual() })
   const [nombreHoja, setNombreHoja] = useState('')
+  const [regPin, setRegPin] = useState<RegistroSesion | null>(null)
+  const [pinActual, setPinActual] = useState('')
+  const [pinNuevo, setPinNuevo] = useState('')
+  useEffect(() => { void cargarRegistroSesion(localStorageAdapter).then(setRegPin) }, [])
+  const guardarPinConfig = async () => {
+    try {
+      if (regPin?.pin && !(await verificarPin(localStorageAdapter, pinActual))) {
+        toast(t('seguridad.pinActualIncorrecto'), 'error'); return
+      }
+      await configurarPin(localStorageAdapter, pinNuevo)
+      if (!regPin?.pin) await activarCifradoEspejo(localStorageAdapter, pinNuevo)
+      setRegPin(await cargarRegistroSesion(localStorageAdapter))
+      setPinActual(''); setPinNuevo('')
+      toast(t('seguridad.pinGuardado'))
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    }
+  }
+  const toggleCifrado = async () => {
+    try {
+      if (regPin?.cifrado) await desactivarCifradoEspejo(localStorageAdapter)
+      else await activarCifradoEspejo(localStorageAdapter, pinActual || pinNuevo)
+      setRegPin(await cargarRegistroSesion(localStorageAdapter))
+      toast(t('seguridad.actualizado'))
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    }
+  }
   const [conectandoHoja, setConectandoHoja] = useState(false)
   const conectarHoja = async () => {
     if (!nombreHoja.trim()) return
@@ -48,6 +79,35 @@ export function Configuracion() {
   const [ayudaFolio, setAyudaFolio] = useState(false)
   useEffect(() => { if (config && !form) setForm(config) }, [config, form])
   if (!config || !form) return <div className="p-8 text-muted-foreground">{t('common.cargando')}</div>
+  const tarjetaSeguridad = (
+    <section className="mb-6 rounded-xl border border-gray-200 bg-surface p-5">
+      <h2 className="font-semibold mb-1">{t('seguridad.titulo')}</h2>
+      <p className="text-xs text-muted-foreground mb-3">{t('seguridad.descripcion')}</p>
+      {!regPin ? (
+        <p className="text-sm text-muted-foreground">{t('seguridad.sinSesion')}</p>
+      ) : (
+        <div className="space-y-2 max-w-md">
+          {regPin.pin && (
+            <Input type="password" value={pinActual} onChange={e => setPinActual(e.target.value)} placeholder={t('seguridad.pinActual')} inputMode="numeric" />
+          )}
+          <Input type="password" value={pinNuevo} onChange={e => setPinNuevo(e.target.value)} placeholder={t('seguridad.pinNuevo')} inputMode="numeric" />
+          <div className="flex gap-2">
+            <Button onClick={() => void guardarPinConfig()} disabled={pinNuevo.length < 4}>{regPin.pin ? t('seguridad.cambiarPin') : t('seguridad.configurarPin')}</Button>
+            {regPin.pin && (
+              <Button variant="outline" onClick={() => void toggleCifrado()} disabled={!pinActual && !pinNuevo}>
+                {regPin.cifrado ? t('seguridad.desactivarCifrado') : t('seguridad.activarCifrado')}
+              </Button>
+            )}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {regPin.cifrado ? t('seguridad.cifradoActivo') : t('seguridad.cifradoInactivo')}
+            {' · '}
+            {t('seguridad.sinEmail')}
+          </p>
+        </div>
+      )}
+    </section>
+  )
   const tarjetaHoja = (
     <section className="mb-6 rounded-xl border border-gray-200 bg-surface p-5">
       <h2 className="font-semibold mb-1">{t('hoja.titulo')}</h2>
@@ -122,6 +182,7 @@ export function Configuracion() {
     <div className="space-y-6">
       <h1 className="text-xl font-bold">{t('configuracion.title')}</h1>
       {tarjetaHoja}
+      {tarjetaSeguridad}
       <Card title={t('configuracion.idioma')}>
         <Select value={locale} onChange={setLocale as (v: string) => void}
           options={SUPPORTED_LOCALES.map(l => ({ value: l, label: LOCALE_LABELS[l] }))} />

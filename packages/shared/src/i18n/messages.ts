@@ -633,6 +633,23 @@ export const messages = {
     creada: 'Hoja creada y conectada',
     hint: 'Usa un nombre distintivo (ej. "FinanceTracker — Tu Empresa") para identificar la vinculación; si ya existe una hoja tuya con ese nombre se conecta a ella y valida que tengas permisos de edición.'
   },
+  seguridad: {
+    titulo: 'PIN y cifrado local',
+    descripcion: 'Protege los datos guardados en este dispositivo.',
+    sinSesion: 'Inicia sesión una vez para poder configurar el PIN.',
+    pinActual: 'PIN actual',
+    pinNuevo: 'PIN nuevo (4–6 dígitos)',
+    cambiarPin: 'Cambiar PIN',
+    configurarPin: 'Configurar PIN',
+    pinGuardado: 'PIN actualizado',
+    pinActualIncorrecto: 'El PIN actual no coincide',
+    activarCifrado: 'Activar cifrado',
+    desactivarCifrado: 'Desactivar cifrado',
+    actualizado: 'Preferencias actualizadas',
+    cifradoActivo: 'Cifrado del espejo: ACTIVO',
+    cifradoInactivo: 'Cifrado del espejo: inactivo',
+    sinEmail: 'El PIN es local a este dispositivo; no admite recuperación por correo.'
+  },
   authOffline: {
     titulo: 'Sesión guardada',
     continuarComo: 'Continuar como',
