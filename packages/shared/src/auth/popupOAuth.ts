@@ -80,7 +80,7 @@ export function popupOAuth(options: { clientId: string; redirectUri: string }): 
       iframe.style.display = 'none'
       iframe.src = authUrl('none')
       const cleanup = () => { iframe.remove() }
-      const timer = window.setTimeout(() => { cleanup(); resolve({ access: null, idToken: null }) }, 15000)
+      const timer = window.setTimeout(() => { cleanup(); resolve({ access: null, idToken: null }) }, 6000)
       iframe.onload = () => {
         try {
           const hash = iframe.contentWindow?.location.hash ?? ''

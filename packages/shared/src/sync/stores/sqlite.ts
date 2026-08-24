@@ -76,6 +76,9 @@ export interface OpcionesSqliteStore {
   clave?: () => Promise<string>
 }
 
+/** Diagnóstico de la última apertura (visible vía window.__ftEspejo). */
+export interface InfoApertura { habiaVolcado: boolean; bytesVolcado: number | null; volcadoCifrado: boolean | null; bytesAplicados: number | null }
+
 let moduloCache: Promise<Sqlite3> | null = null
 
 function cargarModulo(): Promise<Sqlite3> {
@@ -95,6 +98,7 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
   let vfsUsado = 'memory'
   let sucio = false
   let persistirTimer: ReturnType<typeof setTimeout> | null = null
+  const apertura: InfoApertura = { habiaVolcado: false, bytesVolcado: null, volcadoCifrado: null, bytesAplicados: null }
 
   async function abrir(): Promise<SqliteDb> {
     if (db) return db
@@ -107,15 +111,31 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
       try {
         const json = await persistor.cargar()
         if (json) {
+          apertura.habiaVolcado = true
+          apertura.bytesVolcado = json.length
           const volcado = decodificar(json)
           if (volcado) {
-            const bytes = volcado.cifrado && clave
-              ? await descifrarVolcado(await clave(), JSON.parse(json) as VolcadoCifrado)
-              : (volcado.cifrado ? null : deB64(volcado.datosB64))
-            if (bytes) cargarImagen(sqlite3, db, bytes)
+            apertura.volcadoCifrado = volcado.cifrado
+            let bytes: Uint8Array | null = null
+            if (volcado.cifrado && clave) {
+              bytes = await descifrarVolcado(await clave(), JSON.parse(json) as VolcadoCifrado)
+            } else if (volcado.cifrado) {
+              // Volcado cifrado abierto sin clave: NO es error, pero explica un espejo vacío.
+              console.warn('[espejo] el volcado en IndexedDB está CIFRADO y esta sesión lo abrió sin PIN: se arranca vacío')
+            } else {
+              bytes = deB64(volcado.datosB64)
+            }
+            if (bytes) {
+              cargarImagen(sqlite3, db, bytes)
+              apertura.bytesAplicados = bytes.length
+            }
           }
+        } else {
+          console.debug('[espejo] sin volcado previo en IndexedDB: espejo nuevo')
         }
-      } catch { /* blob corrupto o PIN distinto: espejo nuevo desechable */ }
+      } catch (e) {
+        console.warn('[espejo] volcado ilegible, espejo nuevo:', e instanceof Error ? e.message : e)
+      }
       return db
     }
     console.debug(`[espejo] persistencia=opfs|${ruta}`)
@@ -270,19 +290,20 @@ export async function crearStoreEspejo(opciones: OpcionesSqliteStore & { ruta?: 
       creado = await crearStoreMemoria()
     }
   }
-  exponerDebug(creado)
+  exponerDebug(creado, apertura)
   return creado
 }
 
 const TABLAS_DEBUG = Object.keys(TABLES) as TableName[]
 
 /** Solo dev: window.__ftEspejo.conteo() lista filas por tabla del espejo. */
-function exponerDebug(store: EspejoStore): void {
+function exponerDebug(store: EspejoStore, apertura: InfoApertura): void {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
   if (!env?.DEV || env.DEV === 'false') return
   const w = globalThis as unknown as { __ftEspejo?: unknown }
   w.__ftEspejo = {
     vfs: () => ((store as EspejoStore & { vfs?: () => string }).vfs?.() ?? 'memoria'),
+    apertura,
     conteo: async (): Promise<Record<string, number>> => {
       const out: Record<string, number> = {}
       for (const t of TABLAS_DEBUG) {
