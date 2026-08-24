@@ -232,3 +232,18 @@ describe('escritura encolada dispara eco local en el bus', () => {
     expect(llamadas).toBe(0)
   })
 })
+
+describe('techo del intento directo', () => {
+  it('red colgada: el intento expira, encola y devuelve eco sin colgar el modal', async () => {
+    const s = kvFalso()
+    const nunca = () => new Promise(() => {}) // red que traga paquetes
+    const repo = repoFalso({ saveCliente: nunca })
+    const envuelto = conColaEscrituras(repo, { storage: s, activo: () => false, techoMs: 30 })
+    const eco = await envuelto.saveCliente({ nombre: 'Tarde pero seguro' } as never)
+    expect((eco as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
+    expect(await resumirCola(s)).toEqual({ pendientes: 1, errores: 0 })
+    // El flush posterior sí la envía.
+    const res = await vaciarCola(s, repoFalso())
+    expect(res.ejecutadas).toBe(1)
+  })
+})

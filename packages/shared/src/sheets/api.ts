@@ -18,7 +18,7 @@ export class SheetsApi {
       const token = await this.tokenGetter()
       // Sin timeout una red que traga paquetes cuelga el modal indefinidamente.
       const ctrl = new AbortController()
-      const temporizador = setTimeout(() => ctrl.abort(), 15_000)
+      const temporizador = setTimeout(() => ctrl.abort(), 8_000)
       let res: Response
       try {
         res = await fetch(url, {

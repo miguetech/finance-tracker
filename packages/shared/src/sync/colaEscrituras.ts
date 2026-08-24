@@ -284,9 +284,22 @@ export const BAJAS_POR_METODO: Partial<Record<string, { tabla: TableName; idKey:
   deleteFactura: { tabla: 'Facturas', idKey: 'id_factura' }
 }
 
+/** Techo para el intento directo: pasado este plazo se considera red caída
+ *  y la escritura cae a la cola. Garantiza que el modal SIEMPRE resuelva. */
+const TECHO_INTENTO_DIRECTO_MS = 8_000
+
+function conTecho<T>(p: Promise<T>, ms = TECHO_INTENTO_DIRECTO_MS): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('Failed to fetch: timeout de red')), ms)
+    p.then(v => { clearTimeout(t); resolve(v) }, e => { clearTimeout(t); reject(e) })
+  })
+}
+
 export interface OpcionesColaRepo {
   /** Devuelve true mientras la app esté en modo offline (o sin red). */
   activo?: () => boolean
+  /** Techo del intento directo en ms (tests usan valores cortos). */
+  techoMs?: number
   /** Snapshot de config cacheado (zustand) para calcular totales locales. */
   configActual?: () => Config | null
   storage: StorageAdapter
@@ -305,7 +318,7 @@ export function conColaEscrituras(repo: Repository, opciones: OpcionesColaRepo):
     ;(envuelto as unknown as Record<string, (...a: never[]) => unknown>)[metodo] = async (...args: Args): Promise<unknown> => {
       if (!activo()) {
         try {
-          return await original.apply(repo, args as never[])
+          return await conTecho(original.apply(repo, args as never[]) as Promise<unknown>, opciones.techoMs)
         } catch (e) {
           // navigator.onLine puede mentir (DevTools, wifi a medio morir): si el
           // fallo es de transporte, la escritura cae a la cola en vez de romper
