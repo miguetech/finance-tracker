@@ -91,7 +91,7 @@ function cargarModulo(): Promise<Sqlite3> {
  * OPFS nativo; volcado cifrado en IndexedDB (persistor + clave); volcado
  * plano en IndexedDB (persistor); memoria de sesión.
  */
-export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones: OpcionesSqliteStore = {}): EspejoStore & { vfs: () => string } {
+export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones: OpcionesSqliteStore = {}): EspejoStore & { vfs: () => string; infoApertura?: () => InfoApertura } {
   const { persistor, clave } = opciones
   let db: SqliteDb | null = null
   let sqlite3Ref: Sqlite3 | null = null
@@ -188,6 +188,7 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
 
   return {
     vfs: () => vfsUsado,
+    infoApertura: () => apertura,
 
     async init(ddl: string[]): Promise<void> {
       const dbActivo = await abrir()
@@ -290,20 +291,21 @@ export async function crearStoreEspejo(opciones: OpcionesSqliteStore & { ruta?: 
       creado = await crearStoreMemoria()
     }
   }
-  exponerDebug(creado, apertura)
+  const conVfs = creado as EspejoStore & { infoApertura?: () => InfoApertura }
+  exponerDebug(creado, () => conVfs.infoApertura?.() ?? { habiaVolcado: false, bytesVolcado: null, volcadoCifrado: null, bytesAplicados: null })
   return creado
 }
 
 const TABLAS_DEBUG = Object.keys(TABLES) as TableName[]
 
 /** Solo dev: window.__ftEspejo.conteo() lista filas por tabla del espejo. */
-function exponerDebug(store: EspejoStore, apertura: InfoApertura): void {
+function exponerDebug(store: EspejoStore, aperturaInfo: () => InfoApertura): void {
   const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
   if (!env?.DEV || env.DEV === 'false') return
   const w = globalThis as unknown as { __ftEspejo?: unknown }
   w.__ftEspejo = {
     vfs: () => ((store as EspejoStore & { vfs?: () => string }).vfs?.() ?? 'memoria'),
-    apertura,
+    apertura: () => aperturaInfo(),
     conteo: async (): Promise<Record<string, number>> => {
       const out: Record<string, number> = {}
       for (const t of TABLAS_DEBUG) {
