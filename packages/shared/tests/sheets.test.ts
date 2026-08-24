@@ -37,10 +37,11 @@ describe('rows', () => {
 })
 
 describe('api', () => {
-  it('batchGet parsea filas por rango', async () => {
+  it('batchGet parsea filas por rango (parametro repetido)', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const u = new URL(String(url))
-      const ranges = (u.searchParams.get('ranges') ?? '').split(',').filter(Boolean)
+      const ranges = u.searchParams.getAll('ranges')
+      expect(ranges).toEqual(['A1:A2', 'B1:B2']) // parametro repetido, no lista con comas
       const data: Record<string, { values?: (string | number)[][] }> = {}
       for (const r of ranges) data[r] = { values: [['a'], ['b']] }
       return { ok: true, json: async () => ({ valueRanges: Object.entries(data).map(([range, x]) => ({ range, values: x.values })) }) } as Response
