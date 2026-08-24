@@ -5,7 +5,11 @@ export default defineConfig({
   // Auto-imports de WXT desactivados: colisionan con identificadores
   // (`storage`) del código compartido, que usa imports explícitos.
   imports: false,
-  vite: () => ({ plugins: [tailwindcss()] }),
+  vite: () => ({
+    plugins: [tailwindcss()],
+    // Igual que en web: el wasm/worker de sqlite no tolera pre-bundle.
+    optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] }
+  }),
   manifest: {
     name: 'FinanceTracker',
     version: '0.1.0',

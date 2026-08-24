@@ -73,6 +73,7 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
   let sqlite3Ref: Sqlite3 | null = null
   let vfsUsado = 'memory'
   let sucio = false
+  let persistirTimer: ReturnType<typeof setTimeout> | null = null
 
   async function abrir(): Promise<SqliteDb> {
     if (db) return db
@@ -80,6 +81,7 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
     sqlite3Ref = sqlite3
     if (persistor) {
       vfsUsado = clave ? 'cifrado' : 'idb'
+      console.debug(`[espejo] persistencia=${vfsUsado}`)
       db = new sqlite3.oo1.DB(':memory:')
       try {
         const json = await persistor.cargar()
@@ -95,12 +97,14 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
       } catch { /* blob corrupto o PIN distinto: espejo nuevo desechable */ }
       return db
     }
+    console.debug(`[espejo] persistencia=opfs|${ruta}`)
     try {
       if (sqlite3.oo1.OpfsDb && sqlite3.opfs?.registersVfs) {
         db = new sqlite3.oo1.OpfsDb(ruta)
         vfsUsado = 'opfs'
       } else {
         db = new sqlite3.oo1.DB(':memory:')
+        console.warn('[espejo] sin OPFS ni persistor: los datos no sobreviven la recarga')
       }
     } catch {
       db = new sqlite3.oo1.DB(':memory:')
@@ -108,15 +112,37 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
     return db
   }
 
-  /** Vuelca la base al persistor tras escrituras (best-effort). */
+  /** Vuelca la base al persistor tras escrituras (best-effort, con debounce:
+   *  el pull inicial toca muchas tablas y serializar cada una bloquea). */
   async function persistir(): Promise<void> {
     if (!db || !persistor || !sucio || !sqlite3Ref) return
     try {
       const bytes = volcarBytes(sqlite3Ref, db)
-      if (clave) await persistor.guardar(JSON.stringify(await cifrarVolcado(await clave(), bytes)))
-      else await persistor.guardar(codificarPlano(bytes))
+      if (clave) await persistirJson(JSON.stringify(await cifrarVolcado(await clave(), bytes)))
+      else await persistirJson(codificarPlano(bytes))
       sucio = false
     } catch { /* se reintenta en la siguiente escritura */ }
+
+    async function persistirJson(json: string): Promise<void> {
+      await persistor!.guardar(json)
+    }
+  }
+
+  function programarPersistir(): void {
+    sucio = true
+    if (persistirTimer) return
+    persistirTimer = setTimeout(() => {
+      persistirTimer = null
+      void persistir()
+    }, 400)
+  }
+
+  // Cola pendiente al cerrar/recargar la pestaña: último snapshot antes de salir.
+  if (persistor && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('pagehide', () => {
+      if (persistirTimer) { clearTimeout(persistirTimer); persistirTimer = null }
+      void persistir()
+    })
   }
 
   return {
@@ -133,8 +159,7 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
           try { dbActivo.exec('ROLLBACK') } catch { /* sin transacción abierta */ }
           throw e
         }
-        sucio = true
-        await persistir()
+        programarPersistir()
       }
     },
 
@@ -179,8 +204,7 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
           stmt.reset()
         }
         dbActivo.exec('COMMIT')
-        sucio = true
-        await persistir()
+        programarPersistir()
       } catch (e) {
         try { dbActivo.exec('ROLLBACK') } catch { /* sin transacción abierta */ }
         throw e
@@ -190,7 +214,12 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
     },
 
     async close(): Promise<void> {
-      if (db) { await persistir(); db.close(); db = null }
+      if (db) {
+        if (persistirTimer) { clearTimeout(persistirTimer); persistirTimer = null }
+        await persistir()
+        db.close()
+        db = null
+      }
     }
   }
 }
