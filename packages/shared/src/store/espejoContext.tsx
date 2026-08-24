@@ -103,8 +103,11 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
       ultimoRef.current = espejo.estado().ultimoPull
       setUltimoPull(ultimoRef.current)
     } catch (e) {
+      // Cuota agotada: pausa larga. Otros fallos transitorios: pausa corta,
+      // para que los automáticos no queden silenciados medio minuto.
       if (esErrorRed(e)) {
-        cooldownRef.current = Date.now() + 90_000
+        const cuota = /429|RESOURCE_EXHAUSTED/i.test(e instanceof Error ? e.message : String(e))
+        cooldownRef.current = Date.now() + (cuota ? 90_000 : 15_000)
         console.debug('[espejo] pull en pausa por red/cuota hasta', new Date(cooldownRef.current).toLocaleTimeString())
         return
       }
