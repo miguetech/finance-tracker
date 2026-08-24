@@ -53,9 +53,21 @@ export function useCurrency(): Currency {
 /** Con espejo activo las lecturas salen del SQLite local; mientras el store
  *  carga (flag on) se evita golpear Sheets. Fuera de flag, ruta directa. */
 function useOrigenLectura() {
-  const { habilitado, espejo } = useEspejo()
-  return { espejo, esperaEspejo: habilitado && !espejo }
+  const { habilitado, espejo, version } = useEspejo()
+  return { espejo, esperaEspejo: habilitado && !espejo, version }
 }
+
+/** Sync perezoso: al montar la sección, trae del pull solo SUS tablas vencidas.
+ *  No-op sin espejo (la ruta directa a Sheets se encarga). */
+function useSyncSeccion(tablas: TableName[]) {
+  const clave = tablas.join('|')
+  const { sincronizarTablas, activo } = useEspejo()
+  React.useEffect(() => {
+    if (!activo) return
+    void sincronizarTablas(clave.split('|') as TableName[])
+  }, [clave, activo, sincronizarTablas])
+}
+
 
 export function useConfig() {
   const repo = useRepo()
@@ -78,8 +90,9 @@ export function useConfig() {
 export function useClientes() {
   const repo = useRepo()
   const qc = useQueryClient()
-  const { espejo, esperaEspejo } = useOrigenLectura()
-  const q = useQuery({ queryKey: ['clientes', !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listClientesEspejo(espejo) : repo.listClientes()) })
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Clientes'])
+  const q = useQuery({ queryKey: ['clientes', version], enabled: !esperaEspejo, queryFn: () => (espejo ? listClientesEspejo(espejo) : repo.listClientes()) })
   const saveCliente = useMutation({ mutationFn: (c: Cliente) => repo.saveCliente(c), onSuccess: () => { qc.invalidateQueries({ queryKey: ['clientes'] }); invalidarEspejo('Clientes') } })
   const deleteCliente = useMutation({ mutationFn: (id: string) => repo.deleteCliente(id), onSuccess: () => { qc.invalidateQueries({ queryKey: ['clientes'] }); invalidarEspejo('Clientes') } })
   return { clientes: q.data ?? [], isLoading: q.isLoading, saveCliente, deleteCliente }
@@ -88,8 +101,8 @@ export function useClientes() {
 export function useFacturas(filtro?: { estado?: string; mes?: string }) {
   const repo = useRepo()
   const qc = useQueryClient()
-  const { espejo, esperaEspejo } = useOrigenLectura()
-  const q = useQuery({ queryKey: ['facturas', filtro, !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listFacturasEspejo(espejo, filtro) : repo.listFacturas(filtro)) })
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  const q = useQuery({ queryKey: ['facturas', filtro, version], enabled: !esperaEspejo, queryFn: () => (espejo ? listFacturasEspejo(espejo, filtro) : repo.listFacturas(filtro)) })
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['facturas'] }); invalidarEspejo('Facturas', 'Factura_Items') }
   const create = useMutation({ mutationFn: (i: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }) => repo.createFactura(i), onSuccess: invalidate })
   const update = useMutation({ mutationFn: (i: { id: string; data: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string } }) => repo.updateFactura(i.id, i.data), onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ['factura'] }) } })
@@ -99,9 +112,10 @@ export function useFacturas(filtro?: { estado?: string; mes?: string }) {
 
 export function useFactura(id: string | null) {
   const repo = useRepo()
-  const { espejo, esperaEspejo } = useOrigenLectura()
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Facturas', 'Factura_Items'])
   return useQuery({
-    queryKey: ['factura', id, !!espejo],
+    queryKey: ['factura', id, version],
     queryFn: (): Promise<{ factura: Factura; items: FacturaItem[] } | null> =>
       (id ? (espejo ? getFacturaEspejo(espejo, id) : repo.getFactura(id)) : Promise.resolve(null)),
     enabled: !!id && !esperaEspejo
@@ -111,8 +125,9 @@ export function useFactura(id: string | null) {
 export function useGastos(filtro?: { mes?: string; categoria?: string }) {
   const repo = useRepo()
   const qc = useQueryClient()
-  const { espejo, esperaEspejo } = useOrigenLectura()
-  const q = useQuery({ queryKey: ['gastos', filtro, !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listGastosEspejo(espejo, filtro) : repo.listGastos(filtro)) })
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Gastos'])
+  const q = useQuery({ queryKey: ['gastos', filtro, version], enabled: !esperaEspejo, queryFn: () => (espejo ? listGastosEspejo(espejo, filtro) : repo.listGastos(filtro)) })
   const save = useMutation({ mutationFn: (g: Gasto) => repo.saveGasto(g), onSuccess: () => qc.invalidateQueries({ queryKey: ['gastos'] }) })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteGasto(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['gastos'] }) })
   return { gastos: q.data ?? [], isLoading: q.isLoading, saveGasto: save, deleteGasto: del }
@@ -121,8 +136,9 @@ export function useGastos(filtro?: { mes?: string; categoria?: string }) {
 export function useEmpleados() {
   const repo = useRepo()
   const qc = useQueryClient()
-  const { espejo, esperaEspejo } = useOrigenLectura()
-  const q = useQuery({ queryKey: ['empleados', !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listEmpleadosEspejo(espejo) : repo.listEmpleados()) })
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Empleados'])
+  const q = useQuery({ queryKey: ['empleados', version], enabled: !esperaEspejo, queryFn: () => (espejo ? listEmpleadosEspejo(espejo) : repo.listEmpleados()) })
   const invalidate = () => qc.invalidateQueries({ queryKey: ['empleados'] })
   const save = useMutation({ mutationFn: (e: Empleado) => repo.saveEmpleado(e), onSuccess: invalidate })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteEmpleado(id), onSuccess: invalidate })
@@ -132,9 +148,10 @@ export function useEmpleados() {
 export function useAsistencias(filtro: { id_empleado?: string; desde?: string; hasta?: string } = {}) {
   const repo = useRepo()
   const qc = useQueryClient()
-  const { espejo, esperaEspejo } = useOrigenLectura()
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Asistencias'])
   const key = JSON.stringify(filtro)
-  const q = useQuery({ queryKey: ['asistencias', key, !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listAsistenciasEspejo(espejo, filtro) : repo.listAsistencias(filtro)) })
+  const q = useQuery({ queryKey: ['asistencias', key, version], enabled: !esperaEspejo, queryFn: () => (espejo ? listAsistenciasEspejo(espejo, filtro) : repo.listAsistencias(filtro)) })
   const invalidate = () => qc.invalidateQueries({ queryKey: ['asistencias'] })
   const save = useMutation({ mutationFn: (a: Omit<Asistencia, 'id_asistencia' | 'nombre_empleado'> & { id_asistencia?: string; nombre_empleado?: string }) => repo.saveAsistencia(a), onSuccess: invalidate })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteAsistencia(id), onSuccess: invalidate })
@@ -162,8 +179,9 @@ export function useRegisterNomina() {
 export function useProveedores() {
   const repo = useRepo()
   const qc = useQueryClient()
-  const { espejo, esperaEspejo } = useOrigenLectura()
-  const q = useQuery({ queryKey: ['proveedores', !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listProveedoresEspejo(espejo) : repo.listProveedores()) })
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Proveedores'])
+  const q = useQuery({ queryKey: ['proveedores', version], enabled: !esperaEspejo, queryFn: () => (espejo ? listProveedoresEspejo(espejo) : repo.listProveedores()) })
   const save = useMutation({ mutationFn: (p: Proveedor) => repo.saveProveedor(p), onSuccess: () => qc.invalidateQueries({ queryKey: ['proveedores'] }) })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteProveedor(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['proveedores'] }) })
   return { proveedores: q.data ?? [], isLoading: q.isLoading, saveProveedor: save, deleteProveedor: del }
@@ -172,8 +190,9 @@ export function useProveedores() {
 export function useCxp(filtro?: { estado?: string }) {
   const repo = useRepo()
   const qc = useQueryClient()
-  const { espejo, esperaEspejo } = useOrigenLectura()
-  const q = useQuery({ queryKey: ['cxp', filtro, !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listCxpEspejo(espejo, filtro) : repo.listCxp(filtro)) })
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Cuentas_Pagar'])
+  const q = useQuery({ queryKey: ['cxp', filtro, version], enabled: !esperaEspejo, queryFn: () => (espejo ? listCxpEspejo(espejo, filtro) : repo.listCxp(filtro)) })
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['cxp'] }); qc.invalidateQueries({ queryKey: ['pagos'] }) }
   const create = useMutation({ mutationFn: (i: { id_proveedor: string; folio_documento: string; categoria: string; descripcion: string; fecha_emision: string; fecha_vencimiento: string; monto_total: number; notas: string; moneda?: string }) => repo.createCxp(i), onSuccess: invalidate })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteCxp(id), onSuccess: invalidate })
@@ -182,8 +201,9 @@ export function useCxp(filtro?: { estado?: string }) {
 
 export function usePagos(idOrigen?: string) {
   const repo = useRepo()
-  const { espejo, esperaEspejo } = useOrigenLectura()
-  return useQuery({ queryKey: ['pagos', idOrigen, !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listPagosEspejo(espejo, idOrigen) : repo.listPagos(idOrigen)) })
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Pagos'])
+  return useQuery({ queryKey: ['pagos', idOrigen, version], enabled: !esperaEspejo, queryFn: () => (espejo ? listPagosEspejo(espejo, idOrigen) : repo.listPagos(idOrigen)) })
 }
 
 export function useRegisterPago() {
@@ -197,9 +217,10 @@ export function useRegisterPago() {
 
 export function useReportes(mes: string) {
   const repo = useRepo()
-  const { espejo, esperaEspejo } = useOrigenLectura()
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Facturas', 'Gastos', 'Cuentas_Pagar', 'Pagos'])
   return useQuery({
-    queryKey: ['reportes', mes, !!espejo],
+    queryKey: ['reportes', mes, version],
     enabled: !esperaEspejo,
     queryFn: () => (espejo ? reportesKpisEspejo(espejo, mes) : repo.getReportes(mes))
   })
@@ -262,8 +283,9 @@ export function useCxpById(id: string | null) {
 export function useProductos() {
   const repo = useRepo()
   const qc = useQueryClient()
-  const { espejo, esperaEspejo } = useOrigenLectura()
-  const q = useQuery({ queryKey: ['productos', !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listProductosEspejo(espejo) : repo.listProductos()) })
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Productos'])
+  const q = useQuery({ queryKey: ['productos', version], enabled: !esperaEspejo, queryFn: () => (espejo ? listProductosEspejo(espejo) : repo.listProductos()) })
   const invalidate = () => qc.invalidateQueries({ queryKey: ['productos'] })
   const save = useMutation({ mutationFn: (p: Producto) => repo.saveProducto(p), onSuccess: invalidate })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteProducto(id), onSuccess: invalidate })
@@ -272,8 +294,9 @@ export function useProductos() {
 
 export function useMovimientos(idProducto?: string) {
   const repo = useRepo()
-  const { espejo, esperaEspejo } = useOrigenLectura()
-  return useQuery({ queryKey: ['movimientos', idProducto, !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listMovimientosEspejo(espejo, idProducto) : repo.listMovimientos(idProducto)) })
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Movimientos_Stock'])
+  return useQuery({ queryKey: ['movimientos', idProducto, version], enabled: !esperaEspejo, queryFn: () => (espejo ? listMovimientosEspejo(espejo, idProducto) : repo.listMovimientos(idProducto)) })
 }
 
 export function useRegistrarMovimiento() {
@@ -315,10 +338,11 @@ export function useNominaDetalles() {
 
 export function useReporteFinanciero(desde: string, hasta: string) {
   const repo = useRepo()
-  const { espejo, esperaEspejo } = useOrigenLectura()
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Facturas', 'Gastos', 'Cuentas_Pagar', 'Pagos', 'Productos', 'Factura_Items'])
   const config = useAppStore(s => s.config)
   return useQuery({
-    queryKey: ['reporteFinanciero', desde, hasta, !!espejo],
+    queryKey: ['reporteFinanciero', desde, hasta, version],
     enabled: (!!desde || !!hasta) && !esperaEspejo,
     // Sin config cacheada aún (carrera de arranque) la vía espejo no puede
     // convertir monedas: usa Sheets y evita romper el tab en online.

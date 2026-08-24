@@ -20,11 +20,15 @@ export interface EspejoDeps {
   fetchTablas(ts: TableName[]): Promise<Partial<Record<TableName, Row[] | null>>>
   ahora?: () => number
   onCambio?: (tablas: TableName[]) => void
+  /** Tras CADA descarga exitosa (aunque el contenido no cambiara): las UIs
+   *  deben releer el espejo, si no quedan pintando el estado previo. */
+  onDescarga?: (tablas: TableName[]) => void
 }
 
 export function crearEspejo(deps: EspejoDeps) {
-  const { store, fetchTablas, ahora = Date.now, onCambio } = deps
+  const { store, fetchTablas, ahora = Date.now, onCambio, onDescarga } = deps
   const hashes = new Map<TableName, string>()
+  const fechas = new Map<TableName, number>()
   let ultimoPull = 0
   let initPromise: Promise<void> | null = null
   let cola: Promise<unknown> = Promise.resolve()
@@ -67,7 +71,9 @@ export function crearEspejo(deps: EspejoDeps) {
       const descargas = await fetchTablas(objetivo)
       const cambiadas: TableName[] = []
       for (const t of objetivo) await aplicar(t, descargas[t] ?? null, cambiadas)
+      for (const t of objetivo) fechas.set(t, ahora())
       ultimoPull = ahora()
+      if (onDescarga) onDescarga(objetivo)
       if (cambiadas.length && onCambio) onCambio(cambiadas)
       return cambiadas
     })
@@ -78,6 +84,8 @@ export function crearEspejo(deps: EspejoDeps) {
     pull,
     getAllRows: (t: TableName) => init().then(() => store.getAllRows(t)),
     estado: () => ({ ultimoPull, hashes: Object.fromEntries(hashes) as Record<string, string> }),
+    /** Última vez que cada tabla se descargó (0 = nunca). */
+    fechasPorTabla: (): Record<string, number> => Object.fromEntries(fechas),
     close: () => store.close()
   }
 }

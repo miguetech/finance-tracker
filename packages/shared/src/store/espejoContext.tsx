@@ -13,6 +13,9 @@ import { useContext } from 'react'
 /** TTL de refresco de tablas calientes. */
 export const TABLAS_CALIENTES_TTL_MS = 60_000
 
+/** TTL por sección: al abrir una pantalla, sus tablas se piden si están vencidas. */
+export const TTL_SECCION_MS = 60_000
+
 /** Query keys de react-query que se invalidan cuando el pull detecta
  *  cambios en cada tabla del espejo. */
 export const QUERY_KEYS_POR_TABLA: Partial<Record<TableName, readonly string[]>> = {
@@ -76,6 +79,15 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
     return crearEspejo({
       store,
       fetchTablas: fetchTablasOverride ?? ((ts) => fetchTablasDesdeRepo(repo, ts)),
+      // Invalidar SIEMPRE tras descarga (hash igual incluido): el refetch lee
+      // el espejo local (<5 ms) y evita pantallas con el estado previo.
+      onDescarga: (tablas) => {
+        for (const t of tablas) {
+          const keys = QUERY_KEYS_POR_TABLA[t]
+          if (!keys) continue
+          for (const key of keys) void qc.invalidateQueries({ queryKey: [key] })
+        }
+      },
       onCambio: (tablas) => {
         for (const t of tablas) {
           const keys = QUERY_KEYS_POR_TABLA[t]
@@ -188,7 +200,27 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
     }
   }, [activo, espejo])
 
-  const value: EspejoCtxValue = { habilitado, activo, espejo, ultimoPull, sincronizarAhora }
+  /** Sync perezoso por pantalla: solo trae las tablas vencidas de la sección. */
+  const sincronizarTablas = async (tablas: TableName[]) => {
+    if (!espejo) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    if (Date.now() < cooldownRef.current) return
+    const fechas = espejo.fechasPorTabla()
+    const viejas = tablas.filter(t => Date.now() - (fechas[t] ?? 0) > TTL_SECCION_MS)
+    if (!viejas.length) return
+    try {
+      await espejo.pull(viejas)
+      cooldownRef.current = 0
+      ultimoRef.current = espejo.estado().ultimoPull
+      setUltimoPull(ultimoRef.current)
+    } catch (e) {
+      if (esErrorRed(e)) {
+        cooldownRef.current = Date.now() + (/429|RESOURCE_EXHAUSTED/i.test(String(e)) ? 90_000 : 15_000)
+      }
+    }
+  }
+
+  const value: EspejoCtxValue = { version: ultimoPull, habilitado, activo, espejo, ultimoPull, sincronizarAhora, sincronizarTablas }
   return <EspejoCtx.Provider value={value}>{children}</EspejoCtx.Provider>
 }
 
