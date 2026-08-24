@@ -28,6 +28,7 @@ interface Sqlite3 {
     sqlite3_js_db_export(db: number | SqliteDb): Uint8Array
     sqlite3_deserialize(db: number, esquema: string, data: number, sz: number, szBuffer: number, flags: number): number
     SQLITE_DESERIALIZE_FREEONCLOSE: number
+    SQLITE_DESERIALIZE_RESIZEABLE: number
   }
   wasm: { allocFromTypedArray(a: Uint8Array): number }
 }
@@ -39,14 +40,34 @@ function volcarBytes(sqlite3: Sqlite3, db: SqliteDb): Uint8Array {
 /** Carga una imagen de base sobre un DB recién abierto. */
 function cargarImagen(sqlite3: Sqlite3, db: SqliteDb, bytes: Uint8Array): void {
   const ptr = sqlite3.wasm.allocFromTypedArray(bytes)
-  sqlite3.capi.sqlite3_deserialize(
-    db.pointer,
-    'main',
-    ptr,
-    bytes.length,
-    bytes.length,
-    sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE
-  )
+  // RESIZEABLE es obligatorio: sin él la base queda con el tamaño fijo de la
+  // imagen importada y todo INSERT posterior falla con SQLITE_FULL.
+  const flags = sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE | sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE
+  sqlite3.capi.sqlite3_deserialize(db.pointer, 'main', ptr, bytes.length, bytes.length, flags)
+}
+
+/** Tablas cuyo esquema cambió y deben recrearse si el volcado viejo trae la
+ *  definición anterior (el espejo es desechable: el pull lo repuebla). */
+const TABLAS_A_MIGRAR: ReadonlyArray<{ tabla: string; marcaVieja: RegExp }> = [
+  // PK errónea en id_factura: revientaba con facturas de 2+ conceptos.
+  { tabla: 'Factura_Items', marcaVieja: /CREATE TABLE.*Factura_Items[\s\S]*PRIMARY KEY/i }
+]
+
+function migrarEsquemas(db: SqliteDb, ddl: string[]): void {
+  for (const { tabla, marcaVieja } of TABLAS_A_MIGRAR) {
+    if (!ddl.some(s => s.includes(`"${tabla}"`))) continue
+    let sqlActual = ''
+    const stmt = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='${tabla}'`)
+    try {
+      if (stmt.step()) sqlActual = String(stmt.get(0) ?? '')
+    } finally {
+      stmt.finalize()
+    }
+    if (sqlActual && marcaVieja.test(sqlActual)) {
+      db.exec(`DROP TABLE IF EXISTS "${tabla}"`)
+      console.debug(`[espejo] migración: "${tabla}" recreada (esquema viejo)`)
+    }
+  }
 }
 
 export interface OpcionesSqliteStore {
@@ -151,6 +172,7 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
     async init(ddl: string[]): Promise<void> {
       const dbActivo = await abrir()
       if (ddl.length) {
+        migrarEsquemas(dbActivo, ddl)
         dbActivo.exec('BEGIN')
         try {
           for (const sentencia of ddl) dbActivo.exec(sentencia)

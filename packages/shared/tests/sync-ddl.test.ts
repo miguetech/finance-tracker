@@ -14,8 +14,8 @@ describe('DDL del espejo', () => {
     expect(facturas.create).toContain('"fecha_emision" TEXT')
   })
 
-  it('primera columna es PRIMARY KEY', () => {
-    const clientes = ddlDesdeTables().find(d => d.tabla === 'Clientes')!
+  it('primera columna es PRIMARY KEY (salvo tablas hijas)', () => {
+    const clientes = ddlDesdeTables().find(t => t.tabla === 'Clientes')!
     expect(clientes.create).toMatch(/"id_cliente" TEXT PRIMARY KEY/)
   })
 
@@ -25,5 +25,13 @@ describe('DDL del espejo', () => {
     expect(items.indexes.some(i => i.includes('idx_Factura_Items_id_factura'))).toBe(true)
     const pagos = defs.find(d => d.tabla === 'Pagos')!
     expect(pagos.indexes.some(i => i.includes('idx_Pagos_id_origen'))).toBe(true)
+  })
+})
+
+describe('DDL de tablas hijas (N filas por clave padre)', () => {
+  it('Factura_Items NO lleva PRIMARY KEY en id_factura', () => {
+    const items = ddlDesdeTables().find(t => t.tabla === 'Factura_Items')!
+    expect(items.create).not.toMatch(/PRIMARY KEY/)
+    expect(items.indexes.some(i => i.includes('idx_Factura_Items_id_factura'))).toBe(true)
   })
 })

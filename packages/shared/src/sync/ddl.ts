@@ -10,6 +10,10 @@ const INDEXES: Partial<Record<TableName, string[]>> = {
   Cuentas_Pagar: ['fecha_vencimiento']
 }
 
+/** Tablas donde la primera columna NO es única (N filas por clave padre):
+ *  ponerle PRIMARY KEY revienta el pull con SQLITE_CONSTRAINT_PRIMARYKEY. */
+const SIN_PK: ReadonlySet<TableName> = new Set(['Factura_Items'])
+
 function sqlType(type?: string): string {
   return type === 'number' ? 'REAL' : 'TEXT'
 }
@@ -21,7 +25,7 @@ export function ddlDesdeTables(): DdlTabla[] {
   return (Object.keys(TABLES) as TableName[]).map(tabla => {
     const [pk, ...rest] = TABLES[tabla]
     const colSql = [
-      `"${pk.key}" ${sqlType(pk.type)} PRIMARY KEY`,
+      SIN_PK.has(tabla) ? `"${pk.key}" ${sqlType(pk.type)}` : `"${pk.key}" ${sqlType(pk.type)} PRIMARY KEY`,
       ...rest.map(c => `"${c.key}" ${sqlType(c.type)}`)
     ].join(', ')
     const idxCols = INDEXES[tabla] ?? []

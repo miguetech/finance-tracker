@@ -101,3 +101,47 @@ describe('store sqlite con volcado cifrado', () => {
     expect(await p.cargar()).toBeNull()
   })
 })
+
+describe('regresión: facturas con varios conceptos', () => {
+  it('Factura_Items acepta N filas con el mismo id_factura', async () => {
+    const persistor = persistorMemoria()
+    const s = crearSqliteStore('/t.db3', { persistor })
+    await s.init(DDL)
+    await s.replaceTable('Factura_Items', [
+      { id_factura: 'f1', descripcion: 'Concepto A', cantidad: 1, precio_unitario: 10, importe: 10 },
+      { id_factura: 'f1', descripcion: 'Concepto B', cantidad: 2, precio_unitario: 5, importe: 10 }
+    ])
+    expect(await s.getAllRows('Factura_Items')).toHaveLength(2)
+    await s.close()
+    // Reabrir el snapshot y volver a reemplazar (pull tras recarga).
+    const s2 = crearSqliteStore('/t.db3', { persistor })
+    await s2.init(DDL)
+    await s2.replaceTable('Factura_Items', [
+      { id_factura: 'f1', descripcion: 'A', cantidad: 1, precio_unitario: 10, importe: 10 },
+      { id_factura: 'f1', descripcion: 'B', cantidad: 1, precio_unitario: 5, importe: 5 },
+      { id_factura: 'f1', descripcion: 'C', cantidad: 1, precio_unitario: 5, importe: 5 }
+    ])
+    expect(await s2.getAllRows('Factura_Items')).toHaveLength(3)
+    await s2.close()
+  })
+
+  it('migración: snapshot viejo con PK errónea se recrea al iniciar', async () => {
+    const persistor = persistorMemoria()
+    // Simula volcado viejo: crea la tabla con la definición incorrecta.
+    const viejo = ddlDesdeTables().find(t => t.tabla === 'Factura_Items')!
+    const createViejo = viejo.create.replace('"id_factura" TEXT,', '"id_factura" TEXT PRIMARY KEY,')
+    const s1 = crearSqliteStore('/t.db3', { persistor })
+    await s1.init([createViejo])
+    await s1.replaceTable('Factura_Items', [{ id_factura: 'f1', descripcion: 'x', cantidad: 1, precio_unitario: 1, importe: 1 }])
+    await s1.close()
+    // Nueva sesión con el DDL correcto: detecta esquema viejo y lo tira.
+    const s2 = crearSqliteStore('/t.db3', { persistor })
+    await s2.init(DDL)
+    await s2.replaceTable('Factura_Items', [
+      { id_factura: 'f1', descripcion: 'a', cantidad: 1, precio_unitario: 1, importe: 1 },
+      { id_factura: 'f1', descripcion: 'b', cantidad: 1, precio_unitario: 1, importe: 1 }
+    ])
+    expect(await s2.getAllRows('Factura_Items')).toHaveLength(2)
+    await s2.close()
+  })
+})
