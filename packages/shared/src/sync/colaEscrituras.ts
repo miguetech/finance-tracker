@@ -66,7 +66,9 @@ export async function descartarErrores(almacen: StorageAdapter): Promise<void> {
 export function esErrorRed(e: unknown): boolean {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
   const msg = e instanceof Error ? `${e.message}` : String(e)
-  return /fetch|network|Failed to fetch|NetworkError|ERR_INTERNET|token|401|403|429|500|503/i.test(msg)
+  const nombre = e instanceof Error ? e.name : ''
+  if (nombre === 'AbortError') return true
+  return /fetch|network|Failed to fetch|NetworkError|ERR_INTERNET|abort|token|401|403|429|500|503/i.test(msg)
 }
 
 export interface ResultadoVaciado { ejecutadas: number; fallidas: number; restantes: number }
@@ -283,7 +285,16 @@ export function conColaEscrituras(repo: Repository, opciones: OpcionesColaRepo):
     const original = (repo as unknown as Record<string, (...a: never[]) => unknown>)[metodo]
     if (typeof original !== 'function') continue
     ;(envuelto as unknown as Record<string, (...a: never[]) => unknown>)[metodo] = async (...args: Args): Promise<unknown> => {
-      if (!activo()) return original.apply(repo, args as never[])
+      if (!activo()) {
+        try {
+          return await original.apply(repo, args as never[])
+        } catch (e) {
+          // navigator.onLine puede mentir (DevTools, wifi a medio morir): si el
+          // fallo es de transporte, la escritura cae a la cola en vez de romper
+          // el modal. Los errores de negocio siguen propagando.
+          if (!esErrorRed(e)) throw e
+        }
+      }
       const normales = conf && METODOS_COLA[metodo]?.normalizar ? METODOS_COLA[metodo].normalizar!(args) : args
       await encolarOp(opciones.storage, metodo, normales)
       refrescarEstadoCola(opciones.storage)

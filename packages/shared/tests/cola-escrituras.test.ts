@@ -158,6 +158,35 @@ describe('conColaEscrituras — envoltorio del repositorio', () => {
     expect(await resumirCola(s)).toEqual({ pendientes: 0, errores: 0 })
   })
 
+  it('inactivo con red muerta a mitad: fallo de transporte encola en vez de romper', async () => {
+    const s = kvFalso()
+    const repo = repoFalso({
+      saveCliente: async () => { throw new Error('Failed to fetch') }
+    })
+    const envuelto = conColaEscrituras(repo, { storage: s, activo: () => false, configActual: () => configFake })
+    // No lanza: devuelve eco y la operación queda pendiente para vaciar.
+    const eco = await envuelto.saveCliente({ nombre: 'Offline' } as never)
+    expect((eco as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
+    expect(repo.llamadas).toEqual([])
+    expect(await resumirCola(s)).toEqual({ pendientes: 1, errores: 0 })
+  })
+
+  it('inactivo: error de negocio sigue propagando sin encolar', async () => {
+    const s = kvFalso()
+    const repo = repoFalso({
+      saveCliente: async () => { throw new Error('Cliente no existe') }
+    })
+    const envuelto = conColaEscrituras(repo, { storage: s, activo: () => false })
+    await expect(envuelto.saveCliente({} as never)).rejects.toThrow('Cliente no existe')
+    expect(await resumirCola(s)).toEqual({ pendientes: 0, errores: 0 })
+  })
+
+  it('abort (timeout de red) cuenta como error de transporte', () => {
+    const e = new Error('The operation was aborted')
+    e.name = 'AbortError'
+    expect(esErrorRed(e)).toBe(true)
+  })
+
   it('vaciar tras encolar reproduce contra el repositorio real', async () => {
     const s = kvFalso()
     const repo = repoFalso()

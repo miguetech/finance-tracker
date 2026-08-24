@@ -16,14 +16,23 @@ export class SheetsApi {
     const maxAttempts = 4
     for (let attempt = 0; ; attempt++) {
       const token = await this.tokenGetter()
-      const res = await fetch(url, {
-        ...init,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          ...(init.headers ?? {})
-        }
-      })
+      // Sin timeout una red que traga paquetes cuelga el modal indefinidamente.
+      const ctrl = new AbortController()
+      const temporizador = setTimeout(() => ctrl.abort(), 15_000)
+      let res: Response
+      try {
+        res = await fetch(url, {
+          ...init,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            ...(init.headers ?? {})
+          },
+          signal: init.signal ?? ctrl.signal
+        })
+      } finally {
+        clearTimeout(temporizador)
+      }
       if (!res.ok) {
         if (attempt < maxAttempts - 1 && (res.status === 429 || res.status === 500 || res.status === 503)) {
           const delay = 500 * 2 ** attempt + Math.random() * 250

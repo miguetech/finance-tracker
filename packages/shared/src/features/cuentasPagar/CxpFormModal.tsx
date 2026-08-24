@@ -78,7 +78,7 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
         <div><label className="text-xs text-gray-500">{t('common.notas')}</label><Textarea value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} rows={3} /></div>
       </div>
       {nuevoProv && <ProveedorFormModal open onClose={() => setNuevoProv(false)} initial={null}
-        onSave={async p => { await saveProveedor.mutateAsync(p); onProveedorCreado(p) }} />}
+        onSave={async p => { try { await saveProveedor.mutateAsync(p); onProveedorCreado(p) } catch (e) { throw e instanceof Error ? e : new Error('Error al guardar proveedor') } }} />}
     </Dialog>
   )
 }

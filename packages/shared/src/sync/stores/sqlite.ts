@@ -230,19 +230,44 @@ import { crearStoreMemoria } from './memoria'
  *  con `clave`, plano sin ella); memoria de sesión como último recurso. */
 export async function crearStoreEspejo(opciones: OpcionesSqliteStore & { ruta?: string } = {}): Promise<EspejoStore> {
   const ruta = opciones.ruta ?? '/finance-tracker-espejo.db3'
+  let creado: EspejoStore | null = null
   try {
     const persistor = opciones.persistor ?? crearPersistorIdb() ?? undefined
     if (persistor || opciones.clave) {
       const s = crearSqliteStore(ruta, { persistor, clave: opciones.clave })
       await s.init([])
-      return s
+      creado = s
     }
   } catch { /* cae a OPFS/memoria abajo */ }
-  try {
-    const s = crearSqliteStore(ruta)
-    await s.init([]) // fuerza carga del módulo WASM y apertura
-    return s
-  } catch {
-    return crearStoreMemoria()
+  if (!creado) {
+    try {
+      const s = crearSqliteStore(ruta)
+      await s.init([]) // fuerza carga del módulo WASM y apertura
+      creado = s
+    } catch {
+      creado = await crearStoreMemoria()
+    }
+  }
+  exponerDebug(creado)
+  return creado
+}
+
+const TABLAS_DEBUG = Object.keys(TABLES) as TableName[]
+
+/** Solo dev: window.__ftEspejo.conteo() lista filas por tabla del espejo. */
+function exponerDebug(store: EspejoStore): void {
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+  if (!env?.DEV || env.DEV === 'false') return
+  const w = globalThis as unknown as { __ftEspejo?: unknown }
+  w.__ftEspejo = {
+    vfs: () => ((store as EspejoStore & { vfs?: () => string }).vfs?.() ?? 'memoria'),
+    conteo: async (): Promise<Record<string, number>> => {
+      const out: Record<string, number> = {}
+      for (const t of TABLAS_DEBUG) {
+        try { out[t] = (await store.getAllRows(t)).length } catch { out[t] = -1 }
+      }
+      return out
+    },
+    filas: (t: TableName) => store.getAllRows(t)
   }
 }
