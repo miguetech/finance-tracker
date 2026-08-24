@@ -87,7 +87,7 @@ export async function vaciarCola(
   const red = opts.esErrorRed ?? esErrorRed
   let ejecutadas = 0
   let fallidas = 0
-  const pendientesAlEntrar = await cargarCola(storage)
+  const pendientesAlEntrar = await cargarCola(almacen)
   for (const [i, op] of pendientesAlEntrar.entries()) {
     if (!enLinea()) break
     if (op.estado === 'error') continue // requiere reintento o descarte manual
