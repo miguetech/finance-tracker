@@ -1,6 +1,6 @@
 import type { crearEspejo } from '../sync/espejo'
 import type { TableName } from '../sheets/tables'
-import type { Cliente, Empleado, Asistencia, Factura, FacturaItem, Gasto, Pago, Producto } from '../types/entities'
+import type { Cliente, Empleado, Asistencia, Factura, FacturaItem, Gasto, Pago, Producto, Proveedor } from '../types/entities'
 
 type Espejo = ReturnType<typeof crearEspejo>
 
@@ -55,6 +55,10 @@ export async function listGastosEspejo(e: Espejo, filtro: { mes?: string; catego
 
 export async function listProductosEspejo(e: Espejo): Promise<Producto[]> {
   return leer<Producto>(e, 'Productos')
+}
+
+export async function listProveedoresEspejo(e: Espejo): Promise<Proveedor[]> {
+  return leer<Proveedor>(e, 'Proveedores')
 }
 
 export async function listEmpleadosEspejo(e: Espejo): Promise<Empleado[]> {

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { crearEspejo, TABLAS_CALIENTES, type EspejoStore } from '../sync/espejo'
 import { ddlDesdeTables } from '../sync/ddl'
 import { espejoBus } from '../sync/espejoBus'
-import { TABLAS_POR_METODO, ecoDe, ID_POR_TABLA, esErrorRed } from '../sync/colaEscrituras'
+import { TABLAS_POR_METODO, ecoDe, ID_POR_TABLA, BAJAS_POR_METODO, esErrorRed } from '../sync/colaEscrituras'
 import type { TableName } from '../sheets/tables'
 import { useRepo, _repoCtx as RepoCtx } from './queries'
 import { EspejoCtx, type EspejoCtxValue } from './espejoReact'
@@ -17,6 +17,7 @@ export const TABLAS_CALIENTES_TTL_MS = 60_000
  *  cambios en cada tabla del espejo. */
 export const QUERY_KEYS_POR_TABLA: Partial<Record<TableName, readonly string[]>> = {
   Clientes: ['clientes'],
+  Proveedores: ['proveedores'],
   Empleados: ['empleados'],
   Asistencias: ['asistencias'],
   Facturas: ['facturas', 'factura'],
@@ -106,13 +107,38 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
     }
   }
 
+  // Ecos que llegaron antes de que el store terminara de cargar: se aplican
+  // en cuanto exista, si no se perderían hasta la recarga.
+  const ecosPendientesRef = useRef<Array<{ metodo: string; args: unknown[] }>>([])
+
   /** Escritura encolada offline: inserta/reemplaza la fila del eco en el
    *  espejo local para que la UI la muestre ya guardada. El próximo pull
    *  con red reescribe las tablas tocadas con la verdad de Sheets. */
   const aplicarEscrituraLocal = async (metodo: string, args: unknown[]) => {
-    if (!store) return
+    if (!store) {
+      ecosPendientesRef.current.push({ metodo, args })
+      return
+    }
     const tablas = TABLAS_POR_METODO[metodo]
     if (!tablas?.length) return
+
+    // Baja: quitar la fila del espejo (y los items si es factura).
+    const baja = BAJAS_POR_METODO[metodo]
+    if (baja) {
+      try {
+        await store.init(ddlDesdeTables().flatMap(d => [d.create, ...d.indexes]))
+        const idBaja = String(args[0])
+        const filas = await store.getAllRows(baja.tabla)
+        await store.replaceTable(baja.tabla, filas.filter(f => String(f[baja.idKey]) !== idBaja))
+        if (baja.tabla === 'Facturas') {
+          const items = await store.getAllRows('Factura_Items')
+          await store.replaceTable('Factura_Items', items.filter(i => String(i.id_factura) !== idBaja))
+        }
+        for (const key of QUERY_KEYS_POR_TABLA[baja.tabla] ?? []) void qc.invalidateQueries({ queryKey: [key] })
+      } catch { /* la baja llegará con el pull al reconectar */ }
+      return
+    }
+
     const eco = ecoDe(metodo, args, { configActual: () => useAppStore.getState().config ?? null })
     if (!eco) return
     const tabla = tablas.find(t => ID_POR_TABLA[t])
@@ -131,6 +157,10 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
 
   useEffect(() => {
     if (!activo || !espejo) return
+    // Aplica los ecos que llegaron antes de que el store estuviera listo.
+    for (const p of ecosPendientesRef.current.splice(0)) {
+      void aplicarEscrituraLocal(p.metodo, p.args)
+    }
     void sincronizarAhora() // arranque: full pull
     const alFoco = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return

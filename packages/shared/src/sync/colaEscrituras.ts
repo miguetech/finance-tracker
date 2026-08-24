@@ -270,6 +270,20 @@ export const ID_POR_TABLA: Partial<Record<TableName, string>> = {
   Asistencias: 'id_asistencia'
 }
 
+/** Bajas: sin eco que insertar, hay que QUITAR la fila del espejo local
+ *  al momento; si no, el registro borrado "se reintegra" desde SQLite. */
+export const BAJAS_POR_METODO: Partial<Record<string, { tabla: TableName; idKey: string }>> = {
+  deleteCliente: { tabla: 'Clientes', idKey: 'id_cliente' },
+  deleteProveedor: { tabla: 'Proveedores', idKey: 'id_proveedor' },
+  deleteEmpleado: { tabla: 'Empleados', idKey: 'id_empleado' },
+  deleteGasto: { tabla: 'Gastos', idKey: 'id_gasto' },
+  deleteGastoFijo: { tabla: 'Gastos_Fijos', idKey: 'id_gastofijo' },
+  deleteProducto: { tabla: 'Productos', idKey: 'id_producto' },
+  deleteCxp: { tabla: 'Cuentas_Pagar', idKey: 'id_cxp' },
+  deleteAsistencia: { tabla: 'Asistencias', idKey: 'id_asistencia' },
+  deleteFactura: { tabla: 'Facturas', idKey: 'id_factura' }
+}
+
 export interface OpcionesColaRepo {
   /** Devuelve true mientras la app esté en modo offline (o sin red). */
   activo?: () => boolean

@@ -7,7 +7,7 @@ import type { VentaProductoFila } from '../reports/inventario'
 import { espejoBus } from '../sync/espejoBus'
 import type { TableName } from '../sheets/tables'
 import { useEspejo } from './espejoReact'
-import { listClientesEspejo, listFacturasEspejo, getFacturaEspejo, listGastosEspejo, listPagosEspejo, listProductosEspejo, listEmpleadosEspejo, listAsistenciasEspejo } from '../data/readCache'
+import { listClientesEspejo, listFacturasEspejo, getFacturaEspejo, listGastosEspejo, listPagosEspejo, listProductosEspejo, listProveedoresEspejo, listEmpleadosEspejo, listAsistenciasEspejo } from '../data/readCache'
 
 /** Avisa al espejo activo que ciertas tablas cambiaron en Sheets. */
 function invalidarEspejo(...tablas: TableName[]) {
@@ -162,7 +162,8 @@ export function useRegisterNomina() {
 export function useProveedores() {
   const repo = useRepo()
   const qc = useQueryClient()
-  const q = useQuery({ queryKey: ['proveedores'], queryFn: () => repo.listProveedores() })
+  const { espejo, esperaEspejo } = useOrigenLectura()
+  const q = useQuery({ queryKey: ['proveedores', !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listProveedoresEspejo(espejo) : repo.listProveedores()) })
   const save = useMutation({ mutationFn: (p: Proveedor) => repo.saveProveedor(p), onSuccess: () => qc.invalidateQueries({ queryKey: ['proveedores'] }) })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteProveedor(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['proveedores'] }) })
   return { proveedores: q.data ?? [], isLoading: q.isLoading, saveProveedor: save, deleteProveedor: del }

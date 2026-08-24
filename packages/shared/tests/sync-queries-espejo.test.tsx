@@ -1,7 +1,7 @@
 import React from 'react'
 import { describe, expect, it, afterEach } from 'vitest'
 import { render, screen, act, cleanup, waitFor } from '@testing-library/react'
-import { AppProvider, useClientes } from '../src/store/queries'
+import { AppProvider, useClientes, useProveedores } from "../src/store/queries"
 import type { Repository } from '../src/data/repository'
 import { EspejoProvider, useEspejo } from '../src/store/espejoContext'
 import { crearStoreMemoria } from '../src/sync/stores/memoria'
@@ -53,5 +53,22 @@ describe('lecturas UI desde el espejo', () => {
       </AppProvider>
     )
     await waitFor(() => expect(screen.getByRole('button').textContent).toBe('DesdeRepo'))
+  })
+
+  it('useProveedores también lee del espejo (regresión offline)', async () => {
+    const fuente: { filas: Record<string, string>[] } = { filas: [{ id_proveedor: 'p1', nombre: 'Prov Espejo' }] }
+    const fetchTablas = async (ts: TableName[]) => Object.fromEntries(ts.map(t => [t, t === 'Proveedores' ? fuente.filas : []]))
+    function ProbeProv() {
+      const { proveedores } = useProveedores()
+      return <output>{proveedores.map(p => p.nombre).join(',')}</output>
+    }
+    render(
+      <AppProvider repo={repoFalso}>
+        <EspejoProvider flag="on" store={crearStoreMemoria()} fetchTablas={fetchTablas}>
+          <ProbeProv />
+        </EspejoProvider>
+      </AppProvider>
+    )
+    await waitFor(() => expect(screen.getByText('Prov Espejo')).toBeTruthy())
   })
 })

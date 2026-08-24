@@ -78,3 +78,34 @@ describe('EspejoProvider', () => {
     void TABLAS_POR_METODO
   })
 })
+
+describe('baja offline aplicada al espejo', () => {
+  it('deleteProveedor quita la fila del espejo al momento (no se reintegra)', async () => {
+    const { conColaEscrituras } = await import('../src/sync/colaEscrituras')
+    const repoBaseFalso = {
+      deleteProveedor: async () => {},
+      saveCliente: async (c: unknown) => c
+    } as unknown as Repository
+    const almacenMemoria = crearStoreMemoria()
+    await almacenMemoria.replaceTable('Proveedores', [
+      { id_proveedor: 'p1', nombre: 'Viejo' },
+      { id_proveedor: 'p2', nombre: 'Queda' }
+    ])
+    const kvLocal = memoriaKv()
+    const repo = conColaEscrituras(repoBaseFalso, { storage: kvLocal, activo: () => true })
+    renderConCliente(
+      <AppProvider repo={repo}>
+        <EspejoProvider flag="on" store={almacenMemoria} fetchTablas={async () => ({})}>
+          <button onClick={() => void repo.deleteProveedor('p1')}>borrar</button>
+        </EspejoProvider>
+      </AppProvider>
+    )
+    await act(async () => { screen.getByText('borrar').click() })
+    for (let i = 0; i < 50 && (await almacenMemoria.getAllRows('Proveedores')).length === 2; i++) {
+      await new Promise(r => setTimeout(r, 10))
+    }
+    const filas = await almacenMemoria.getAllRows('Proveedores')
+    expect(filas).toHaveLength(1)
+    expect(filas[0].id_proveedor).toBe('p2')
+  })
+})
