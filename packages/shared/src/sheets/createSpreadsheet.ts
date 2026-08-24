@@ -41,8 +41,8 @@ const DEFAULT_CONFIG: Config = {
   unidades_medida: 'pieza,kg,gr,litro,ml,caja,saco,docena,metro'
 }
 
-export async function createInitialSpreadsheet(api: SheetsApi): Promise<{ spreadsheetId: string; url: string }> {
-  const { spreadsheetId, url } = await api.createSpreadsheet('FinanceTracker')
+export async function createInitialSpreadsheet(api: SheetsApi, titulo = 'FinanceTracker'): Promise<{ spreadsheetId: string; url: string }> {
+  const { spreadsheetId, url } = await api.createSpreadsheet(titulo)
   const extra = ALL_TABLES.filter(t => t !== 'Config')
   await api.addSheets(spreadsheetId, extra.map(sheetName))
 

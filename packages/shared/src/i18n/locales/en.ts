@@ -313,6 +313,17 @@ const en: Partial<Dict> = {
     sincronizarAhora: 'Sync now',
     modoOffline: 'Offline mode'
   },
+  hoja: {
+    titulo: 'Linked spreadsheet',
+    descripcion: 'Google Sheets spreadsheet where FinanceTracker stores your data.',
+    nombre: 'Name',
+    abrir: 'Open in Google Sheets',
+    conectarPorNombre: 'Connect or create by exact name:',
+    botonConectar: 'Connect',
+    conectada: 'Sheet connected',
+    creada: 'Sheet created and connected',
+    hint: 'Use a distinctive name (e.g. "FinanceTracker — Your Company") to make the link obvious; if one of your sheets already has that name it connects to it and validates edit permissions.'
+  },
   authOffline: {
     titulo: 'Saved session',
     continuarComo: 'Continue as',

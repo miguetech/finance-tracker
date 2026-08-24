@@ -56,7 +56,7 @@ export class SheetsApi {
     }).then(r => ({ spreadsheetId: r.spreadsheetId, url: r.spreadsheetUrl }))
   }
 
-  getSpreadsheet(spreadsheetId: string): Promise<{ sheets: { properties: { title: string; sheetId: number; gridProperties?: { columnCount?: number } } }[] }> {
+  getSpreadsheet(spreadsheetId: string): Promise<{ properties?: { title?: string }; sheets: { properties: { title: string; sheetId: number; gridProperties?: { columnCount?: number } } }[] }> {
     return this.request<{ sheets: { properties: { title: string; sheetId: number; gridProperties?: { columnCount?: number } } }[] }>(`${BASE}/${spreadsheetId}`)
   }
 

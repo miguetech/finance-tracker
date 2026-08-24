@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { todayLocal } from '../../lib/date'
 import { useConfig, useRepo } from '../../store/queries'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import type { Repository } from '../../data/repository'
 import { Card, Button, Input, Select, Dialog, Tooltip, useToast } from '../../ui/components'
 import { IconPlus, IconX, IconAlert, IconSwap, IconCoins } from '../../ui/icons'
 import { CURRENCIES, parseRates, tasasFrescas, fetchExchangeRates, parseCustomCurrencies, registerCurrency } from '../../currency'
@@ -22,6 +23,23 @@ export function Configuracion() {
   const { config, saveConfig } = useConfig()
   const repo = useRepo()
   const qc = useQueryClient()
+  const hojaQ = useQuery({ queryKey: ['hojaActual'], queryFn: () => (repo as Repository).hojaActual() })
+  const [nombreHoja, setNombreHoja] = useState('')
+  const [conectandoHoja, setConectandoHoja] = useState(false)
+  const conectarHoja = async () => {
+    if (!nombreHoja.trim()) return
+    setConectandoHoja(true)
+    try {
+      const res = await (repo as Repository).conectarHojaPorNombre(nombreHoja)
+      toast(res.creada ? t('hoja.creada') : t('hoja.conectada'))
+      await qc.invalidateQueries({ queryKey: ['hojaActual'] })
+      setTimeout(() => window.location.reload(), 900) // reset de cachés al cambiar de hoja
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    } finally {
+      setConectandoHoja(false)
+    }
+  }
   const toast = useToast()
   const [form, setForm] = useState<Config | null>(null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -30,6 +48,29 @@ export function Configuracion() {
   const [ayudaFolio, setAyudaFolio] = useState(false)
   useEffect(() => { if (config && !form) setForm(config) }, [config, form])
   if (!config || !form) return <div className="p-8 text-muted-foreground">{t('common.cargando')}</div>
+  const tarjetaHoja = (
+    <section className="mb-6 rounded-xl border border-gray-200 bg-surface p-5">
+      <h2 className="font-semibold mb-1">{t('hoja.titulo')}</h2>
+      <p className="text-xs text-muted-foreground mb-3">{t('hoja.descripcion')}</p>
+      {hojaQ.data ? (
+        <div className="text-sm space-y-1 mb-4">
+          <div><span className="text-muted-foreground">{t('hoja.nombre')}:</span> <span className="font-medium">{hojaQ.data.titulo}</span></div>
+          <div className="truncate"><span className="text-muted-foreground">ID:</span> <code className="text-xs">{hojaQ.data.id}</code></div>
+          <a className="text-blue-600 hover:underline text-xs" href={hojaQ.data.url} target="_blank" rel="noreferrer">{t('hoja.abrir')}</a>
+        </div>
+      ) : (
+        <div className="text-sm text-muted-foreground mb-4">{t('common.cargando')}</div>
+      )}
+      <label className="block text-xs text-gray-500 mb-1">{t('hoja.conectarPorNombre')}</label>
+      <div className="flex gap-2">
+        <Input value={nombreHoja} onChange={e => setNombreHoja(e.target.value)} placeholder={`FinanceTracker — ${config.empresa_nombre}`} />
+        <Button onClick={() => void conectarHoja()} disabled={conectandoHoja || !nombreHoja.trim()}>
+          {conectandoHoja ? t('imagenes.subiendo') : t('hoja.botonConectar')}
+        </Button>
+      </div>
+      <p className="text-[11px] text-muted-foreground mt-1">{t('hoja.hint')}</p>
+    </section>
+  )
   const docLabel = getDocLabel(form.tipo_doc, form.tipo_doc_etiqueta)
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => f && ({ ...f, [k]: e.target.value }))
   const hoy = todayLocal()
@@ -80,6 +121,7 @@ export function Configuracion() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-bold">{t('configuracion.title')}</h1>
+      {tarjetaHoja}
       <Card title={t('configuracion.idioma')}>
         <Select value={locale} onChange={setLocale as (v: string) => void}
           options={SUPPORTED_LOCALES.map(l => ({ value: l, label: LOCALE_LABELS[l] }))} />

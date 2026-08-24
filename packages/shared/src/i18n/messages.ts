@@ -622,6 +622,17 @@ export const messages = {
     sincronizarAhora: 'Sincronizar ahora',
     modoOffline: 'Modo offline'
   },
+  hoja: {
+    titulo: 'Hoja de cálculo vinculada',
+    descripcion: 'Hoja de Google Sheets donde FinanceTracker guarda tus datos.',
+    nombre: 'Nombre',
+    abrir: 'Abrir en Google Sheets',
+    conectarPorNombre: 'Conectar o crear por nombre exacto:',
+    botonConectar: 'Conectar',
+    conectada: 'Hoja conectada',
+    creada: 'Hoja creada y conectada',
+    hint: 'Usa un nombre distintivo (ej. "FinanceTracker — Tu Empresa") para identificar la vinculación; si ya existe una hoja tuya con ese nombre se conecta a ella y valida que tengas permisos de edición.'
+  },
   authOffline: {
     titulo: 'Sesión guardada',
     continuarComo: 'Continuar como',

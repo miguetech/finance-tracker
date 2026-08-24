@@ -2,9 +2,9 @@ import { SheetsApi } from '../sheets/api'
 import { DriveApi, type UploadImagenInput } from '../drive/api'
 import { TABLES, HEADER_ROWS, type TableName } from '../sheets/tables'
 import { serializeRow } from '../sheets/rows'
-import { configFromRows, configToRows } from '../sheets/createSpreadsheet'
+import { configFromRows, configToRows, createInitialSpreadsheet, ensureTables } from '../sheets/createSpreadsheet'
 import { withMutex } from '../sheets/mutex'
-import type { StorageAdapter } from './storage'
+import { KEYS, type StorageAdapter } from './storage'
 import { createSheetsTableStore, type TableStore } from './tableStore'
 import { uid } from '../lib/uid'
 import { todayLocal } from '../lib/date'
@@ -794,6 +794,40 @@ export function createRepository(ctx: RepoContext) {
 
     async listFacturasItems(): Promise<(FacturaItem & { id_factura: string })[]> {
       return readTable<FacturaItem & { id_factura: string }>('Factura_Items')
+    },
+
+    /** Datos de la hoja vinculada actualmente (título exacto, id y URL). */
+    async hojaActual(): Promise<{ id: string; titulo: string; url: string }> {
+      const id = await sid()
+      const meta = await api.getSpreadsheet(id)
+      const titulo = meta.properties?.title || 'Sin título'
+      return { id, titulo, url: `https://docs.google.com/spreadsheets/d/${id}/edit` }
+    },
+
+    /**
+     * Conecta por nombre: si existe una hoja de la cuenta con ese nombre se
+     * vincula (verificando permisos reales); si no, se crea con ese nombre.
+     * El nombre debe ser distintivo para que la vinculación sea evidente y
+     * no choque con hojas de terceros a las que la cuenta solo puede leer.
+     */
+    async conectarHojaPorNombre(nombre: string): Promise<{ spreadsheetId: string; url: string; creada: boolean }> {
+      const limpio = nombre.trim()
+      if (!limpio) throw new Error('Escribe el nombre de la hoja a conectar')
+      if (limpio.length > 120) throw new Error('El nombre es demasiado largo (máx. 120)')
+      const drive = new DriveApi(() => api.getToken())
+      const existente = await drive.findSpreadsheet(limpio)
+      if (existente) {
+        try {
+          await ensureTables(api, existente.id)
+        } catch {
+          throw new Error(`La hoja "${limpio}" existe pero esta cuenta no tiene permisos de edición sobre ella`)
+        }
+        await ctx.storage.set(KEYS.spreadsheetId, existente.id)
+        return { spreadsheetId: existente.id, url: existente.url ?? `https://docs.google.com/spreadsheets/d/${existente.id}`, creada: false }
+      }
+      const creada = await createInitialSpreadsheet(api, limpio)
+      await ctx.storage.set(KEYS.spreadsheetId, creada.spreadsheetId)
+      return { spreadsheetId: creada.spreadsheetId, url: creada.url, creada: true }
     },
 
     /** Varias tablas en una sola petición batchGet (para pulls del espejo). */
