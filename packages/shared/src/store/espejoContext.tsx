@@ -137,11 +137,13 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
       if (Date.now() - ultimoRef.current >= TABLAS_CALIENTES_TTL_MS) void sincronizarAhora(TABLAS_CALIENTES)
     }
     espejoBus.onEscritura = (tablas) => { void sincronizarAhora(tablas) }
+    espejoBus.onFlushCompletado = (tablas) => { void sincronizarAhora(tablas, { forzar: true }) }
     espejoBus.onEscrituraLocal = (metodo, args) => { void aplicarEscrituraLocal(metodo, args) }
     document.addEventListener('visibilitychange', alFoco)
     const timer = setInterval(alFoco, TABLAS_CALIENTES_TTL_MS)
     return () => {
       espejoBus.onEscritura = undefined
+      espejoBus.onFlushCompletado = undefined
       espejoBus.onEscrituraLocal = undefined
       document.removeEventListener('visibilitychange', alFoco)
       clearInterval(timer)

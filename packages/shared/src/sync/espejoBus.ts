@@ -6,4 +6,6 @@ export const espejoBus: {
   onEscritura?: (tablas: TableName[]) => void
   /** Escritura encolada offline: el provider aplica el eco al espejo local. */
   onEscrituraLocal?: (metodo: string, args: unknown[]) => void
+  /** La cola acaba de flushear a Sheets: pull forzado (ignora cooldown). */
+  onFlushCompletado?: (tablas: TableName[]) => void
 } = {}

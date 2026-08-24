@@ -68,7 +68,9 @@ export function SincronizadorCola({ almacen, repo }: {
     if (res.ejecutadas > 0) {
       qc.invalidateQueries()
       const tablas = new Set(ops.flatMap(op => TABLAS_POR_METODO[op.metodo] ?? []))
-      if (tablas.size) espejoBus.onEscritura?.([...tablas])
+      // Pull FORZADO: al reconectar el cooldown suele estar armado por los
+      // pulls fallidos de la desconexión; sin esto el espejo quedaría viejo.
+      if (tablas.size) espejoBus.onFlushCompletado?.([...tablas])
     }
   }, [almacen, repo, qc])
 
