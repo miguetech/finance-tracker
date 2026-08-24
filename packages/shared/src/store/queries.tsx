@@ -7,7 +7,7 @@ import type { VentaProductoFila } from '../reports/inventario'
 import { espejoBus } from '../sync/espejoBus'
 import type { TableName } from '../sheets/tables'
 import { useEspejo } from './espejoReact'
-import { listClientesEspejo, listFacturasEspejo, getFacturaEspejo, listGastosEspejo, listPagosEspejo, listProductosEspejo, listProveedoresEspejo, listEmpleadosEspejo, listAsistenciasEspejo } from '../data/readCache'
+import { listClientesEspejo, listFacturasEspejo, getFacturaEspejo, listGastosEspejo, listPagosEspejo, listProductosEspejo, listProveedoresEspejo, listEmpleadosEspejo, listAsistenciasEspejo, listCxpEspejo, reportesKpisEspejo, listMovimientosEspejo, reporteFinancieroEspejo } from '../data/readCache'
 
 /** Avisa al espejo activo que ciertas tablas cambiaron en Sheets. */
 function invalidarEspejo(...tablas: TableName[]) {
@@ -172,7 +172,8 @@ export function useProveedores() {
 export function useCxp(filtro?: { estado?: string }) {
   const repo = useRepo()
   const qc = useQueryClient()
-  const q = useQuery({ queryKey: ['cxp', filtro], queryFn: () => repo.listCxp(filtro) })
+  const { espejo, esperaEspejo } = useOrigenLectura()
+  const q = useQuery({ queryKey: ['cxp', filtro, !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listCxpEspejo(espejo, filtro) : repo.listCxp(filtro)) })
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['cxp'] }); qc.invalidateQueries({ queryKey: ['pagos'] }) }
   const create = useMutation({ mutationFn: (i: { id_proveedor: string; folio_documento: string; categoria: string; descripcion: string; fecha_emision: string; fecha_vencimiento: string; monto_total: number; notas: string; moneda?: string }) => repo.createCxp(i), onSuccess: invalidate })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteCxp(id), onSuccess: invalidate })
@@ -196,7 +197,12 @@ export function useRegisterPago() {
 
 export function useReportes(mes: string) {
   const repo = useRepo()
-  return useQuery({ queryKey: ['reportes', mes], queryFn: () => repo.getReportes(mes) })
+  const { espejo, esperaEspejo } = useOrigenLectura()
+  return useQuery({
+    queryKey: ['reportes', mes, !!espejo],
+    enabled: !esperaEspejo,
+    queryFn: () => (espejo ? reportesKpisEspejo(espejo, mes) : repo.getReportes(mes))
+  })
 }
 
 export function useUsuarios() {
@@ -266,7 +272,8 @@ export function useProductos() {
 
 export function useMovimientos(idProducto?: string) {
   const repo = useRepo()
-  return useQuery({ queryKey: ['movimientos', idProducto], queryFn: () => repo.listMovimientos(idProducto) })
+  const { espejo, esperaEspejo } = useOrigenLectura()
+  return useQuery({ queryKey: ['movimientos', idProducto, !!espejo], enabled: !esperaEspejo, queryFn: () => (espejo ? listMovimientosEspejo(espejo, idProducto) : repo.listMovimientos(idProducto)) })
 }
 
 export function useRegistrarMovimiento() {
@@ -308,7 +315,13 @@ export function useNominaDetalles() {
 
 export function useReporteFinanciero(desde: string, hasta: string) {
   const repo = useRepo()
-  return useQuery({ queryKey: ['reporteFinanciero', desde, hasta], queryFn: () => repo.getReporteFinanciero({ desde, hasta }), enabled: !!desde || !!hasta })
+  const { espejo, esperaEspejo } = useOrigenLectura()
+  const config = useAppStore(s => s.config)
+  return useQuery({
+    queryKey: ['reporteFinanciero', desde, hasta, !!espejo],
+    enabled: (!!desde || !!hasta) && !esperaEspejo,
+    queryFn: () => (espejo ? reporteFinancieroEspejo(espejo, { desde, hasta }, config) : repo.getReporteFinanciero({ desde, hasta }))
+  })
 }
 
 export function useReportesInventario(desde: string, hasta: string, ids?: string[]) {

@@ -2,6 +2,63 @@ import { useState } from 'react'
 import { Button, Input, useI18n, configurarPin, verificarPin, desbloqueoPermitido, activarCifradoEspejo, marcarDesbloqueoSesion } from '@ft/shared'
 import type { RegistroSesion, StorageAdapter } from '@ft/shared'
 
+/** Se perdió la conexión y hay sesión local: ofrecer entrar al modo offline
+ *  sin recargar. Con PIN configurado o espejo cifrado lo pide; sin PIN solo
+ *  dentro de la ventana de 24 h. */
+export function ModalConexionPerdida({ almacen, registro, onEntrar }: {
+  almacen: StorageAdapter
+  registro: RegistroSesion
+  onEntrar: (pin?: string) => void
+}) {
+  const { t } = useI18n()
+  const [pin, setPin] = useState('')
+  const [error, setError] = useState('')
+  const pidePin = !!registro.pin || !!registro.cifrado
+
+  const entrar = async () => {
+    if (pidePin) {
+      if (!(await verificarPin(almacen, pin))) {
+        setError(t('authOffline.pinInvalido'))
+        return
+      }
+      marcarDesbloqueoSesion()
+      onEntrar(pin)
+      return
+    }
+    if (!desbloqueoPermitido(registro)) {
+      setError(t('authOffline.sesionExpirada'))
+      return
+    }
+    marcarDesbloqueoSesion()
+    onEntrar()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+      <div className="w-full max-w-sm space-y-4 rounded-xl bg-surface border border-gray-200 shadow-2xl p-5">
+        <h2 className="text-lg font-semibold text-center">{t('authOffline.conexionPerdida')}</h2>
+        <p className="text-sm text-center text-gray-600">
+          {t('authOffline.continuarComo')} <span className="font-medium">{registro.cuenta}</span>
+        </p>
+        {pidePin ? (
+          <form className="space-y-2" onSubmit={e => { e.preventDefault(); void entrar() }}>
+            <Input value={pin} onChange={e => setPin(e.target.value)} placeholder={t('authOffline.pin')} inputMode="numeric" autoComplete="off" type="password" />
+            <Button type="submit" className="w-full" disabled={!pin}>{t('authOffline.entrarSinConexion')}</Button>
+          </form>
+        ) : (
+          <Button className="w-full" onClick={() => void entrar()}>{t('authOffline.entrarSinConexion')}</Button>
+        )}
+        {!desbloqueoPermitido(registro) && !pidePin && (
+          <div className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg p-2">
+            {t('authOffline.sesionExpirada')}
+          </div>
+        )}
+        {error && <div className="text-sm text-red-600">{error}</div>}
+      </div>
+    </div>
+  )
+}
+
 /** Puerta de entrada sin red (spec espejo §9): "Continuar como <cuenta>",
  *  desbloqueo por PIN local o ventana de 24 h si no hay PIN.
  *  Compartida por web (localStorage) y extensión (chrome.storage). */

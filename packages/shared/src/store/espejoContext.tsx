@@ -20,12 +20,17 @@ export const QUERY_KEYS_POR_TABLA: Partial<Record<TableName, readonly string[]>>
   Proveedores: ['proveedores'],
   Empleados: ['empleados'],
   Asistencias: ['asistencias'],
-  Facturas: ['facturas', 'factura'],
-  Factura_Items: ['factura'],
-  Pagos: ['pagos'],
-  Gastos: ['gastos'],
-  Productos: ['productos']
+  Facturas: ['facturas', 'factura', 'reportes', 'reporteFinanciero', 'ventasProducto'],
+  Factura_Items: ['factura', 'reporteFinanciero', 'reportesInventario'],
+  Pagos: ['pagos', 'reportes', 'reporteFinanciero'],
+  Gastos: ['gastos', 'reportes', 'reporteFinanciero'],
+  Productos: ['productos', 'movimientos', 'reportesInventario'],
+  Cuentas_Pagar: ['cxp', 'cxpById', 'reportes', 'reporteFinanciero'],
+  Movimientos_Stock: ['movimientos', 'reportesInventario']
 }
+
+// Duplicados deliberados arriba se colapsan al recorrer el array.
+void QUERY_KEYS_POR_TABLA
 
 function fetchTablasDesdeRepo(repo: ReturnType<typeof useRepo> | null, ts: TableName[]): Promise<Partial<Record<TableName, Record<string, string | number>[] | null>>> {
   const r = repo as unknown as {

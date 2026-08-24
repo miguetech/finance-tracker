@@ -325,6 +325,7 @@ const en: Partial<Dict> = {
     guardarPin: 'Save PIN',
     pinGuardado: 'PIN saved',
     ultimaSync: 'Last sync',
+    conexionPerdida: 'Internet connection lost',
     cifrarDatos: 'Encrypt local data with this PIN (recommended on shared computers)',
     pedirPinCifrado: 'Enter your PIN to unlock the encrypted local data'
   },

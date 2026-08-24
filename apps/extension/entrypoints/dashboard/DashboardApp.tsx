@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { ensureSheet, getChromeToken } from '../../src/onboarding'
-import { ensureTables, hayDesbloqueoSesion, desbloqueoPermitido, limpiarDesbloqueoSesion } from '@ft/shared'
+import { ensureTables, hayDesbloqueoSesion, desbloqueoPermitido, limpiarDesbloqueoSesion, ModalConexionPerdida, useOnline } from '@ft/shared'
 import { createRepository, chromeStorageAdapter, KEYS, SheetsApi, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Toaster, useConfig, PermsProvider, adminPerms, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo, SesionOffline, PantallaPinCifrado, chromeIdentityAuth } from '@ft/shared'
 import type { NavKey, RegistroSesion, EspejoStore } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
@@ -17,6 +17,7 @@ function Boot() {
   const [claveEspejo, setClaveEspejo] = useState<(() => Promise<string>) | null>(null)
   const [storeCifrado, setStoreCifrado] = useState<EspejoStore | null>(null)
   const [pendientePinCifrado, setPendientePinCifrado] = useState<RegistroSesion | null>(null)
+  const [falloArranque, setFalloArranque] = useState(false)
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
   const [nav, setNav] = useState<NavKey>('dashboard')
@@ -47,6 +48,7 @@ function Boot() {
           const email = (await authExt()?.getSignedInUser())?.email
           if (email) void guardarRegistroSesion(chromeStorageAdapter, { cuenta: email })
           const reg = await cargarRegistroSesion(chromeStorageAdapter)
+          if (reg) setSesionLocal(reg) // disponible para el modal si la red cae a mitad de sesión
           // Espejo cifrado de la sesión anterior: exige PIN antes de abrirlo.
           if (reg?.cifrado) setPendientePinCifrado(reg)
         } catch {
@@ -54,6 +56,7 @@ function Boot() {
           const reg = await cargarRegistroSesion(chromeStorageAdapter)
           if (reg) {
             setSesionLocal(reg)
+            setFalloArranque(true)
             if (!reg.cifrado && hayDesbloqueoSesion() && desbloqueoPermitido(reg)) setModoOffline(true)
           }
         }
@@ -91,7 +94,21 @@ function Boot() {
   if (loading) return <div className="p-8">Conectando a Google Sheets…</div>
   if (!idHoja && !sesionLocal) return <div className="p-8 text-red-600">{err || 'Error de configuración'}</div>
   // Arranque sin red con sesión previa: gate "Continuar como" (spec §9).
-  if (!modoOffline && sesionLocal) {
+  const online = useOnline()
+
+  if (!online && !modoOffline && sesionLocal) {
+    return (
+      <ModalConexionPerdida
+        storage={chromeStorageAdapter}
+        registro={sesionLocal}
+        onEntrar={pinEntrado => {
+          setModoOffline(true)
+          if (sesionLocal.cifrado && pinEntrado) setClaveEspejo(() => async () => pinEntrado)
+        }}
+      />
+    )
+  }
+  if (!modoOffline && sesionLocal && falloArranque) {
     return (
       <SesionOffline
         almacen={chromeStorageAdapter}

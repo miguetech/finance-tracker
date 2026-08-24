@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo, SesionOffline, PantallaPinCifrado, hayDesbloqueoSesion, desbloqueoPermitido, limpiarDesbloqueoSesion } from '@ft/shared'
+import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo, SesionOffline, PantallaPinCifrado, hayDesbloqueoSesion, desbloqueoPermitido, limpiarDesbloqueoSesion, ModalConexionPerdida, useOnline } from '@ft/shared'
 import type { NavKey, NavItem, ModuleKey, PermsInfo, RegistroSesion, EspejoStore } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
@@ -18,6 +18,7 @@ function OwnerShell() {
   const [claveEspejo, setClaveEspejo] = useState<(() => Promise<string>) | null>(null)
   const [storeCifrado, setStoreCifrado] = useState<EspejoStore | null>(null)
   const [pendientePinCifrado, setPendientePinCifrado] = useState<RegistroSesion | null>(null)
+  const [falloArranque, setFalloArranque] = useState(false)
   const [nav, setNav] = useState<NavKey>(() => (sessionStorage.getItem('ft_nav') as NavKey) || 'dashboard')
   const [mes, setMes] = useState(() => sessionStorage.getItem('ft_mes') || monthLocal())
   const [error, setError] = useState('')
@@ -114,9 +115,24 @@ function OwnerShell() {
     }
   }, [modoOffline])
 
+  const online = useOnline()
+
   if (error) return <div className="p-8 text-red-600">{error}</div>
   if (!idHoja) return <div className="p-8">Conectando a Google Sheets…</div>
-  if (!modoOffline && sesionLocal) {
+  // Conexión perdida con sesión local: modal de paso a modo offline al instante.
+  if (!online && !modoOffline && sesionLocal) {
+    return (
+      <ModalConexionPerdida
+        storage={localStorageAdapter}
+        registro={sesionLocal}
+        onEntrar={pinEntrado => {
+          setModoOffline(true)
+          if (sesionLocal.cifrado && pinEntrado) setClaveEspejo(() => async () => pinEntrado)
+        }}
+      />
+    )
+  }
+  if (!modoOffline && sesionLocal && falloArranque) {
     return (
       <SesionOffline
         almacen={localStorageAdapter}

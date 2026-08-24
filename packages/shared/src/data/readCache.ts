@@ -1,6 +1,10 @@
 import type { crearEspejo } from '../sync/espejo'
 import type { TableName } from '../sheets/tables'
-import type { Cliente, Empleado, Asistencia, Factura, FacturaItem, Gasto, Pago, Producto, Proveedor } from '../types/entities'
+import type { Cliente, Empleado, Asistencia, Factura, FacturaItem, Gasto, Pago, Producto, Proveedor, CuentaPagar, MovimientoStock, Config } from '../types/entities'
+import { kpisForMonth, gastosPorCategoria, topClientes, type Kpis } from '../calc/kpis'
+import { estadoResultados, puntoDeEquilibrio, reconversionMonetaria, flujoCaja } from '../reports/financieros'
+import { parseComisiones, parseComisionesMetodos } from '../reports/comisiones'
+import type { ResultadoPL, PuntoEquilibrio, ResumenReconversion, ResultadoFlujoCaja, RangoFecha } from '../reports/types'
 
 type Espejo = ReturnType<typeof crearEspejo>
 
@@ -72,4 +76,56 @@ export async function listAsistenciasEspejo(e: Espejo, filtro: { id_empleado?: s
   if (filtro.desde) rows = rows.filter(a => a.fecha >= filtro.desde!)
   if (filtro.hasta) rows = rows.filter(a => a.fecha <= filtro.hasta!)
   return rows.sort((a, b) => b.fecha.localeCompare(a.fecha))
+}
+
+
+export async function listCxpEspejo(e: Espejo, filtro: { estado?: string } = {}): Promise<CuentaPagar[]> {
+  let rows = await leer<CuentaPagar>(e, 'Cuentas_Pagar')
+  if (filtro.estado) rows = rows.filter(c => c.estado === filtro.estado)
+  return rows
+}
+
+/** KPIs del dashboard desde el espejo (mismo contrato que repo.getReportes). */
+export async function reportesKpisEspejo(e: Espejo, mes: string): Promise<{ kpis: Kpis; categorias: ReturnType<typeof gastosPorCategoria>; top: ReturnType<typeof topClientes> }> {
+  const [facturas, gastos, cxps, pagos] = await Promise.all([
+    leer<Factura>(e, 'Facturas'), leer<Gasto>(e, 'Gastos'),
+    leer<CuentaPagar>(e, 'Cuentas_Pagar'), leer<Pago>(e, 'Pagos')
+  ])
+  return {
+    kpis: kpisForMonth(facturas, gastos, cxps, pagos, mes),
+    categorias: gastosPorCategoria(gastos.filter(g => g.fecha.slice(0, 7) === mes)),
+    top: topClientes(facturas.filter(f => f.fecha_emision.slice(0, 7) === mes))
+  }
+}
+
+export async function listMovimientosEspejo(e: Espejo, idProducto?: string): Promise<MovimientoStock[]> {
+  let rows = await leer<MovimientoStock>(e, 'Movimientos_Stock')
+  if (idProducto) rows = rows.filter(m => m.id_producto === idProducto)
+  return rows
+}
+
+/** Reporte financiero completo desde el espejo; la config viene del cache de zustand. */
+export async function reporteFinancieroEspejo(e: Espejo, rango: RangoFecha, cfg: Config | null) {
+  if (!cfg) throw new Error('Config no disponible en offline')
+  const [facturas, gastos, cxps, pagos, productos, items] = await Promise.all([
+    leer<Factura>(e, 'Facturas'), leer<Gasto>(e, 'Gastos'), leer<CuentaPagar>(e, 'Cuentas_Pagar'),
+    leer<Pago>(e, 'Pagos'), leer<Producto>(e, 'Productos'),
+    leer<FacturaItem & { id_factura: string }>(e, 'Factura_Items')
+  ])
+  const costoPorProducto = productos.reduce<Record<string, number>>((m, p) => { m[p.id_producto] = Number(p.precio_costo) || 0; return m }, {})
+  const monedaPorProducto = productos.reduce<Record<string, string>>((m, p) => { m[p.id_producto] = p.moneda || ''; return m }, {})
+  const itemsPorFactura = items.reduce<Record<string, { cantidad: number; id_producto?: string; precio_unitario?: number }[]>>((m, it) => {
+    ;(m[it.id_factura] ??= []).push({ cantidad: Number(it.cantidad), id_producto: it.id_producto || undefined, precio_unitario: Number(it.precio_unitario) })
+    return m
+  }, {})
+  const pl: ResultadoPL = estadoResultados(facturas, gastos, cfg, costoPorProducto, monedaPorProducto, itemsPorFactura, rango)
+  const legacyPct = Object.fromEntries(Object.entries(parseComisiones(cfg.comisiones_transaccion).metodos).map(([k, pct]) => [k, { pct }]))
+  const comisionesMetodo = { ...legacyPct, ...parseComisionesMetodos(cfg.comisiones_metodos) }
+  const flujo: ResultadoFlujoCaja = flujoCaja(pagos, gastos, comisionesMetodo, rango)
+  return {
+    pl,
+    equilibrio: puntoDeEquilibrio(pl) as PuntoEquilibrio,
+    reconversion: reconversionMonetaria(cfg, { facturas, gastos, cxps, pagos }, rango) as ResumenReconversion,
+    flujo
+  }
 }

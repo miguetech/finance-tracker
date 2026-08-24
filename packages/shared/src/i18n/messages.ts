@@ -634,6 +634,7 @@ export const messages = {
     guardarPin: 'Guardar PIN',
     pinGuardado: 'PIN guardado',
     ultimaSync: 'Última sincronización',
+    conexionPerdida: 'Se perdió la conexión a internet',
     cifrarDatos: 'Cifrar los datos locales con este PIN (recomendado si compartes equipo)',
     pedirPinCifrado: 'Ingresa tu PIN para desbloquear los datos locales cifrados'
   },
