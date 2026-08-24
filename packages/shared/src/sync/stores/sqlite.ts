@@ -157,6 +157,12 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
    *  el pull inicial toca muchas tablas y serializar cada una bloquea). */
   async function persistir(): Promise<void> {
     if (!db || !persistor || !sucio || !sqlite3Ref) return
+    // Protección anti-destrucción: si el blob existente está CIFRADO y esta
+    // sesión abrió sin clave, NO lo pisa con un espejo vacío/plano.
+    if (!clave && apertura.volcadoCifrado === true) {
+      console.warn('[espejo] volcado cifrado en IndexedDB intacto: esta sesión sin PIN no escribe encima')
+      return
+    }
     try {
       const bytes = volcarBytes(sqlite3Ref, db)
       if (clave) await persistirJson(JSON.stringify(await cifrarVolcado(await clave(), bytes)))
