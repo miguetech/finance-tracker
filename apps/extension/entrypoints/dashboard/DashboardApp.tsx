@@ -99,7 +99,7 @@ function Boot() {
   if (!online && !modoOffline && sesionLocal) {
     return (
       <ModalConexionPerdida
-        storage={chromeStorageAdapter}
+        almacen={chromeStorageAdapter}
         registro={sesionLocal}
         onEntrar={pinEntrado => {
           setModoOffline(true)

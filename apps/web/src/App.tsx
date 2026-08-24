@@ -123,7 +123,7 @@ function OwnerShell() {
   if (!online && !modoOffline && sesionLocal) {
     return (
       <ModalConexionPerdida
-        storage={localStorageAdapter}
+        almacen={localStorageAdapter}
         registro={sesionLocal}
         onEntrar={pinEntrado => {
           setModoOffline(true)
