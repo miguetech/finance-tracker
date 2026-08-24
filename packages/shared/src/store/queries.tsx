@@ -52,9 +52,16 @@ export function useCurrency(): Currency {
 
 /** Con espejo activo las lecturas salen del SQLite local; mientras el store
  *  carga (flag on) se evita golpear Sheets. Fuera de flag, ruta directa. */
-function useOrigenLectura() {
+function useOrigenLectura(tablas?: TableName[]) {
   const { habilitado, espejo, version } = useEspejo()
-  return { espejo, esperaEspejo: habilitado && !espejo, version }
+  // Versión GRANULAR: solo las fechas de las tablas de ESTA sección. Un pull
+  // ajeno ya no re-renderiza pantallas que no le conciernen (parpadeo).
+  let versionSeccion = version
+  if (tablas?.length && espejo) {
+    const fechas = espejo.fechasPorTabla()
+    versionSeccion = tablas.map(t => fechas[t] ?? 0).join('|') + '|' + version
+  }
+  return { espejo, esperaEspejo: habilitado && !espejo, version: versionSeccion }
 }
 
 /** Sync perezoso: al montar la sección, trae del pull solo SUS tablas vencidas.
@@ -88,6 +95,7 @@ export function useConfig() {
 }
 
 export function useClientes() {
+  const SECCION = ['Clientes']
   const repo = useRepo()
   const qc = useQueryClient()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
@@ -111,6 +119,7 @@ export function useFacturas(filtro?: { estado?: string; mes?: string }) {
 }
 
 export function useFactura(id: string | null) {
+  const SECCION = ['Facturas', 'Factura_Items']
   const repo = useRepo()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
   useSyncSeccion(['Facturas', 'Factura_Items'])
@@ -123,6 +132,7 @@ export function useFactura(id: string | null) {
 }
 
 export function useGastos(filtro?: { mes?: string; categoria?: string }) {
+  const SECCION = ['Gastos']
   const repo = useRepo()
   const qc = useQueryClient()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
@@ -134,6 +144,7 @@ export function useGastos(filtro?: { mes?: string; categoria?: string }) {
 }
 
 export function useEmpleados() {
+  const SECCION = ['Empleados']
   const repo = useRepo()
   const qc = useQueryClient()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
@@ -146,6 +157,7 @@ export function useEmpleados() {
 }
 
 export function useAsistencias(filtro: { id_empleado?: string; desde?: string; hasta?: string } = {}) {
+  const SECCION = ['Asistencias']
   const repo = useRepo()
   const qc = useQueryClient()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
@@ -177,6 +189,7 @@ export function useRegisterNomina() {
 }
 
 export function useProveedores() {
+  const SECCION = ['Proveedores']
   const repo = useRepo()
   const qc = useQueryClient()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
@@ -188,6 +201,7 @@ export function useProveedores() {
 }
 
 export function useCxp(filtro?: { estado?: string }) {
+  const SECCION = ['Cuentas_Pagar']
   const repo = useRepo()
   const qc = useQueryClient()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
@@ -200,6 +214,7 @@ export function useCxp(filtro?: { estado?: string }) {
 }
 
 export function usePagos(idOrigen?: string) {
+  const SECCION = ['Pagos']
   const repo = useRepo()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
   useSyncSeccion(['Pagos'])
@@ -216,6 +231,7 @@ export function useRegisterPago() {
 }
 
 export function useReportes(mes: string) {
+  const SECCION = ['Facturas', 'Gastos', 'Cuentas_Pagar', 'Pagos']
   const repo = useRepo()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
   useSyncSeccion(['Facturas', 'Gastos', 'Cuentas_Pagar', 'Pagos'])
@@ -281,6 +297,7 @@ export function useCxpById(id: string | null) {
 }
 
 export function useProductos() {
+  const SECCION = ['Productos']
   const repo = useRepo()
   const qc = useQueryClient()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
@@ -293,6 +310,7 @@ export function useProductos() {
 }
 
 export function useMovimientos(idProducto?: string) {
+  const SECCION = ['Movimientos_Stock']
   const repo = useRepo()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
   useSyncSeccion(['Movimientos_Stock'])
@@ -337,6 +355,7 @@ export function useNominaDetalles() {
 }
 
 export function useReporteFinanciero(desde: string, hasta: string) {
+  const SECCION = ['Facturas', 'Gastos', 'Cuentas_Pagar', 'Pagos', 'Productos', 'Factura_Items']
   const repo = useRepo()
   const { espejo, esperaEspejo, version } = useOrigenLectura()
   useSyncSeccion(['Facturas', 'Gastos', 'Cuentas_Pagar', 'Pagos', 'Productos', 'Factura_Items'])

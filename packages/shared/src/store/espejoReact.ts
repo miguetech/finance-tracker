@@ -5,9 +5,9 @@ import type { TableName } from '../sheets/tables'
 /** Valor del contexto del espejo, en módulo propio para evitar ciclos
  *  de importación entre queries.tsx y espejoContext.tsx. */
 export interface EspejoCtxValue {
-  /** Se incrementa tras cada pull del espejo: las queries lo meten en su
-   *  queryKey para releer SIEMPRE que haya descarga nueva. */
-  version: number
+  /** Se incrementa tras cada pull; useOrigenLectura la combina con las
+   *  fechas de las tablas de la sección para una versión granular. */
+  version: number | string
   /** Flag VITE_ESPEJO=on, aunque el store aún no termine de cargar. */
   habilitado: boolean
   /** Store cargado y espejo creado: las lecturas pueden ir al espejo. */
