@@ -31,7 +31,7 @@ afterEach(() => cleanup())
 describe('EspejoProvider', () => {
   it('con flag off queda inactivo (ruta directa a Sheets)', () => {
     renderConCliente(
-      <EspejoProvider flag="off" store={crearStoreMemoria()} fetchTable={async () => []}>
+      <EspejoProvider flag="off" store={crearStoreMemoria()} fetchTablas={async () => ({})}>
         <Probe />
       </EspejoProvider>
     )
@@ -40,7 +40,7 @@ describe('EspejoProvider', () => {
 
   it('con flag on, sincronizarAhora actualiza ultimoPull', async () => {
     renderConCliente(
-      <EspejoProvider flag="on" store={crearStoreMemoria()} fetchTable={async () => []}>
+      <EspejoProvider flag="on" store={crearStoreMemoria()} fetchTablas={async () => ({})}>
         <Probe />
       </EspejoProvider>
     )
@@ -61,7 +61,7 @@ describe('EspejoProvider', () => {
     const repo = conColaEscrituras(repoFalso, { storage: memoriaKv(), activo: () => true })
     renderConCliente(
       <AppProvider repo={repo}>
-        <EspejoProvider flag="on" store={almacenMemoria} fetchTable={async () => []}>
+        <EspejoProvider flag="on" store={almacenMemoria} fetchTablas={async () => ({})}>
           <BotonGuardar repo={repo} />
         </EspejoProvider>
       </AppProvider>

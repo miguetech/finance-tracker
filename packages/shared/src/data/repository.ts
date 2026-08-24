@@ -1,6 +1,6 @@
 import { SheetsApi } from '../sheets/api'
 import { DriveApi, type UploadImagenInput } from '../drive/api'
-import { TABLES, HEADER_ROWS } from '../sheets/tables'
+import { TABLES, HEADER_ROWS, type TableName } from '../sheets/tables'
 import { serializeRow } from '../sheets/rows'
 import { configFromRows, configToRows } from '../sheets/createSpreadsheet'
 import { withMutex } from '../sheets/mutex'
@@ -788,6 +788,11 @@ export function createRepository(ctx: RepoContext) {
 
     async listFacturasItems(): Promise<(FacturaItem & { id_factura: string })[]> {
       return readTable<FacturaItem & { id_factura: string }>('Factura_Items')
+    },
+
+    /** Varias tablas en una sola petición batchGet (para pulls del espejo). */
+    async leerVariasTablas(ts: TableName[]): Promise<Partial<Record<TableName, Record<string, string | number>[]>>> {
+      return store.getVarias(ts)
     },
 
     /** Historial de ventas de un producto individual en un rango. */

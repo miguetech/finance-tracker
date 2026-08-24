@@ -16,14 +16,14 @@ export const TABLAS_CALIENTES: TableName[] = ['Facturas', 'Factura_Items', 'Pago
 
 export interface EspejoDeps {
   store: EspejoStore
-  /** Devuelve las filas de la tabla, o `null` si la tabla no está soportada por este origen. */
-  fetchTable(t: TableName): Promise<Row[] | null>
+  /** Descarga varias tablas en una sola petición; null = tabla sin origen. */
+  fetchTablas(ts: TableName[]): Promise<Partial<Record<TableName, Row[] | null>>>
   ahora?: () => number
   onCambio?: (tablas: TableName[]) => void
 }
 
 export function crearEspejo(deps: EspejoDeps) {
-  const { store, fetchTable, ahora = Date.now, onCambio } = deps
+  const { store, fetchTablas, ahora = Date.now, onCambio } = deps
   const hashes = new Map<TableName, string>()
   let ultimoPull = 0
   let initPromise: Promise<void> | null = null
@@ -44,9 +44,8 @@ export function crearEspejo(deps: EspejoDeps) {
     return resultado
   }
 
-  async function pullUna(t: TableName, cambiadas: TableName[]): Promise<void> {
-    const filas = await fetchTable(t)
-    if (filas === null) return // tabla sin origen: no se envenena su hash
+  async function aplicar(t: TableName, filas: Row[] | null, cambiadas: TableName[]): Promise<void> {
+    if (!filas) return // tabla sin origen: no se envenena su hash
     const h = hashTabla(filas)
     if (hashes.get(t) !== h) {
       hashes.set(t, h)
@@ -56,16 +55,18 @@ export function crearEspejo(deps: EspejoDeps) {
   }
 
   /**
-   * Descarga tablas y actualiza el espejo solo donde cambió el hash.
-   * Sin `tablas`: primer pull descarga todo; siguientes, solo calientes.
+   * Descarga tablas (una petición para todas) y actualiza el espejo solo
+   * donde cambió el hash. Sin `tablas`: primer pull descarga todo;
+   * siguientes, solo calientes.
    */
   function pull(tablas?: TableName[]): Promise<TableName[]> {
     return encolar(async () => {
       await init()
       let objetivo = tablas
       if (!objetivo) objetivo = hashes.size ? TABLAS_CALIENTES : (Object.keys(TABLES) as TableName[])
+      const descargas = await fetchTablas(objetivo)
       const cambiadas: TableName[] = []
-      for (const t of objetivo) await pullUna(t, cambiadas)
+      for (const t of objetivo) await aplicar(t, descargas[t] ?? null, cambiadas)
       ultimoPull = ahora()
       if (cambiadas.length && onCambio) onCambio(cambiadas)
       return cambiadas

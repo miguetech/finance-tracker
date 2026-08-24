@@ -28,10 +28,10 @@ function Probe() {
 describe('lecturas UI desde el espejo', () => {
   it('con flag on lee Clientes del espejo y se refresca al invalidar la tabla', async () => {
     const fuente: { filas: Record<string, string>[] } = { filas: [] }
-    const fetchTable = async (t: TableName) => (t === 'Clientes' ? fuente.filas : [])
+    const fetchTablas = async (ts: TableName[]) => Object.fromEntries(ts.map(t => [t, t === 'Clientes' ? fuente.filas : []]))
     render(
       <AppProvider repo={repoFalso}>
-        <EspejoProvider flag="on" store={crearStoreMemoria()} fetchTable={fetchTable}>
+        <EspejoProvider flag="on" store={crearStoreMemoria()} fetchTablas={fetchTablas}>
           <Probe />
         </EspejoProvider>
       </AppProvider>

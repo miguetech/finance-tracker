@@ -47,6 +47,8 @@ export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & {
     updateFactura: (id, data) => call('updateFactura', { id, data }),
     listFacturas: f => call('listFacturas', f ?? {}),
     listFacturasItems: () => call('listFacturasItems'),
+    // El visitante no usa espejo; stub para cumplir la forma de Repository.
+    leerVariasTablas: async () => ({}),
     getFactura: id => call('getFactura', id),
     deleteFactura: id => call('deleteFactura', id),
     listGastos: f => call('listGastos', f ?? {}),

@@ -15,7 +15,7 @@ function FrescuraEspejo() {
   return (
     <div className="flex items-center justify-between gap-2 text-xs">
       <span className="text-muted-foreground">{t('espejo.sincronizado')}: {ultimoPull ? new Date(ultimoPull).toLocaleTimeString() : '—'}</span>
-      <button type="button" onClick={() => void sincronizarAhora()}
+      <button type="button" onClick={() => void sincronizarAhora(undefined, { forzar: true })}
         className="text-primary underline decoration-dotted underline-offset-2 hover:text-primary-hover">
         ⟳ {t('espejo.sincronizarAhora')}
       </button>

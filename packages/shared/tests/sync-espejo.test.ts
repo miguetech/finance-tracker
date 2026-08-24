@@ -21,8 +21,8 @@ describe('pipeline del espejo', () => {
   it('primer pull inserta; segundo idéntico no reemplaza; cambio sí', async () => {
     const store = storeMemoria()
     let filas: Record<string, string | number>[] = [{ id_factura: 'f1', total: 10 }]
-    const fetchTable = vi.fn(async (_t: TableName) => filas)
-    const espejo = crearEspejo({ store, fetchTable })
+    const fetchTablas = vi.fn(async (ts: TableName[]) => Object.fromEntries(ts.map(t => [t, filas])))
+    const espejo = crearEspejo({ store, fetchTablas })
     await espejo.init()
     await espejo.pull(['Facturas'])
     expect(store.replaceTable).toHaveBeenCalledTimes(1)
@@ -36,36 +36,36 @@ describe('pipeline del espejo', () => {
 
   it('getAllRows lee del store, no de la red', async () => {
     const store = storeMemoria()
-    const fetchTable = vi.fn(async () => [])
-    const espejo = crearEspejo({ store, fetchTable })
+    const fetchTablas = vi.fn(async (ts: TableName[]) => Object.fromEntries(ts.map(t => [t, []])))
+    const espejo = crearEspejo({ store, fetchTablas })
     await espejo.init()
     await espejo.pull(['Clientes'])
-    fetchTable.mockClear()
+    fetchTablas.mockClear()
     await espejo.getAllRows('Clientes')
-    expect(fetchTable).not.toHaveBeenCalled()
+    expect(fetchTablas).not.toHaveBeenCalled()
   })
 
   it('pulls simultáneos se serializan (cola única)', async () => {
     const store = storeMemoria()
     let resolver!: () => void
     const puerta = new Promise<void>(r => { resolver = r })
-    const fetchTable = vi.fn(async () => { await puerta; return [] })
-    const espejo = crearEspejo({ store, fetchTable })
+    const fetchTablas = vi.fn(async (ts: TableName[]) => { await puerta; return Object.fromEntries(ts.map(t => [t, []])) })
+    const espejo = crearEspejo({ store, fetchTablas })
     await espejo.init()
     const p1 = espejo.pull(['Facturas'])
     const p2 = espejo.pull(['Clientes'])
     await new Promise(r => setTimeout(r))
-    expect(fetchTable).toHaveBeenCalledTimes(1)
+    expect(fetchTablas).toHaveBeenCalledTimes(1)
     resolver()
     await Promise.all([p1, p2])
-    expect(fetchTable).toHaveBeenCalledTimes(2)
+    expect(fetchTablas).toHaveBeenCalledTimes(2)
   })
 
   it('onCambio reporta solo tablas modificadas', async () => {
     const store = storeMemoria()
     const onCambio = vi.fn()
     let filas: Record<string, string | number>[] = []
-    const espejo = crearEspejo({ store, fetchTable: async () => filas, onCambio })
+    const espejo = crearEspejo({ store, fetchTablas: async ts => Object.fromEntries(ts.map(t => [t, filas])), onCambio })
     await espejo.init()
     filas = [{ id_cliente: 'c1' }]
     // Carga inicial: ambas pasan de desconocidas a cargadas.
@@ -79,7 +79,7 @@ describe('pipeline del espejo', () => {
   it('estado expone ultimoPull y hashes', async () => {
     const store = storeMemoria()
     let ahora = 1000
-    const espejo = crearEspejo({ store, fetchTable: async () => [], ahora: () => ahora })
+    const espejo = crearEspejo({ store, fetchTablas: async ts => Object.fromEntries(ts.map(t => [t, []])), ahora: () => ahora })
     await espejo.init()
     await espejo.pull(['Gastos'])
     ahora = 2000
@@ -88,34 +88,35 @@ describe('pipeline del espejo', () => {
     expect(Object.keys(espejo.estado().hashes)).toContain('Gastos')
   })
 
-  it('pull sin tablas: primera vez todas, luego calientes', async () => {
+  it('pull sin tablas: primera vez todas en UNA descarga, luego calientes', async () => {
     const store = storeMemoria()
-    const fetchTable = vi.fn(async (_t: TableName) => [])
-    const espejo = crearEspejo({ store, fetchTable })
+    const fetchTablas = vi.fn(async (ts: TableName[]) => Object.fromEntries(ts.map(t => [t, []])))
+    const espejo = crearEspejo({ store, fetchTablas })
     await espejo.init()
     await espejo.pull()
-    expect(fetchTable.mock.calls.length).toBeGreaterThan(15) // todas las tablas
-    fetchTable.mockClear()
+    expect(fetchTablas.mock.calls[0][0].length).toBeGreaterThan(15) // todas las tablas, 1 llamada
+    fetchTablas.mockClear()
     await espejo.pull()
-    expect(new Set(fetchTable.mock.calls.map(c => c[0]))).toEqual(new Set(TABLAS_CALIENTES))
+    expect(new Set(fetchTablas.mock.calls.at(-1)![0])).toEqual(new Set(TABLAS_CALIENTES))
   })
 })
 
-describe('tablas sin origen (fetchTable → null)', () => {
+describe('tablas sin origen (fetchTablas → null)', () => {
   it('se omiten: no se guardan, no cuentan como cambio ni envenenan hash', async () => {
     const store = storeMemoria()
     const onCambio = vi.fn()
     const soportadas = new Set(['Facturas'])
-    const fetchTable = vi.fn(async (t: TableName) => (soportadas.has(t) ? [{ id_factura: 'x' }] : null))
-    const espejo = crearEspejo({ store, fetchTable, onCambio })
+    const fetchTablas = vi.fn(async (ts: TableName[]) =>
+      Object.fromEntries(ts.map(t => [t, soportadas.has(t) ? [{ id_factura: 'x' }] : null]))
+    )
+    const espejo = crearEspejo({ store, fetchTablas, onCambio })
     await espejo.init()
     const cambiadas = await espejo.pull()
     expect(cambiadas).toEqual(['Facturas'])
     expect(onCambio).toHaveBeenCalledWith(['Facturas'])
     // Segundo pull calientes: solo calientes vuelven a descargarse
-    fetchTable.mockClear()
+    fetchTablas.mockClear()
     await espejo.pull()
-    const llamadas = fetchTable.mock.calls.map(c => c[0])
-    expect(new Set(llamadas)).toEqual(new Set(TABLAS_CALIENTES))
+    expect(new Set(fetchTablas.mock.calls.at(-1)![0])).toEqual(new Set(TABLAS_CALIENTES))
   })
 })

@@ -11,7 +11,7 @@ export interface EspejoCtxValue {
   activo: boolean
   espejo: ReturnType<typeof crearEspejo> | null
   ultimoPull: number
-  sincronizarAhora: (tablas?: TableName[]) => Promise<void>
+  sincronizarAhora: (tablas?: TableName[], opts?: { forzar?: boolean }) => Promise<void>
 }
 
 export const EspejoCtx = createContext<EspejoCtxValue>({

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { crearEspejo, TABLAS_CALIENTES, type EspejoStore } from '../sync/espejo'
 import { ddlDesdeTables } from '../sync/ddl'
 import { espejoBus } from '../sync/espejoBus'
-import { TABLAS_POR_METODO, ecoDe, ID_POR_TABLA } from '../sync/colaEscrituras'
+import { TABLAS_POR_METODO, ecoDe, ID_POR_TABLA, esErrorRed } from '../sync/colaEscrituras'
 import type { TableName } from '../sheets/tables'
 import { useRepo, _repoCtx as RepoCtx } from './queries'
 import { EspejoCtx, type EspejoCtxValue } from './espejoReact'
@@ -26,39 +26,36 @@ export const QUERY_KEYS_POR_TABLA: Partial<Record<TableName, readonly string[]>>
   Productos: ['productos']
 }
 
-function fetchTableDesdeRepo(repo: ReturnType<typeof useRepo> | null, t: TableName): Promise<Record<string, string | number>[] | null> {
-  const r = repo as unknown as Record<string, (a?: unknown) => Promise<unknown[]>> | null
-  if (!r) return Promise.resolve(null)
-  // Tablas con listX directo en el repositorio.
-  const mapa: Partial<Record<TableName, string>> = {
-    Clientes: 'listClientes',
-    Proveedores: 'listProveedores',
-    Empleados: 'listEmpleados',
-    Facturas: 'listFacturas',
-    Factura_Items: 'listFacturasItems',
-    Pagos: 'listPagos',
-    Gastos: 'listGastos',
-    Productos: 'listProductos',
-    Cuentas_Pagar: 'listCxp',
-    Gastos_Fijos: 'listGastosFijos',
-    Tasas_Historial: 'listTasasHistorial',
-    Nomina_Detalles: 'listNominaDetalles',
-    Usuarios: 'listUsuarios',
-    Codigos_Acceso: 'listCodigos',
-    Dispositivos: 'listDispositivos',
-    Asistencias: 'listAsistencias'
+function fetchTablasDesdeRepo(repo: ReturnType<typeof useRepo> | null, ts: TableName[]): Promise<Partial<Record<TableName, Record<string, string | number>[] | null>>> {
+  const r = repo as unknown as {
+    leerVariasTablas?: (ts: TableName[]) => Promise<Partial<Record<TableName, Record<string, string | number>[]>>>
+  } | null
+  if (!r) return Promise.resolve({})
+  // Vía rápida: un batchGet para todas. Tablas sin listX quedan fuera (null).
+  const conOrigen = ts.filter(t => TABLA_CON_LISTX.has(t))
+  if (!conOrigen.length || typeof r.leerVariasTablas !== 'function') {
+    // Fallback per-table para repos falsos de tests.
+    return Promise.resolve(Object.fromEntries(ts.map(t => [t, TABLA_CON_LISTX.has(t) ? [] : null])))
   }
-  // Config (clave/valor) y Movimientos_Stock (requiere id) quedan fuera del espejo en Fase A.
-  const metodo = mapa[t]
-  if (!metodo || typeof r[metodo] !== 'function') return Promise.resolve(null)
-  return r[metodo]() as Promise<Record<string, string | number>[]>
+  return r.leerVariasTablas(conOrigen).then(res => {
+    const out: Partial<Record<TableName, Record<string, string | number>[] | null>> = {}
+    for (const t of ts) out[t] = TABLA_CON_LISTX.has(t) ? res[t] ?? [] : null
+    return out
+  })
 }
 
-export function EspejoProvider({ flag, store = null, fetchTable, children }: {
+const TABLA_CON_LISTX: ReadonlySet<TableName> = new Set<TableName>([
+  'Clientes', 'Proveedores', 'Empleados', 'Facturas', 'Factura_Items', 'Pagos', 'Gastos',
+  'Productos', 'Cuentas_Pagar', 'Gastos_Fijos', 'Tasas_Historial', 'Nomina_Detalles',
+  'Usuarios', 'Codigos_Acceso', 'Dispositivos', 'Asistencias'
+])
+// Config (clave/valor) y Movimientos_Stock (requiere id) quedan fuera del espejo en Fase A.
+
+export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOverride, children }: {
   flag?: string
   store?: EspejoStore | null
-  /** Override para tests; por defecto usa las listX del repositorio. */
-  fetchTable?: (t: TableName) => Promise<Record<string, string | number>[] | null>
+  /** Override para tests; por defecto un batchGet del repositorio. */
+  fetchTablas?: (ts: TableName[]) => Promise<Partial<Record<TableName, Record<string, string | number>[] | null>>>
   children: React.ReactNode
 }) {
   const repo = useContext(RepoCtx) // puede ser null en tests; fetchTable override lo evita
@@ -72,7 +69,7 @@ export function EspejoProvider({ flag, store = null, fetchTable, children }: {
     if (!activo) return null
     return crearEspejo({
       store,
-      fetchTable: fetchTable ?? ((t) => (repo ? fetchTableDesdeRepo(repo, t) : Promise.resolve([]))),
+      fetchTablas: fetchTablasOverride ?? ((ts) => fetchTablasDesdeRepo(repo, ts)),
       onCambio: (tablas) => {
         for (const t of tablas) {
           const keys = QUERY_KEYS_POR_TABLA[t]
@@ -81,15 +78,32 @@ export function EspejoProvider({ flag, store = null, fetchTable, children }: {
         }
       }
     })
-  }, [activo, store, fetchTable, repo, qc])
+  }, [activo, store, fetchTablasOverride, repo, qc])
 
-  const sincronizarAhora = async (tablas?: TableName[]) => {
+  // Cuota de Sheets agotada: pausa los pulls automáticos 90 s. El botón
+  // manual de sincronización la ignora.
+  const cooldownRef = useRef(0)
+
+  const sincronizarAhora = async (tablas?: TableName[], opts?: { forzar?: boolean }) => {
     if (!espejo) return
-    // Sin red: los pulls solo generan errores (y tormenta de 429 al volver).
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
-    await espejo.pull(tablas ?? (ultimoRef.current === 0 ? undefined : TABLAS_CALIENTES))
-    ultimoRef.current = espejo.estado().ultimoPull
-    setUltimoPull(ultimoRef.current)
+    if (!opts?.forzar) {
+      if (Date.now() < cooldownRef.current) return
+      // Sin red: los pulls solo generan errores (y tormenta de 429 al volver).
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    }
+    try {
+      await espejo.pull(tablas ?? (ultimoRef.current === 0 ? undefined : TABLAS_CALIENTES))
+      cooldownRef.current = 0
+      ultimoRef.current = espejo.estado().ultimoPull
+      setUltimoPull(ultimoRef.current)
+    } catch (e) {
+      if (esErrorRed(e)) {
+        cooldownRef.current = Date.now() + 90_000
+        console.debug('[espejo] pull en pausa por red/cuota hasta', new Date(cooldownRef.current).toLocaleTimeString())
+        return
+      }
+      throw e
+    }
   }
 
   /** Escritura encolada offline: inserta/reemplaza la fila del eco en el
