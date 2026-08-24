@@ -79,7 +79,8 @@ export class SheetsApi {
 
   async batchGet(spreadsheetId: string, ranges: string[]): Promise<Record<string, (string | number)[][]>> {
     const params = new URLSearchParams()
-    params.set('ranges', ranges.join(','))
+    // La API espera el parámetro repetido (ranges=A&ranges=B), no una lista separada por comas.
+    for (const r of ranges) params.append('ranges', r)
     params.set('majorDimension', 'ROWS')
     params.set('valueRenderOption', 'UNFORMATTED_VALUE')
     const url = `${BASE}/${spreadsheetId}/values:batchGet?${params.toString()}`
