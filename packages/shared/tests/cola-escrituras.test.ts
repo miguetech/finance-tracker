@@ -221,7 +221,7 @@ describe('escritura encolada dispara eco local en el bus', () => {
     expect((vistas[0].args[0] as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
   })
 
-  it('fuera de modo offline no toca el bus', async () => {
+  it('fuera de modo offline: éxito online también aplica eco al espejo', async () => {
     const { espejoBus } = await import('../src/sync/espejoBus')
     let llamadas = 0
     espejoBus.onEscrituraLocal = () => { llamadas++ }
@@ -229,7 +229,8 @@ describe('escritura encolada dispara eco local en el bus', () => {
     const envuelto = conColaEscrituras(repoFalso(), { storage: s, activo: () => false })
     await envuelto.deleteGasto('g1')
     espejoBus.onEscrituraLocal = undefined
-    expect(llamadas).toBe(0)
+    expect(llamadas).toBe(1) // baja aplicada al espejo al instante, sin esperar pull
+    expect(await resumirCola(s)).toEqual({ pendientes: 0, errores: 0 })
   })
 })
 

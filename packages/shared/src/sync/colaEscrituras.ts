@@ -316,9 +316,13 @@ export function conColaEscrituras(repo: Repository, opciones: OpcionesColaRepo):
     const original = (repo as unknown as Record<string, (...a: never[]) => unknown>)[metodo]
     if (typeof original !== 'function') continue
     ;(envuelto as unknown as Record<string, (...a: never[]) => unknown>)[metodo] = async (...args: Args): Promise<unknown> => {
+      const normales = conf && METODOS_COLA[metodo]?.normalizar ? METODOS_COLA[metodo].normalizar!(args) : args
       if (!activo()) {
         try {
-          return await conTecho(original.apply(repo, args as never[]) as Promise<unknown>, opciones.techoMs)
+          const resultado = await conTecho(original.apply(repo, args as never[]) as Promise<unknown>, opciones.techoMs)
+          // Éxito online: aplica el eco/baja al espejo YA (la UI no espera al pull).
+          try { espejoBus.onEscrituraLocal?.(metodo, normales) } catch { /* sin provider */ }
+          return resultado
         } catch (e) {
           // navigator.onLine puede mentir (DevTools, wifi a medio morir): si el
           // fallo es de transporte, la escritura cae a la cola en vez de romper
@@ -326,7 +330,6 @@ export function conColaEscrituras(repo: Repository, opciones: OpcionesColaRepo):
           if (!esErrorRed(e)) throw e
         }
       }
-      const normales = conf && METODOS_COLA[metodo]?.normalizar ? METODOS_COLA[metodo].normalizar!(args) : args
       await encolarOp(opciones.storage, metodo, normales)
       refrescarEstadoCola(opciones.storage)
       // El provider aplica el eco al espejo local para que la fila se vea ya guardada.
