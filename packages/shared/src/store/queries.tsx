@@ -27,7 +27,17 @@ export function useRepo(): Repository {
 }
 
 export function AppProvider({ repo, children }: { repo: Repository; children: React.ReactNode }) {
-  const [client] = React.useState(() => new QueryClient())
+  const [client] = React.useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        // La frescura la maneja el espejo (TTL/foco/post-escritura): re-leer
+        // TODO al cambiar de pestaña solo quemaba cuota de Sheets (60/min).
+        refetchOnWindowFocus: false,
+        staleTime: 30_000,
+        retry: 1 // los 429 no se martillan con 3 reintentos
+      }
+    }
+  }))
   return (
     <RepoCtx.Provider value={repo}>
       <QueryClientProvider client={client}>{children}</QueryClientProvider>

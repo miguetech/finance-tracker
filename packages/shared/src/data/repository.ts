@@ -578,7 +578,12 @@ export function createRepository(ctx: RepoContext) {
     },
 
     async getReportes(mes: string) {
-      const [facturas, gastos, cxps, pagos] = await Promise.all([readTable<Factura>('Facturas'), readTable<Gasto>('Gastos'), readTable<CuentaPagar>('Cuentas_Pagar'), readTable<Pago>('Pagos')])
+      // Una sola petición para las 4 tablas (cuota de lectura de Sheets: 60/min/usuario).
+      const tablas = await store.getVarias<Record<string, string | number>>(['Facturas', 'Gastos', 'Cuentas_Pagar', 'Pagos'])
+      const facturas = (tablas.Facturas ?? []) as unknown as Factura[]
+      const gastos = (tablas.Gastos ?? []) as unknown as Gasto[]
+      const cxps = (tablas.Cuentas_Pagar ?? []) as unknown as CuentaPagar[]
+      const pagos = (tablas.Pagos ?? []) as unknown as Pago[]
       const kpis: Kpis = kpisForMonth(facturas, gastos, cxps, pagos, mes)
       const categorias = gastosPorCategoria(gastos.filter(g => g.fecha.slice(0, 7) === mes))
       const top = topClientes(facturas.filter(f => f.fecha_emision.slice(0, 7) === mes))
@@ -774,10 +779,11 @@ export function createRepository(ctx: RepoContext) {
       movimientosMensuales: ReturnType<typeof movimientosPorMes>
       statsProductos: StatsProducto[]
     }> {
-      const [productos, movimientos, facturas, items] = await Promise.all([
-        readTable<Producto>('Productos'), readTable<MovimientoStock>('Movimientos_Stock'),
-        readTable<Factura>('Facturas'), readTable<FacturaItem & { id_factura: string }>('Factura_Items')
-      ])
+      const tablasInv = await store.getVarias<Record<string, string | number>>(['Productos', 'Movimientos_Stock', 'Facturas', 'Factura_Items'])
+      const productos = (tablasInv.Productos ?? []) as unknown as Producto[]
+      const movimientos = (tablasInv.Movimientos_Stock ?? []) as unknown as MovimientoStock[]
+      const facturas = (tablasInv.Facturas ?? []) as unknown as Factura[]
+      const items = (tablasInv.Factura_Items ?? []) as unknown as (FacturaItem & { id_factura: string })[]
       const ids = idsProductos?.length ? idsProductos : productos.filter(p => p.activo !== 'false').map(p => p.id_producto)
       return {
         stockBajo: productosStockBajo(productos),
@@ -797,18 +803,22 @@ export function createRepository(ctx: RepoContext) {
 
     /** Historial de ventas de un producto individual en un rango. */
     async getVentasProducto(idProducto: string, rango: RangoFecha): Promise<VentaProductoFila[]> {
-      const [items, facturas] = await Promise.all([
-        readTable<FacturaItem & { id_factura: string }>('Factura_Items'),
-        readTable<Factura>('Facturas')
-      ])
-      return historialVentasProducto(items, facturas, idProducto, rango)
+      const t = await store.getVarias<Record<string, string | number>>(['Factura_Items', 'Facturas'])
+      return historialVentasProducto(
+        (t.Factura_Items ?? []) as unknown as (FacturaItem & { id_factura: string })[],
+        (t.Facturas ?? []) as unknown as Factura[],
+        idProducto,
+        rango
+      )
     },
 
     /** Metas vs logros por mes (facturación convertida a base). */
     async getMetasVsLogros(meses: string[]) {
-      const cfg = await readConfig()
-      const facturas = await readTable<Factura>('Facturas')
-      return metasVsLogros(facturas, parseMetas(cfg.metas_mensuales), meses)
+      const [cfg, tablasMeta] = await Promise.all([
+        readConfig(),
+        store.getVarias<Record<string, string | number>>(['Facturas'])
+      ])
+      return metasVsLogros((tablasMeta.Facturas ?? []) as unknown as Factura[], parseMetas(cfg.metas_mensuales), meses)
     }
   }
 }
