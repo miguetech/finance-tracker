@@ -320,7 +320,9 @@ export function useReporteFinanciero(desde: string, hasta: string) {
   return useQuery({
     queryKey: ['reporteFinanciero', desde, hasta, !!espejo],
     enabled: (!!desde || !!hasta) && !esperaEspejo,
-    queryFn: () => (espejo ? reporteFinancieroEspejo(espejo, { desde, hasta }, config) : repo.getReporteFinanciero({ desde, hasta }))
+    // Sin config cacheada aún (carrera de arranque) la vía espejo no puede
+    // convertir monedas: usa Sheets y evita romper el tab en online.
+    queryFn: () => (espejo && config ? reporteFinancieroEspejo(espejo, { desde, hasta }, config) : repo.getReporteFinanciero({ desde, hasta }))
   })
 }
 
