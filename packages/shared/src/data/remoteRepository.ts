@@ -49,6 +49,7 @@ export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & {
     // Buscador/vinculación: solo el dueño administra almacenamiento.
     listarHojasDisponibles: async () => [],
     conectarHojaPorId: async () => {},
+    eliminarAño: async () => {},
     saveConfig: c => call('saveConfig', c),
     listClientes: () => call('listClientes'),
     saveCliente: c => call('saveCliente', c),

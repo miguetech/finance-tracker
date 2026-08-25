@@ -383,7 +383,11 @@ const en: Partial<Dict> = {
     crearAño: 'Create current year sheet',
     creando: 'Creating…',
     añoCreado: 'Year sheet created and registered.',
-    añoError: 'Could not create the year sheet'
+    añoError: 'Could not create the year sheet',
+    eliminar: 'Delete',
+    confirmarEliminar: 'Delete from Drive? Click again',
+    añoEliminado: 'Year file moved to trash.',
+    añoActivoNoEliminable: 'The active year cannot be deleted.'
   },
   cola: {
     pendientes: '{n} pending changes to sync',

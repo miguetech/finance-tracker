@@ -693,7 +693,11 @@ export const messages = {
     crearAño: 'Crear hoja del año actual',
     creando: 'Creando…',
     añoCreado: 'Hoja del año creada y registrada.',
-    añoError: 'No se pudo crear la hoja del año'
+    añoError: 'No se pudo crear la hoja del año',
+    eliminar: 'Eliminar',
+    confirmarEliminar: '¿Eliminar de Drive? Clic otra vez',
+    añoEliminado: 'Archivo del año enviado a la papelera.',
+    añoActivoNoEliminable: 'El año activo no se puede eliminar.'
   },
   cola: {
     pendientes: '{n} pendientes de sincronizar',    conError: '{n} operaciones con error',

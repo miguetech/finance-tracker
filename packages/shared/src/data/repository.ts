@@ -120,12 +120,24 @@ export function createRepository(ctx: RepoContext) {
       soportada = Array.isArray(sonda?.sheets)
     } catch { soportada = true } // 404 real: la API sí existe
     if (!soportada) throw new Error('estructura de hojas no disponible')
-    console.info(`[hoja-año] creando EVENTOS-${anio}…`)
     const cfg = await readConfig().catch(() => null)
-    const nombre = `FinanceTracker${cfg?.empresa_nombre ? ` ${cfg.empresa_nombre}` : ''} ${anio}`
-    const creada = await crearSpreadsheetEventos(api, nombre.trim())
-    const id = creada.spreadsheetId
-    await ensureTablasEvento(api, id)
+    const nombre = `FinanceTracker${cfg?.empresa_nombre ? ` ${cfg.empresa_nombre}` : ''} ${anio}`.trim()
+    // Anti-duplicación: si ya existe un archivo con ESE nombre exacto, se
+    // ADOPTA (p. ej. tras perder el BASE y su registro).
+    const driveBusqueda = new DriveApi(() => api.getToken())
+    const adoptable = await driveBusqueda.findSpreadsheet(nombre).catch(() => null)
+    let id: string
+    if (adoptable) {
+      id = adoptable.id
+      await ensureTablasEvento(api, id)
+      console.info(`[hoja-año] EVENTOS-${anio} adoptado (${id})`)
+    } else {
+      console.info(`[hoja-año] creando EVENTOS-${anio}…`)
+      const creada = await crearSpreadsheetEventos(api, nombre)
+      id = creada.spreadsheetId
+      await ensureTablasEvento(api, id)
+    }
+    await mutexWriteRow(clave, id)
     añosValidados.add(anio)
     await mutexWriteRow(clave, id)
     console.info(`[hoja-año] EVENTOS-${anio} creado (${id})`)
@@ -350,6 +362,21 @@ export function createRepository(ctx: RepoContext) {
       } catch (e) {
         return { ok: false, modo: 'monolítico', error: e instanceof Error ? e.message : String(e) }
       }
+    },
+
+    /** Elimina el archivo de un año (a papelera) y borra su registro.
+     *  El BASE nunca se elimina aquí. */
+    async eliminarAño(año: string): Promise<void> {
+      if (!/^\d{4}$/.test(año)) throw new Error('Año inválido')
+      const raw = await leerFilasConfigRaw()
+      const clave = `eventos_${año}`
+      const id = raw[clave] ?? ''
+      if (id.trim().length >= 15) {
+        await new DriveApi(() => api.getToken()).enviarAPapelera(id)
+        añosValidados.delete(año)
+        storesEvento.delete(id)
+      }
+      await mutexWriteRow(clave, '')
     },
 
     /** Panel Almacenamiento: dónde vive cada cosa (ids de Drive). */

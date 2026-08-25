@@ -78,6 +78,15 @@ export class DriveApi {
     return res.files ?? []
   }
 
+  /** Envía un archivo a la papelera de Drive (borrado reversible). */
+  async enviarAPapelera(id: string): Promise<void> {
+    await this.request(`https://www.googleapis.com/drive/v3/files/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ trashed: true })
+    })
+  }
+
   /** Sube una imagen, la deja pública por link y devuelve la URL de vista. */
   async uploadBase64(input: DriveUploadInput): Promise<DriveUploadResult> {
     const base64 = stripDataPrefix(input.base64)

@@ -76,7 +76,20 @@ function OwnerShell() {
         idHojaRef.current = id
         setIdHoja(id)
         try {
-          await ensureTables(makeApi(), id)
+          try {
+            await ensureTables(makeApi(), id)
+          } catch (e) {
+            // BASE borrado/vacío (404): re-vincula o crea uno nuevo en vez de
+            // quedarse cargando contra un archivo muerto.
+            if (!/Sheets API 404/.test((e as Error).message)) throw e
+            console.warn('[boot] BASE no accesible; recuperando…')
+            await localStorageAdapter.set(KEYS.spreadsheetId, '')
+            const conectada = await connectOrCreateSpreadsheet(makeApi())
+            id = conectada.spreadsheetId
+            idHojaRef.current = id
+            setIdHoja(id)
+            await ensureTables(makeApi(), id)
+          }
           // Hoja-por-año (spec §8): garantiza EVENTOS-{año} desde el arranque.
           void repoBase.prepararAnioActual().catch((e: unknown) => {
             console.warn('[hoja-año] arranque sin crear hoja del año:', e instanceof Error ? e.message : e)

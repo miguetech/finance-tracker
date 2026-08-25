@@ -44,6 +44,20 @@ export function AlmacenamientoCard() {
     }
   }
 
+  const [confirmando, setConfirmando] = useState<string | null>(null)
+  const eliminarAño = async (año: string) => {
+    if (año === est?.anioActivo) { toast(t('almacen.añoActivoNoEliminable'), 'error'); return }
+    try {
+      await repo.eliminarAño(año)
+      toast(t('almacen.añoEliminado'), 'success')
+      await qc.invalidateQueries({ queryKey: ['almacenamiento'] })
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    } finally {
+      setConfirmando(null)
+    }
+  }
+
   const crearAñoActual = async () => {
     setCreandoAño(true)
     try {
@@ -115,7 +129,23 @@ export function AlmacenamientoCard() {
                     {ev.año}
                     {ev.año === est.anioActivo && <span className="ml-2 text-[11px] text-green-600 font-medium">{t('almacen.activo')}</span>}
                   </span>
-                  <a href={enlace(ev.id)} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">{t('almacen.abrir')}</a>
+                  <div className="flex items-center gap-3">
+                    <a href={enlace(ev.id)} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">{t('almacen.abrir')}</a>
+                    {ev.año !== est.anioActivo && (
+                      confirmando === ev.año ? (
+                        <button className="text-xs text-red-600 font-medium hover:underline"
+                          onClick={() => void eliminarAño(ev.año)}
+                          onBlur={() => setConfirmando(null)}>
+                          {t('almacen.confirmarEliminar')}
+                        </button>
+                      ) : (
+                        <button className="text-xs text-gray-400 hover:text-red-600"
+                          onClick={() => setConfirmando(ev.año)}>
+                          {t('almacen.eliminar')}
+                        </button>
+                      )
+                    )}
+                  </div>
                 </li>
               ))}
               {est.eventos.length === 0 && <li className="px-3 py-2.5 text-xs text-gray-500">{t('almacen.sinAños')}</li>}
