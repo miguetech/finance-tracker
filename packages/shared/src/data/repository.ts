@@ -2,7 +2,7 @@ import { SheetsApi } from '../sheets/api'
 import { DriveApi, type UploadImagenInput } from '../drive/api'
 import { TABLES, HEADER_ROWS, type TableName } from '../sheets/tables'
 import { serializeRow } from '../sheets/rows'
-import { configFromRows, configToRows, createInitialSpreadsheet, ensureTables } from '../sheets/createSpreadsheet'
+import { configFromRows, configToRows, createInitialSpreadsheet, ensureTables, crearSpreadsheetEventos, ensureTablasEvento } from '../sheets/createSpreadsheet'
 import { withMutex } from '../sheets/mutex'
 import { KEYS, type StorageAdapter } from './storage'
 import { createSheetsTableStore, type TableStore } from './tableStore'
@@ -123,9 +123,10 @@ export function createRepository(ctx: RepoContext) {
     console.info(`[hoja-año] creando EVENTOS-${anio}…`)
     const cfg = await readConfig().catch(() => null)
     const nombre = `FinanceTracker${cfg?.empresa_nombre ? ` ${cfg.empresa_nombre}` : ''} ${anio}`
-    const creada = await createInitialSpreadsheet(api, nombre.trim())
+    const creada = await crearSpreadsheetEventos(api, nombre.trim())
     const id = creada.spreadsheetId
-    await ensureTables(api, id)
+    await ensureTablasEvento(api, id)
+    añosValidados.add(anio)
     await mutexWriteRow(clave, id)
     console.info(`[hoja-año] EVENTOS-${anio} creado (${id})`)
     return id
@@ -135,13 +136,24 @@ export function createRepository(ctx: RepoContext) {
    *  devuelve el store apuntándole. Si la creación falla (permisos Drive,
    *  entorno de prueba), degrada al BASE en modo monolítico en vez de romper
    *  la escritura. */
+  const añosValidados = new Set<string>()
+
   async function storeDeEventos(anio: string): Promise<TableStore> {
     const clave = `eventos_${anio}`
-    const existente = await mutexReadRow(clave)
-    let id = existente && existente.trim().length >= 15 ? existente : ''
+    let id = ''
+    if (!añosValidados.has(anio)) {
+      const existente = await mutexReadRow(clave)
+      id = existente && existente.trim().length >= 15 ? existente : ''
+    }
+    if (id && !añosValidados.has(anio)) {
+      // Auto-sanado: archivo borrado/vacío en Drive → se recrea limpio.
+      try { await ensureTablasEvento(api, id); añosValidados.add(anio) }
+      catch { añosValidados.delete(anio); id = '' }
+    }
     if (!id) {
       try {
         id = await crearHojaEventos(anio)
+        añosValidados.add(anio)
       } catch (e) {
         console.warn(`[hoja-año] EVENTOS-${anio} no disponible; escribiendo en el BASE:`, e instanceof Error ? e.message : e)
         return store

@@ -52,6 +52,20 @@ export async function createInitialSpreadsheet(api: SheetsApi, titulo = 'Finance
   return { spreadsheetId, url }
 }
 
+/** Tablas que viven en cada spreadsheet EVENTOS-{año} (spec §2). */
+export const TABLAS_EVENTO_AÑO: (keyof typeof TABLES)[] = ['Facturas', 'Factura_Items', 'Pagos', 'Gastos', 'Cuentas_Pagar']
+
+/** Spreadsheet de año: SOLO pestañas de evento, sin Config ni catálogos.
+ *  Los ajustes y catálogos viven en el BASE. */
+export async function crearSpreadsheetEventos(api: SheetsApi, titulo: string): Promise<{ spreadsheetId: string; url: string }> {
+  const pestañas = TABLAS_EVENTO_AÑO.map(t => ({
+    properties: { title: sheetName(t), gridProperties: { rowCount: 1000, columnCount: TABLES[t].length + 2 } }
+  }))
+  const { spreadsheetId, url } = await api.createSpreadsheet(titulo, pestañas)
+  await writeAllHeaders(api, spreadsheetId, TABLAS_EVENTO_AÑO)
+  return { spreadsheetId, url }
+}
+
 /**
  * Conecta a la hoja principal existente o crea una nueva solo si no hay ninguna.
  * Evita duplicar hojas de cálculo al iniciar sesión con almacenamiento vacío.
@@ -81,22 +95,27 @@ function writeAllHeaders(api: SheetsApi, spreadsheetId: string, tables: (keyof t
   return api.batchUpdate(spreadsheetId, valueRanges).then(() => undefined)
 }
 
-export async function ensureTables(api: SheetsApi, spreadsheetId: string): Promise<void> {
+export async function ensureTables(api: SheetsApi, spreadsheetId: string, tablas: (keyof typeof TABLES)[] = ALL_TABLES): Promise<void> {
   const res = await api.getSpreadsheet(spreadsheetId)
   const existing = new Map(res.sheets.map(s => [s.properties.title, { columnCount: s.properties.gridProperties?.columnCount ?? 0, sheetId: s.properties.sheetId }]))
-  const missing = ALL_TABLES.filter(t => !existing.has(sheetName(t)))
+  const missing = tablas.filter(t => !existing.has(sheetName(t)))
   if (missing.length > 0) {
     await api.addSheets(spreadsheetId, missing.map(sheetName))
     await writeAllHeaders(api, spreadsheetId, missing)
   }
   const skip = new Set(missing.map(sheetName))
-  await ensureColumns(api, spreadsheetId, existing, skip)
+  await ensureColumns(api, spreadsheetId, existing, skip, tablas)
+}
+
+/** Garantiza SOLO las pestañas de evento en un spreadsheet de año. */
+export async function ensureTablasEvento(api: SheetsApi, spreadsheetId: string): Promise<void> {
+  return ensureTables(api, spreadsheetId, TABLAS_EVENTO_AÑO)
 }
 
 /** Añade columnas que falten en hojas existentes (migración de hojas creadas antes de nuevas columnas). */
-async function ensureColumns(api: SheetsApi, spreadsheetId: string, existing: Map<string, { columnCount: number; sheetId: number }>, skip: Set<string>): Promise<void> {
+async function ensureColumns(api: SheetsApi, spreadsheetId: string, existing: Map<string, { columnCount: number; sheetId: number }>, skip: Set<string>, tablas: (keyof typeof TABLES)[] = ALL_TABLES): Promise<void> {
   const requests: unknown[] = []
-  for (const t of ALL_TABLES) {
+  for (const t of tablas) {
     if (t === 'Config') continue
     const name = sheetName(t)
     if (skip.has(name)) continue

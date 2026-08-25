@@ -46,13 +46,17 @@ export class SheetsApi {
     }
   }
 
-  createSpreadsheet(title: string): Promise<{ spreadsheetId: string; url: string }> {
+  createSpreadsheet(
+    title: string,
+    /** Pestañas iniciales; por defecto solo Config (BASE). Los archivos de
+     *  año pasan SUS pestañas de evento y nacen sin Config ni catálogos. */
+    pestañas: { properties: { title: string; gridProperties?: { rowCount?: number; columnCount?: number } } }[] = [
+      { properties: { title: 'Config', gridProperties: { rowCount: 200, columnCount: 2 } } }
+    ]
+  ): Promise<{ spreadsheetId: string; url: string }> {
     return this.request<{ spreadsheetId: string; spreadsheetUrl: string }>(`${BASE}`, {
       method: 'POST',
-      body: JSON.stringify({
-        properties: { title },
-        sheets: [{ properties: { title: 'Config', gridProperties: { rowCount: 200, columnCount: 2 } } }]
-      })
+      body: JSON.stringify({ properties: { title }, sheets: pestañas })
     }).then(r => ({ spreadsheetId: r.spreadsheetId, url: r.spreadsheetUrl }))
   }
 
