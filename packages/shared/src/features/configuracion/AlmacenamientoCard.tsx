@@ -45,6 +45,47 @@ export function AlmacenamientoCard() {
   }
 
   const [confirmando, setConfirmando] = useState<string | null>(null)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [nombreEdicion, setNombreEdicion] = useState('')
+  const [creandoBase, setCreandoBase] = useState(false)
+  const [nombreNuevaBase, setNombreNuevaBase] = useState('')
+
+  const renombrar = async (id: string) => {
+    try {
+      await repo.renombrarHoja(id, nombreEdicion)
+      toast(t('almacen.renombrada'), 'success')
+      setEditandoId(null)
+      await qc.invalidateQueries({ queryKey: ['hojaActual'] })
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    }
+  }
+
+  const crearBaseVacia = async () => {
+    setCreandoBase(true)
+    try {
+      await repo.crearBaseVacia(nombreNuevaBase || t('almacen.basePorDefecto'))
+      toast(t('almacen.vinculada'), 'success')
+      setTimeout(() => window.location.reload(), 700)
+    } catch (e) {
+      toast((e as Error).message, 'error')
+      setCreandoBase(false)
+    }
+  }
+
+  const filaRenombrable = (id: string, texto: string) => editandoId === id ? (
+    <form className="flex items-center gap-2 min-w-0 flex-1" onSubmit={e => { e.preventDefault(); void renombrar(id) }}>
+      <Input value={nombreEdicion} onChange={e => setNombreEdicion(e.target.value)} className="h-7 text-sm" autoFocus />
+      <Button type="submit" size="sm" variant="outline">{t('common.guardar')}</Button>
+      <button type="button" className="text-xs text-gray-400" onClick={() => setEditandoId(null)}>{t('cola.descartar')}</button>
+    </form>
+  ) : (
+    <>
+      <span className="text-sm truncate">{texto}</span>
+      <button title={t('almacen.renombrar')} className="text-[11px] text-gray-400 hover:text-blue-600 shrink-0"
+        onClick={() => { setEditandoId(id); setNombreEdicion(texto) }}>✎</button>
+    </>
+  )
   const eliminarAño = async (año: string) => {
     if (año === est?.anioActivo) { toast(t('almacen.añoActivoNoEliminable'), 'error'); return }
     try {
@@ -84,7 +125,7 @@ export function AlmacenamientoCard() {
         {hojaQ.data ? (
           <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 px-3 py-2.5">
             <div className="min-w-0">
-              <div className="text-sm font-medium truncate">{hojaQ.data.titulo}</div>
+              {filaRenombrable(hojaQ.data.id, hojaQ.data.titulo)}
               <div className="text-[11px] text-gray-400 truncate">{hojaQ.data.id}</div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -101,6 +142,13 @@ export function AlmacenamientoCard() {
             <Input value={filtro} onChange={e => setFiltro(e.target.value)} placeholder={t('almacen.buscarPlaceholder')} />
             {buscando && <p className="text-xs text-gray-400">{t('almacen.buscando')}</p>}
             {!buscando && resultados && resultados.length === 0 && <p className="text-xs text-gray-500">{t('almacen.sinResultados')}</p>}
+            <div className="pt-1 border-t border-gray-100 space-y-1.5">
+              <p className="text-[11px] text-muted-foreground">{t('almacen.nuevaBaseHint')}</p>
+              <div className="flex gap-2">
+                <Input value={nombreNuevaBase} onChange={e => setNombreNuevaBase(e.target.value)} placeholder={t('almacen.nuevaBasePlaceholder')} className="h-8 text-xs" />
+                <Button size="sm" variant="outline" disabled={creandoBase} onClick={() => void crearBaseVacia()}>{t('almacen.nuevaBaseBoton')}</Button>
+              </div>
+            </div>
             <ul className="divide-y divide-gray-50 max-h-60 overflow-y-auto">
               {(resultados ?? []).map(h => (
                 <li key={h.id} className="flex items-center justify-between gap-2 py-2">
@@ -125,9 +173,9 @@ export function AlmacenamientoCard() {
             <ul className="divide-y divide-gray-50 rounded-xl border border-gray-100">
               {est.eventos.map(ev => (
                 <li key={ev.año} className="flex items-center justify-between px-3 py-2.5">
-                  <span className="text-sm">
-                    {ev.año}
-                    {ev.año === est.anioActivo && <span className="ml-2 text-[11px] text-green-600 font-medium">{t('almacen.activo')}</span>}
+                  <span className="flex items-center gap-2 min-w-0 flex-1">
+                    {filaRenombrable(ev.id, ev.año)}
+                    {ev.año === est.anioActivo && <span className="text-[11px] text-green-600 font-medium shrink-0">{t('almacen.activo')}</span>}
                   </span>
                   <div className="flex items-center gap-3">
                     <a href={enlace(ev.id)} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">{t('almacen.abrir')}</a>

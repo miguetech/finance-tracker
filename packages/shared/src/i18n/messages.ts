@@ -17,6 +17,7 @@ export const messages = {
   common: {
     cancelar: 'Cancelar',
     eliminar: 'Eliminar',
+
     guardar: 'Guardar',
     guardarPago: 'Guardar pago',
     editar: 'Editar',
@@ -693,6 +694,12 @@ export const messages = {
     crearAño: 'Crear hoja del año actual',
     creando: 'Creando…',
     añoCreado: 'Hoja del año creada y registrada.',
+    renombrar: 'Renombrar',
+    renombrada: 'Nombre actualizado.',
+    nuevaBaseHint: 'O crea un archivo principal NUEVO (nace solo con Config; los catálogos se completan solos):',
+    nuevaBasePlaceholder: 'FinanceTracker — Nueva empresa',
+    nuevaBaseBoton: 'Crear y vincular',
+    basePorDefecto: 'FinanceTracker — Mi Empresa',
     añoError: 'No se pudo crear la hoja del año',
     eliminar: 'Eliminar',
     confirmarEliminar: '¿Eliminar de Drive? Clic otra vez',

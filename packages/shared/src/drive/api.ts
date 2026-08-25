@@ -78,6 +78,15 @@ export class DriveApi {
     return res.files ?? []
   }
 
+  /** Renombra un archivo de Drive. */
+  async renombrar(id: string, nombre: string): Promise<void> {
+    await this.request(`https://www.googleapis.com/drive/v3/files/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: nombre })
+    })
+  }
+
   /** Envía un archivo a la papelera de Drive (borrado reversible). */
   async enviarAPapelera(id: string): Promise<void> {
     await this.request(`https://www.googleapis.com/drive/v3/files/${id}`, {

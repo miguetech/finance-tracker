@@ -1155,6 +1155,27 @@ export function createRepository(ctx: RepoContext) {
       return new DriveApi(() => api.getToken()).listarHojas(filtro)
     },
 
+    /** Renombra cualquier hoja del sistema (BASE o archivo de año). */
+    async renombrarHoja(id: string, nombre: string): Promise<void> {
+      const limpio = nombre.trim()
+      if (!limpio) throw new Error('El nombre no puede quedar vacío')
+      if (limpio.length > 120) throw new Error('El nombre es demasiado largo (máx. 120)')
+      await new DriveApi(() => api.getToken()).renombrar(id.trim(), limpio)
+    },
+
+    /** Crea un BASE NUEVO casi vacío (solo pestaña Config) y lo vincula.
+     *  ensureTables completa los catálogos en el próximo arranque/sync. */
+    async crearBaseVacia(nombre: string): Promise<{ spreadsheetId: string }> {
+      const limpio = nombre.trim()
+      if (!limpio) throw new Error('Escribe el nombre del archivo principal')
+      if (limpio.length > 120) throw new Error('El nombre es demasiado largo (máx. 120)')
+      const creada = await api.createSpreadsheet(limpio)
+      await ctx.storage.set(KEYS.spreadsheetId, creada.spreadsheetId)
+      añosValidados.clear() // el registro de años vive en el BASE anterior
+      storesEvento.clear()
+      return { spreadsheetId: creada.spreadsheetId }
+    },
+
     /** Vincula el BASE por ID directo (desde el buscador). Valida edición. */
     async conectarHojaPorId(spreadsheetId: string): Promise<void> {
       const id = spreadsheetId.trim()

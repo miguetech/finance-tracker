@@ -50,6 +50,8 @@ export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & {
     listarHojasDisponibles: async () => [],
     conectarHojaPorId: async () => {},
     eliminarAño: async () => {},
+    renombrarHoja: async () => {},
+    crearBaseVacia: async () => ({ spreadsheetId: '' }),
     saveConfig: c => call('saveConfig', c),
     listClientes: () => call('listClientes'),
     saveCliente: c => call('saveCliente', c),
