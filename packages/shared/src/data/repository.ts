@@ -98,16 +98,23 @@ export function createRepository(ctx: RepoContext) {
     let id = existente && existente.includes('-') ? existente : ''
     if (!id) {
       try {
-        // Sonda: entornos que no implementan estructura de hojas (fakes de
-        // test) abortan AQUÍ, antes de escribir un solo header ajeno.
-        const sonda = await api.getSpreadsheet(`probe_${anio}`).catch(() => null)
-        if (!sonda || !Array.isArray(sonda.sheets)) throw new Error('estructura de hojas no disponible')
+        // Sonda de capacidad: la API REAL responde 404/throw para un id que no
+        // existe (=> soportada); los fakes de test responden 200 sin `sheets`
+        // (=> abortamos ANTES de escribir un solo header ajeno).
+        let soportada = true
+        try {
+          const sonda = await api.getSpreadsheet(`probe_${anio}`)
+          soportada = Array.isArray(sonda?.sheets)
+        } catch { soportada = true } // 404 real: la API sí existe
+        if (!soportada) throw new Error('estructura de hojas no disponible')
+        console.info(`[hoja-año] creando EVENTOS-${anio}…`)
         const cfg = await readConfig().catch(() => null)
         const nombre = `FinanceTracker${cfg?.empresa_nombre ? ` ${cfg.empresa_nombre}` : ''} ${anio}`
         const creada = await createInitialSpreadsheet(api, nombre.trim())
         id = creada.spreadsheetId
         await ensureTables(api, id)
         await mutexWriteRow(clave, id)
+        console.info(`[hoja-año] EVENTOS-${anio} creado (${id})`)
       } catch (e) {
         console.warn(`[hoja-año] EVENTOS-${anio} no disponible; escribiendo en el BASE:`, e instanceof Error ? e.message : e)
         return store
