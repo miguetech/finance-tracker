@@ -310,6 +310,7 @@ export function createRepository(ctx: RepoContext) {
     /** F4 (spec hoja-por-año §8): garantiza el spreadsheet EVENTOS-{año actual}
      *  desde el arranque, sin esperar la primera escritura. Idempotente. */
     async prepararAnioActual(): Promise<void> {
+      if (!(await sid()).trim()) throw new Error('sin spreadsheet base vinculado todavía')
       await storeDeEventos(String(new Date().getFullYear()))
     },
 

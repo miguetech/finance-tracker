@@ -29,10 +29,15 @@ function OwnerShell() {
   const makeApi = () => new SheetsApi(async () => webAuth.getToken(false))
 
   // Hooks SIEMPRE antes de cualquier return temprano (Rules of Hooks).
+  // El id va por ref: el repositorio siempre resuelve el spreadsheet actual
+  // (evita closures viejas con idHoja=null del primer render).
+  const idHojaRef = React.useRef<string | null>(null)
   const repoBase = useMemo(
-    () => createRepository({ api: makeApi(), storage: localStorageAdapter, getSpreadsheetId: async () => idHoja ?? '' }),
-    [idHoja]
+    () => createRepository({ api: makeApi(), storage: localStorageAdapter, getSpreadsheetId: async () => idHojaRef.current ?? '' }),
+    []
   )
+  useEffect(() => { idHojaRef.current = idHoja }, [idHoja])
+
   // En modo offline las escrituras se encolan localmente y se reproducen al volver la red.
   const repo = useMemo(
     () => conColaEscrituras(repoBase, {
@@ -68,11 +73,14 @@ function OwnerShell() {
             id = connected.spreadsheetId
           }
         }
+        idHojaRef.current = id
         setIdHoja(id)
         try {
           await ensureTables(makeApi(), id)
           // Hoja-por-año (spec §8): garantiza EVENTOS-{año} desde el arranque.
-          void repoBase.prepararAnioActual().catch(() => { /* sin permiso de creación: modo monolítico */ })
+          void repoBase.prepararAnioActual().catch((e: unknown) => {
+            console.warn('[hoja-año] arranque sin crear hoja del año:', e instanceof Error ? e.message : e)
+          })
           const email = (await webAuth.getSignedInUser())?.email
           if (email) void guardarRegistroSesion(localStorageAdapter, { cuenta: email })
           const reg = await cargarRegistroSesion(localStorageAdapter)
