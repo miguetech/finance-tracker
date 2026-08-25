@@ -74,6 +74,18 @@ export function Configuracion() {
   const toast = useToast()
   const [form, setForm] = useState<Config | null>(null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [migrandoImgs, setMigrandoImgs] = useState(false)
+  const migrarImgs = async () => {
+    setMigrandoImgs(true)
+    try {
+      const r = await (repo as Repository).migrarImagenesADrive()
+      toast(t('configuracion.imgsMigradas').replace('{n}', String(r.migradas)).replace('{e}', String(r.fallidas)), r.fallidas ? 'error' : 'success')
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    } finally {
+      setMigrandoImgs(false)
+    }
+  }
   const [subiendo, setSubiendo] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [ayudaFolio, setAyudaFolio] = useState(false)
@@ -214,6 +226,11 @@ export function Configuracion() {
             <div className="mt-1"><ImageUploader value={form.empresa_logo} onChange={f => setLogoFile(f)} /></div>
             <p className="mt-1 text-xs text-muted-foreground">{t('configuracion.logoUrlOpcional')}</p>
             <Input value={form.empresa_logo} onChange={set('empresa_logo')} placeholder="https://…" className="mt-1" />
+            {/* F1: migra imágenes base64 embebidas (productos/logo) a Drive */}
+            <button type="button" className="mt-2 text-xs text-blue-600 hover:underline disabled:opacity-50"
+              disabled={migrandoImgs} onClick={() => void migrarImgs()}>
+              {migrandoImgs ? t('configuracion.migrandoImgs') : t('configuracion.migrarImgs')}
+            </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div><label className="text-xs text-muted-foreground">{t('configuracion.codigoPostal')}</label><Input value={form.empresa_cp} onChange={set('empresa_cp')} /></div>

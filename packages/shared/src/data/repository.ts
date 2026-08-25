@@ -130,6 +130,41 @@ export function createRepository(ctx: RepoContext) {
       return res.url
     },
 
+    /** F1 (spec hoja-por-año §11): migra imágenes base64 embebidas a Drive.
+     *  Cubre Productos.imagen y Config.empresa_logo. Idempotente: salta lo
+     *  que ya es URL. Pacing de 300 ms por subida (cuota). */
+    async migrarImagenesADrive(): Promise<{ migradas: number; fallidas: number }> {
+      let migradas = 0
+      let fallidas = 0
+      const subir = async (dataUrl: string, nombre: string): Promise<string> => {
+        const m = /^data:([^;]+);base64,(.+)$/s.exec(dataUrl)
+        if (!m) throw new Error('formato data-url no reconocido')
+        const res = await drive.uploadBase64({ nombre, mimeType: m[1], base64: m[2] })
+        return res.url
+      }
+      const productos = await readTable<Producto>('Productos')
+      for (const p of productos) {
+        const img = String(p.imagen ?? '')
+        if (!img.startsWith('data:image')) continue
+        try {
+          const url = await subir(img, `producto_${p.id_producto}_mig.png`)
+          await this.saveProducto({ ...p, imagen: url } as Producto)
+          migradas++
+        } catch { fallidas++ }
+        await new Promise(r => setTimeout(r, 300))
+      }
+      try {
+        const cfg = await readConfig()
+        const logo = String(cfg.empresa_logo ?? '')
+        if (logo.startsWith('data:image')) {
+          const url = await subir(logo, `logo_migrado_${Date.now()}.png`)
+          await writeConfig({ ...cfg, empresa_logo: url })
+          migradas++
+        }
+      } catch { fallidas++ }
+      return { migradas, fallidas }
+    },
+
     async saveConfig(config: Config): Promise<void> {
       const parsed = ConfigSchema.parse(config)
       await writeConfig(parsed)
