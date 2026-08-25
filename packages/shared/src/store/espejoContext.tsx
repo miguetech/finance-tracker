@@ -29,10 +29,12 @@ export const QUERY_KEYS_POR_TABLA: Partial<Record<TableName, readonly string[]>>
   Gastos: ['gastos', 'reportes', 'reporteFinanciero'],
   Productos: ['productos', 'movimientos', 'reportesInventario'],
   Cuentas_Pagar: ['cxp', 'cxpById', 'reportes', 'reporteFinanciero'],
-  Movimientos_Stock: ['movimientos', 'reportesInventario']
+  Movimientos_Stock: ['movimientos', 'reportesInventario'],
+  Tasas_Historial: ['tasasHistorial'],
+  Nomina_Detalles: ['nominaDetalles']
 }
 
-// Duplicados deliberados arriba se colapsan al recorrer el array.
+// Claves nuevas por tablas movidas a archivos de año.
 void QUERY_KEYS_POR_TABLA
 
 function fetchTablasDesdeRepo(repo: ReturnType<typeof useRepo> | null, ts: TableName[]): Promise<Partial<Record<TableName, Record<string, string | number>[] | null>> | { filas: Partial<Record<TableName, Record<string, string | number>[] | null>>; alcance?: Partial<Record<TableName, string[]>> }> {

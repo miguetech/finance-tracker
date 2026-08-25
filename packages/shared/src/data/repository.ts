@@ -2,7 +2,7 @@ import { SheetsApi } from '../sheets/api'
 import { DriveApi, type UploadImagenInput } from '../drive/api'
 import { TABLES, HEADER_ROWS, type TableName } from '../sheets/tables'
 import { serializeRow } from '../sheets/rows'
-import { configFromRows, configToRows, createInitialSpreadsheet, ensureTables, crearSpreadsheetEventos, ensureTablasEvento } from '../sheets/createSpreadsheet'
+import { configFromRows, configToRows, createInitialSpreadsheet, ensureTables, crearSpreadsheetEventos, ensureTablasEvento, TABLAS_EVENTO_AÑO } from '../sheets/createSpreadsheet'
 import { withMutex } from '../sheets/mutex'
 import { KEYS, type StorageAdapter } from './storage'
 import { createSheetsTableStore, type TableStore } from './tableStore'
@@ -58,7 +58,8 @@ export function createRepository(ctx: RepoContext) {
   // escriben en el spreadsheet del AÑO DE SU FECHA. El espejo/UI siguen viendo
   // tablas lógicas únicas: las lecturas unen los fragmentos por año.
 
-  const TABLAS_EVENTO: ReadonlySet<string> = new Set(['Facturas', 'Factura_Items', 'Pagos', 'Gastos', 'Cuentas_Pagar'])
+  // Fuente única: lo que vive en archivos de año (createSpreadsheet).
+  const TABLAS_EVENTO: ReadonlySet<string> = new Set(TABLAS_EVENTO_AÑO as string[])
 
   const storesEvento = new Map<string, TableStore>()
 
@@ -198,10 +199,25 @@ export function createRepository(ctx: RepoContext) {
       if (!id) enBase.push(f)
       else (porAño.get(anio) ?? porAño.set(anio, []).get(anio)!).push(f)
     }
-    if (enBase.length) await store.replace(t, enBase as Record<string, string | number>[])
+    if (idDeAño.size === 0) {
+      // Monolítico puro: sin años registrados el BASE ES la tabla completa
+      // (incluye el borrado total: reemplazo con lista vacía limpia la hoja).
+      await store.replace(t, filas as Record<string, string | number>[])
+      return
+    }
+    // Con años registrados TODAS las fuentes se reescriben con su fragmento
+    // (aunque algún fragmento quede vacío: así un delete del último registro
+    // sí elimina la fila en lugar de dejarla huérfana).
+    await store.replace(t, enBase as Record<string, string | number>[])
     for (const [anio, grupo] of porAño) {
       const st = storeDeAñoSoloLectura(idDeAño.get(anio)!)
       await st.replace(t, grupo as Record<string, string | number>[])
+    }
+    for (const [anio] of idDeAño) {
+      if (!porAño.has(anio)) {
+        const st = storeDeAñoSoloLectura(idDeAño.get(anio)!)
+        await st.replace(t, [])
+      }
     }
   }
 
@@ -232,9 +248,11 @@ export function createRepository(ctx: RepoContext) {
   /** Alcance VIVO para pulls (spec §6): año activo completo + año anterior
    *  SOLO para las tablas con saldo abierto (Facturas/Cuentas_Pagar). */
   function añosVivosPara(t: TableName, activo: string): (anio: string) => boolean {
+    void t
     const anterior = String(Number(activo) - 1)
-    const conArrastre = t === 'Facturas' || t === 'Cuentas_Pagar'
-    return anio => anio === activo || (conArrastre && anio === anterior)
+    // Arrastre UNIVERSAL: toda tabla evento puede recibir registros tardíos
+    // del año previo (asistencia de fin de diciembre, factura retroactiva…).
+    return anio => anio === activo || anio === anterior
   }
 
   /** F3: descarga de alcance REDUCIDO para pulls periódicos. Devuelve además
@@ -250,7 +268,7 @@ export function createRepository(ctx: RepoContext) {
     const alcance: Partial<Record<TableName, string[]>> = {}
     for (const t of ts) {
       if (!TABLAS_EVENTO.has(t)) continue
-      alcance[t] = [activo, ...(t === 'Facturas' || t === 'Cuentas_Pagar' ? [String(Number(activo) - 1)] : [])]
+      alcance[t] = [activo, String(Number(activo) - 1)]
     }
     return { filas, alcance }
   }

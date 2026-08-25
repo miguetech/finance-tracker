@@ -53,7 +53,11 @@ export async function createInitialSpreadsheet(api: SheetsApi, titulo = 'Finance
 }
 
 /** Tablas que viven en cada spreadsheet EVENTOS-{año} (spec §2). */
-export const TABLAS_EVENTO_AÑO: (keyof typeof TABLES)[] = ['Facturas', 'Factura_Items', 'Pagos', 'Gastos', 'Cuentas_Pagar']
+export const TABLAS_EVENTO_AÑO: (keyof typeof TABLES)[] = [
+  'Facturas', 'Factura_Items', 'Pagos', 'Gastos', 'Cuentas_Pagar',
+  // Crecedores puros con fecha propia (spec §2 revisado): se particionan por año.
+  'Movimientos_Stock', 'Asistencias', 'Tasas_Historial', 'Nomina_Detalles'
+]
 
 /** Spreadsheet de año: SOLO pestañas de evento, sin Config ni catálogos.
  *  Los ajustes y catálogos viven en el BASE. */

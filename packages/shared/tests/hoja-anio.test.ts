@@ -158,7 +158,10 @@ describe('hoja-por-año contra API estilo Google', () => {
     const evento = [...docs.entries()].find(([id]) => id !== 'BASE' && id.length >= 20)
     expect(evento).toBeDefined()
     // Composición exacta: solo pestañas de evento (sin Config ni catálogos).
-    expect([...evento![1].keys()].sort()).toEqual(['Cuentas_Pagar', 'Factura_Items', 'Facturas', 'Gastos', 'Pagos'])
+    expect([...evento![1].keys()].sort()).toEqual([
+      'Asistencias', 'Cuentas_Pagar', 'Factura_Items', 'Facturas', 'Gastos',
+      'Movimientos_Stock', 'Nomina_Detalles', 'Pagos', 'Tasas_Historial'
+    ])
     expect((evento![1].get('Facturas') ?? []).length).toBeGreaterThan(0)
     // El archivo del año NUEVO contiene la factura; el BASE nunca la recibió.
     expect((docs.get('BASE')?.get('Facturas') ?? []).length).toBe(0)
