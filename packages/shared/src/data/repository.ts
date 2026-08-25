@@ -153,7 +153,7 @@ export function createRepository(ctx: RepoContext) {
   }
 
   /** Lectura multi-tabla con unión de años (espejo/reportes/historial). */
-  async function getVariasUnificado<T = Record<string, string | number>>(ts: TableName[]): Promise<Partial<Record<TableName, T[]>>> {
+  async function getVariasUnificado<T = Record<string, string | number>>(ts: TableName[], añosPermitidos?: (anio: string, t: TableName) => boolean): Promise<Partial<Record<TableName, T[]>>> {
     const evento = ts.filter(t => TABLAS_EVENTO.has(t as TableName))
     const base = ts.filter(t => !TABLAS_EVENTO.has(t as TableName))
     const out: Partial<Record<TableName, T[]>> = {}
@@ -163,12 +163,47 @@ export function createRepository(ctx: RepoContext) {
       const registro = (cfg ?? {}) as unknown as Record<string, unknown>
       const idsAño = Object.keys(registro)
         .filter(k => /^eventos_\d{4}$/.test(k) && String(registro[k] ?? '').includes('-'))
-        .map(k => String(registro[k]))
-      const fuentes = [store, ...idsAño.map(id => storeDeAñoSoloLectura(id))]
-      const partes = await Promise.all(fuentes.map(f => f.getVarias<T>(evento as TableName[])))
-      for (const t of evento as TableName[]) out[t] = partes.flatMap(p => p[t] ?? []) as T[]
+        .map(k => ({ año: k.slice('eventos_'.length), id: String(registro[k]) }))
+      const fuentes = [
+        { id: '__base__', st: store },
+        ...idsAño.map(x => ({ id: x.id, st: storeDeAñoSoloLectura(x.id) }))
+      ]
+      const partes = await Promise.all(fuentes.map(({ id, st }) =>
+        st.getVarias<T>(evento as TableName[]).then(p => ({ id, p }))
+      ))
+      for (const t of evento as TableName[]) {
+        out[t] = partes
+          .filter(({ id }) => !añosPermitidos || id === '__base__' || añosPermitidos(id.slice(0, 4), t as TableName))
+          .flatMap(({ p }) => p[t] ?? []) as T[]
+      }
     }
     return out
+  }
+
+  /** Alcance VIVO para pulls (spec §6): año activo completo + año anterior
+   *  SOLO para las tablas con saldo abierto (Facturas/Cuentas_Pagar). */
+  function añosVivosPara(t: TableName, activo: string): (anio: string) => boolean {
+    const anterior = String(Number(activo) - 1)
+    const conArrastre = t === 'Facturas' || t === 'Cuentas_Pagar'
+    return anio => anio === activo || (conArrastre && anio === anterior)
+  }
+
+  /** F3: descarga de alcance REDUCIDO para pulls periódicos. Devuelve además
+   *  los años cubiertos por tabla para que el espejo haga merge sin borrar
+   *  fragmentos históricos ya cacheados. */
+  async function leerVariasTablasVivas(ts: TableName[]): Promise<{
+    filas: Partial<Record<TableName, Record<string, string | number>[] | null>>
+    alcance: Partial<Record<TableName, string[]>>
+  }> {
+    const cfg = await readConfigSafe()
+    const activo = String((cfg as unknown as Record<string, unknown>)?.anio_activo ?? '') || String(new Date().getFullYear())
+    const filas = await getVariasUnificado<Record<string, string | number>>(ts, (anio, t) => añosVivosPara(t, activo)(anio))
+    const alcance: Partial<Record<TableName, string[]>> = {}
+    for (const t of ts) {
+      if (!TABLAS_EVENTO.has(t)) continue
+      alcance[t] = [activo, ...(t === 'Facturas' || t === 'Cuentas_Pagar' ? [String(Number(activo) - 1)] : [])]
+    }
+    return { filas, alcance }
   }
 
   function tipoCambioDe(cfg: Config, moneda: string): number {
@@ -1012,7 +1047,11 @@ export function createRepository(ctx: RepoContext) {
 
     /** Varias tablas en una sola petición batchGet (para pulls del espejo). */
     async leerVariasTablas(ts: TableName[]): Promise<Partial<Record<TableName, Record<string, string | number>[]>>> {
-      return getVariasUnificado(ts)
+      return getVariasUnificado<Record<string, string | number>>(ts)
+    },
+
+    async leerVariasTablasVivas(ts: TableName[]) {
+      return leerVariasTablasVivas(ts)
     },
 
     /** Historial de ventas de un producto individual en un rango. */

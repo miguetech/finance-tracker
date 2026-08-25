@@ -43,6 +43,8 @@ export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & {
     migrarImagenesADrive: async () => ({ migradas: 0, fallidas: 0 }),
     // El visitante no crea hojas de año (su vista es de solo lectura).
     prepararAnioActual: async () => {},
+    // Sin alcance vivo: su fuente no es Sheets por años.
+    leerVariasTablasVivas: async ts => ({ filas: Object.fromEntries(ts.map(t => [t, []])), alcance: {} }),
     saveConfig: c => call('saveConfig', c),
     listClientes: () => call('listClientes'),
     saveCliente: c => call('saveCliente', c),

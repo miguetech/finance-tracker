@@ -35,9 +35,10 @@ export const QUERY_KEYS_POR_TABLA: Partial<Record<TableName, readonly string[]>>
 // Duplicados deliberados arriba se colapsan al recorrer el array.
 void QUERY_KEYS_POR_TABLA
 
-function fetchTablasDesdeRepo(repo: ReturnType<typeof useRepo> | null, ts: TableName[]): Promise<Partial<Record<TableName, Record<string, string | number>[] | null>>> {
+function fetchTablasDesdeRepo(repo: ReturnType<typeof useRepo> | null, ts: TableName[]): Promise<Partial<Record<TableName, Record<string, string | number>[] | null>> | { filas: Partial<Record<TableName, Record<string, string | number>[] | null>>; alcance?: Partial<Record<TableName, string[]>> }> {
   const r = repo as unknown as {
     leerVariasTablas?: (ts: TableName[]) => Promise<Partial<Record<TableName, Record<string, string | number>[]>>>
+    leerVariasTablasVivas?: (ts: TableName[]) => Promise<{ filas: Partial<Record<TableName, Record<string, string | number>[] | null>>; alcance: Partial<Record<TableName, string[]>> }>
   } | null
   if (!r) return Promise.resolve({})
   // Vía rápida: un batchGet para todas. Tablas sin listX quedan fuera (null).
@@ -45,6 +46,14 @@ function fetchTablasDesdeRepo(repo: ReturnType<typeof useRepo> | null, ts: Table
   if (!conOrigen.length || typeof r.leerVariasTablas !== 'function') {
     // Fallback per-table para repos falsos de tests.
     return Promise.resolve(Object.fromEntries(ts.map(t => [t, TABLA_CON_LISTX.has(t) ? [] : null])))
+  }
+  if (typeof r.leerVariasTablasVivas === 'function') {
+    // Alcance vivo (spec §6): el espejo hace merge por año y conserva histórico.
+    return r.leerVariasTablasVivas(conOrigen).then(res => {
+      const filas: typeof res.filas = {}
+      for (const t of ts) filas[t] = TABLA_CON_LISTX.has(t) ? res.filas[t] ?? [] : null
+      return { filas, alcance: res.alcance }
+    })
   }
   return r.leerVariasTablas(conOrigen).then(res => {
     const out: Partial<Record<TableName, Record<string, string | number>[] | null>> = {}
@@ -84,7 +93,9 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
     if (!activo) return null
     return crearEspejo({
       store,
-      fetchTablas: fetchTablasOverride ?? ((ts) => fetchTablasDesdeRepo(repo, ts)),
+      fetchTablas: fetchTablasOverride
+        ? ((ts) => Promise.resolve(fetchTablasOverride(ts)))
+        : ((ts) => fetchTablasDesdeRepo(repo, ts)),
       // Invalidar SIEMPRE tras descarga (hash igual incluido): el refetch lee
       // el espejo local (<5 ms) y evita pantallas con el estado previo.
       onDescarga: (tablas) => {
