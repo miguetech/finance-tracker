@@ -17,6 +17,8 @@ export interface EspejoCtxValue {
   sincronizarAhora: (tablas?: TableName[], opts?: { forzar?: boolean }) => Promise<void>
   /** Pull dirigido SOLO de las tablas vencidas (>60 s o sin datos) de esta sección. */
   sincronizarTablas: (tablas: TableName[]) => Promise<void>
+  /** Un batchGet está en vuelo: la barra de sync muestra actividad. */
+  pullEnCurso: boolean
 }
 
 export const EspejoCtx = createContext<EspejoCtxValue>({
@@ -26,7 +28,8 @@ export const EspejoCtx = createContext<EspejoCtxValue>({
   espejo: null,
   ultimoPull: 0,
   sincronizarAhora: async () => {},
-  sincronizarTablas: async () => {}
+  sincronizarTablas: async () => {},
+  pullEnCurso: false
 })
 
 export function useEspejo(): EspejoCtxValue {

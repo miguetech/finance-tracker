@@ -82,7 +82,20 @@ export interface InfoApertura { habiaVolcado: boolean; bytesVolcado: number | nu
 let moduloCache: Promise<Sqlite3> | null = null
 
 function cargarModulo(): Promise<Sqlite3> {
-  moduloCache ??= sqlite3InitModule() as unknown as Promise<Sqlite3>
+  // El d.ts del paquete declara la firma sin opciones; el runtime sí acepta
+  // el objeto de Emscripten (locateFile).
+  const init = sqlite3InitModule as unknown as
+    (opciones?: { locateFile?: (archivo: string, prefijo: string) => string }) => Promise<Sqlite3>
+  moduloCache ??= init({
+    // WASM servido mismo-origen desde public/ (no la ruta @fs de node_modules,
+    // que sin caché ni red deja el espejo muerto en modo offline). En Node y
+    // jsdom (tests, carga por fs) resolución por defecto.
+    locateFile: (archivo, prefijo) => {
+      const navegador = typeof document !== 'undefined' && !/jsdom/i.test(navigator.userAgent)
+      if (archivo !== 'sqlite3.wasm' || !navegador) return prefijo + archivo
+      return new URL('/sqlite3.wasm', document.baseURI).href
+    }
+  })
   return moduloCache
 }
 

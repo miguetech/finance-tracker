@@ -666,11 +666,55 @@ export const messages = {
     cifrarDatos: 'Cifrar los datos locales con este PIN (recomendado si compartes equipo)',
     pedirPinCifrado: 'Ingresa tu PIN para desbloquear los datos locales cifrados'
   },
+  sync: {
+    enviando: 'Reconectado — enviando cambios {i}/{n}…',
+    actualizando: 'Actualizando datos…'
+  },
   cola: {
-    pendientes: '{n} pendientes de sincronizar',
-    conError: '{n} operaciones con error',
+    pendientes: '{n} pendientes de sincronizar',    conError: '{n} operaciones con error',
     reintentar: 'Reintentar',
-    descartar: 'Descartar'
+    descartar: 'Descartar',
+    detalle: 'Ver detalle',
+    cerrar: 'Cerrar',
+    sinDetalle: 'Sin operaciones en la cola',
+    errorRotulo: 'Error',
+    descartarUna: 'Descartar esta operación',
+    descartarSeguro: '¿Seguro? No se aplicará en la hoja y deberás registrarla de nuevo.',
+    descartarTodas: 'Descartar todas las fallidas',
+    metodos: {
+      createFactura: 'Registrar factura',
+      updateFactura: 'Editar factura',
+      deleteFactura: 'Eliminar factura',
+      registerPago: 'Registrar pago',
+      saveCliente: 'Guardar cliente',
+      deleteCliente: 'Eliminar cliente',
+      saveProveedor: 'Guardar proveedor',
+      deleteProveedor: 'Eliminar proveedor',
+      saveEmpleado: 'Guardar empleado',
+      deleteEmpleado: 'Eliminar empleado',
+      saveGasto: 'Registrar gasto',
+      deleteGasto: 'Eliminar gasto',
+      createCxp: 'Registrar cuenta por pagar',
+      deleteCxp: 'Eliminar cuenta por pagar',
+      saveProducto: 'Guardar producto',
+      deleteProducto: 'Eliminar producto',
+      registrarMovimiento: 'Movimiento de inventario',
+      registerNomina: 'Registrar nómina',
+      registerNominaAvanzada: 'Nómina avanzada',
+      saveAsistencia: 'Guardar asistencia',
+      deleteAsistencia: 'Eliminar asistencia',
+      saveConfig: 'Guardar configuración',
+      saveUsuario: 'Guardar usuario',
+      deleteUsuario: 'Eliminar usuario',
+      saveCodigo: 'Guardar código',
+      renovarCodigo: 'Renovar código',
+      deleteCodigo: 'Eliminar código',
+      registrarDispositivo: 'Registrar dispositivo',
+      removerDispositivo: 'Remover dispositivo',
+      saveGastoFijo: 'Guardar gasto fijo',
+      deleteGastoFijo: 'Eliminar gasto fijo',
+      registrarTasa: 'Registrar tasa'
+    }
   },
   offline: {
     banner: '⚠ Trabajando sin conexión — verifica tu red para sincronizar con la hoja de cálculo'

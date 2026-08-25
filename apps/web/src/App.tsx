@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo, SesionOffline, PantallaPinCifrado, hayDesbloqueoSesion, desbloqueoPermitido, limpiarDesbloqueoSesion, ModalConexionPerdida, useOnline } from '@ft/shared'
+import { createRepository, createRemoteRepository, localStorageAdapter, KEYS, SheetsApi, connectOrCreateSpreadsheet, ensureTables, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Compartir, Toaster, PermsProvider, adminPerms, usePerms, permsFromInfo, IconShare, I18nProvider, useI18n, Button, Input, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo, SesionOffline, hayDesbloqueoSesion, desbloqueoPermitido, limpiarDesbloqueoSesion, ModalConexionPerdida, useOnline } from '@ft/shared'
 import type { NavKey, NavItem, ModuleKey, PermsInfo, RegistroSesion, EspejoStore } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
 import { webAuth } from './auth/popupOAuth'
@@ -17,7 +17,6 @@ function OwnerShell() {
   // Clave del espejo cifrado: derivada del PIN y retenida solo en memoria.
   const [claveEspejo, setClaveEspejo] = useState<(() => Promise<string>) | null>(null)
   const [storeCifrado, setStoreCifrado] = useState<EspejoStore | null>(null)
-  const [pendientePinCifrado, setPendientePinCifrado] = useState<RegistroSesion | null>(null)
   const [falloArranque, setFalloArranque] = useState(false)
   const [nav, setNav] = useState<NavKey>(() => (sessionStorage.getItem('ft_nav') as NavKey) || 'dashboard')
   const [mes, setMes] = useState(() => sessionStorage.getItem('ft_mes') || monthLocal())
@@ -75,8 +74,11 @@ function OwnerShell() {
           const email = (await webAuth.getSignedInUser())?.email
           if (email) void guardarRegistroSesion(localStorageAdapter, { cuenta: email })
           const reg = await cargarRegistroSesion(localStorageAdapter)
-          // Espejo cifrado de sesión anterior: exige PIN antes de abrirlo.
-          if (reg?.cifrado) setPendientePinCifrado(reg)
+          if (reg) {
+            // Registro disponible desde ya: si la red cae a mitad de sesión,
+            // el modal de conexión perdida aparece sin recargar.
+            setSesionLocal(reg)
+          }
         } catch {
           // Sin red (o Sheets sin responder): se ofrece modo offline si hubo sesión.
           const reg = await cargarRegistroSesion(localStorageAdapter)
@@ -117,6 +119,15 @@ function OwnerShell() {
 
   const online = useOnline()
 
+  // Red caída con la pestaña ya desbloqueada: pasar a modo offline al
+  // instante y sin repetir PIN. Cifrada: solo si la clave sigue en memoria
+  // (sin recarga de por medio); plana: vale la ventana de 24 h.
+  useEffect(() => {
+    if (online || modoOffline || !sesionLocal) return
+    const abierta = sesionLocal.cifrado ? !!claveEspejo : (!!claveEspejo || (hayDesbloqueoSesion() && desbloqueoPermitido(sesionLocal)))
+    if (abierta) setModoOffline(true)
+  }, [online, modoOffline, sesionLocal, claveEspejo])
+
   if (error) return <div className="p-8 text-red-600">{error}</div>
   if (!idHoja) return <div className="p-8">Conectando a Google Sheets…</div>
   // Conexión perdida con sesión local: modal de paso a modo offline al instante.
@@ -145,17 +156,8 @@ function OwnerShell() {
       />
     )
   }
-  // Espejo cifrado de la sesión anterior: desbloqueo por PIN antes de abrir.
-  if (!modoOffline && pendientePinCifrado && !claveEspejo) {
-    return (
-      <PantallaPinCifrado
-        almacen={localStorageAdapter}
-        registro={pendientePinCifrado}
-        onOk={pin => { setClaveEspejo(() => async () => pin); setPendientePinCifrado(null) }}
-        onCancelar={() => setPendientePinCifrado(null)}
-      />
-    )
-  }
+  // PIN del espejo cifrado: ya NO se pide al arranque online (los datos
+  // vienen de Sheets). Se exige una sola vez, al entrar al modo offline.
   if (claveEspejo && !storeCifrado) return <div className="p-8">Preparando datos locales…</div>
   const extraItems: NavItem[] = [{ key: 'compartir', label: 'Compartir', Icon: IconShare }]
   return (
@@ -163,7 +165,7 @@ function OwnerShell() {
       <SincronizadorCola almacen={localStorageAdapter} repo={repoBase} />
       <PermsProvider perms={adminPerms()}>
         <Toaster>
-          <Layout current={nav} onNavigate={navigate} extraItems={extraItems} espejoForzado={modoOffline} storeExterno={storeCifrado}>
+          <Layout current={nav} onNavigate={navigate} extraItems={extraItems} espejoForzado={modoOffline} storeExterno={storeCifrado} espejoApagado={!modoOffline && !claveEspejo && !!sesionLocal?.cifrado}>
             {nav === 'dashboard' && <Dashboard mes={mes} onNavigate={navigate} />}
             {nav === 'facturas' && <Facturas />}
             {nav === 'clientes' && <Clientes />}
@@ -351,6 +353,13 @@ export function App() {
   const share = loadShareParams()
   const [ownerId, setOwnerId] = useState<string | null>(null)
   useEffect(() => { localStorageAdapter.get(KEYS.spreadsheetId).then(setOwnerId) }, [])
+  // Modo offline (spec §9): precache del shell + binario SQLite. Solo build de
+  // producción; en dev Vite sirve todo con no-cache y el SW estorbaría al HMR.
+  const env = (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+  useEffect(() => {
+    if (!env?.PROD || !('serviceWorker' in navigator)) return
+    navigator.serviceWorker.register('/sw.js').catch(() => {})
+  }, [])
   const inner = share && !ownerId ? <VisitorShell apiUrl={share.apiUrl} /> : <OwnerShell />
   return <I18nProvider>{inner}</I18nProvider>
 }

@@ -56,9 +56,12 @@ function fetchTablasDesdeRepo(repo: ReturnType<typeof useRepo> | null, ts: Table
 const TABLA_CON_LISTX: ReadonlySet<TableName> = new Set<TableName>([
   'Clientes', 'Proveedores', 'Empleados', 'Facturas', 'Factura_Items', 'Pagos', 'Gastos',
   'Productos', 'Cuentas_Pagar', 'Gastos_Fijos', 'Tasas_Historial', 'Nomina_Detalles',
-  'Usuarios', 'Codigos_Acceso', 'Dispositivos', 'Asistencias'
+  'Usuarios', 'Codigos_Acceso', 'Dispositivos', 'Asistencias',
+  // Historial de inventario: sin esto useMovimientos leía un espejo
+  // perpetuamente vacío (entradas/salidas/mermas invisibles incluso online).
+  'Movimientos_Stock'
 ])
-// Config (clave/valor) y Movimientos_Stock (requiere id) quedan fuera del espejo en Fase A.
+// Config (clave/valor) queda fuera del espejo en Fase A.
 
 export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOverride, children }: {
   flag?: string
@@ -73,6 +76,9 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
   const activo = habilitado && !!store
   const [ultimoPull, setUltimoPull] = useState(0)
   const ultimoRef = useRef(0)
+  // Actividad de red del espejo: la barra de sync la muestra como fase
+  // indeterminada ("actualizando datos").
+  const [pullEnCurso, setPullEnCurso] = useState(false)
 
   const espejo = useMemo(() => {
     if (!activo) return null
@@ -101,6 +107,54 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
   // Cuota de Sheets agotada: pausa los pulls automáticos 90 s. El botón
   // manual de sincronización la ignora.
   const cooldownRef = useRef(0)
+  // Un solo pull en vuelo: secciones que montan a la vez con tablas solapadas
+  // no disparan batchGet duplicados (cuota de Sheets).
+  const pullEnCursoRef = useRef<Promise<void> | null>(null)
+  // Reintentos del PRIMER pull: si falla (token OAuth aún no listo, cuota,
+  // red a medias) el dashboard quedaba vacío hasta navegar o esperar el TTL.
+  const reintentosArranqueRef = useRef(0)
+
+  const reintentarArranque = () => {
+    if (ultimoRef.current > 0 || reintentosArranqueRef.current >= 5) return
+    // Un 429 activo (90 s) se respeta; los cooldowns cortos no frenan el arranque.
+    if (cooldownRef.current - Date.now() > 20_000) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    const intento = ++reintentosArranqueRef.current
+    const espera = Math.min(3000 * intento, 10_000)
+    console.warn(`[espejo] datos aún sin cargar; reintento ${intento}/5 en ${espera / 1000}s`)
+    setTimeout(() => { void sincronizarAhora(undefined, { forzar: true }) }, espera)
+  }
+
+  const pullUnico = async (tablas?: TableName[]) => {
+    if (!espejo) return
+    if (pullEnCursoRef.current) {
+      await pullEnCursoRef.current.catch(() => {})
+      return
+    }
+    const promesa = (async () => {
+      try {
+        await espejo.pull(tablas ?? (ultimoRef.current === 0 ? undefined : TABLAS_CALIENTES))
+        cooldownRef.current = 0
+        reintentosArranqueRef.current = 0
+        ultimoRef.current = espejo.estado().ultimoPull
+        setUltimoPull(ultimoRef.current)
+      } catch (e) {
+        // Cuota agotada: pausa larga. Otros fallos transitorios: pausa corta,
+        // para que los automáticos no queden silenciados medio minuto.
+        if (esErrorRed(e)) {
+          const cuota = /429|RESOURCE_EXHAUSTED/i.test(e instanceof Error ? e.message : String(e))
+          cooldownRef.current = Date.now() + (cuota ? 90_000 : 15_000)
+          console.debug('[espejo] pull en pausa por red/cuota hasta', new Date(cooldownRef.current).toLocaleTimeString())
+          if (ultimoRef.current === 0) reintentarArranque()
+          return
+        }
+        throw e
+      }
+    })()
+    pullEnCursoRef.current = promesa
+    setPullEnCurso(true)
+    try { await promesa } finally { pullEnCursoRef.current = null; setPullEnCurso(false) }
+  }
 
   const sincronizarAhora = async (tablas?: TableName[], opts?: { forzar?: boolean }) => {
     if (!espejo) return
@@ -109,22 +163,7 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
       // Sin red: los pulls solo generan errores (y tormenta de 429 al volver).
       if (typeof navigator !== 'undefined' && navigator.onLine === false) return
     }
-    try {
-      await espejo.pull(tablas ?? (ultimoRef.current === 0 ? undefined : TABLAS_CALIENTES))
-      cooldownRef.current = 0
-      ultimoRef.current = espejo.estado().ultimoPull
-      setUltimoPull(ultimoRef.current)
-    } catch (e) {
-      // Cuota agotada: pausa larga. Otros fallos transitorios: pausa corta,
-      // para que los automáticos no queden silenciados medio minuto.
-      if (esErrorRed(e)) {
-        const cuota = /429|RESOURCE_EXHAUSTED/i.test(e instanceof Error ? e.message : String(e))
-        cooldownRef.current = Date.now() + (cuota ? 90_000 : 15_000)
-        console.debug('[espejo] pull en pausa por red/cuota hasta', new Date(cooldownRef.current).toLocaleTimeString())
-        return
-      }
-      throw e
-    }
+    await pullUnico(tablas)
   }
 
   // Ecos que llegaron antes de que el store terminara de cargar: se aplican
@@ -208,19 +247,10 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
     const fechas = espejo.fechasPorTabla()
     const viejas = tablas.filter(t => Date.now() - (fechas[t] ?? 0) > TTL_SECCION_MS)
     if (!viejas.length) return
-    try {
-      await espejo.pull(viejas)
-      cooldownRef.current = 0
-      ultimoRef.current = espejo.estado().ultimoPull
-      setUltimoPull(ultimoRef.current)
-    } catch (e) {
-      if (esErrorRed(e)) {
-        cooldownRef.current = Date.now() + (/429|RESOURCE_EXHAUSTED/i.test(String(e)) ? 90_000 : 15_000)
-      }
-    }
+    await pullUnico(viejas)
   }
 
-  const value: EspejoCtxValue = { version: ultimoPull, habilitado, activo, espejo, ultimoPull, sincronizarAhora, sincronizarTablas }
+  const value: EspejoCtxValue = { version: ultimoPull, habilitado, activo, espejo, ultimoPull, sincronizarAhora, sincronizarTablas, pullEnCurso }
   return <EspejoCtx.Provider value={value}>{children}</EspejoCtx.Provider>
 }
 

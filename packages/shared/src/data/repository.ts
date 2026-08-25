@@ -244,7 +244,11 @@ export function createRepository(ctx: RepoContext) {
       const cfg = await readConfig()
       const moneda = parsed.moneda || cfg.moneda
       const { items, totals } = buildFactura(parsed.items, cfg.iva_porcentaje, getCurrency(moneda).decimals)
-      const id_factura = uid('fac_')
+      // Idempotencia del flush offline: la cola asigna id local; si un intento
+      // anterior SÍ llegó a Sheets (timeout engañoso), no se repite la fila.
+      const id_factura = (input as { id_factura?: string }).id_factura || uid('fac_')
+      const previa = (await readTable<Factura>('Facturas')).find(f => f.id_factura === id_factura)
+      if (previa) return previa
       // Validar stock disponible antes de escribir nada (items con producto vinculado).
       const itemsConProducto = items.filter(it => it.id_producto)
       if (itemsConProducto.length > 0) {

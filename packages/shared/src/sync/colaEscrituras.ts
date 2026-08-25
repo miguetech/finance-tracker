@@ -62,6 +62,12 @@ export async function descartarErrores(almacen: StorageAdapter): Promise<void> {
   await guardarCola(almacen, (await cargarCola(almacen)).filter(o => o.estado !== 'error'))
 }
 
+/** Descarte individual desde el panel de detalle (con confirmación en UI). */
+export async function descartarOp(almacen: StorageAdapter, idOp: string): Promise<void> {
+  await quitarOp(almacen, idOp)
+  notificarCola(await resumirCola(almacen))
+}
+
 /** Errores de transporte (reintentables) vs errores de negocio (permanentes). */
 export function esErrorRed(e: unknown): boolean {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
@@ -207,13 +213,16 @@ const METODOS_COLA: Record<string, OpcionesMetodo> = {
   saveCodigo: { eco: a => ({ ...(args0<CodigoAcceso>(a)), codigo: '' }) },
   registrarDispositivo: {},
   createFactura: {
+    // Id local asignado ANTES de encolar: el eco y la reproducción comparten
+    // el mismo id_factura y el retry tras un timeout no duplica la fila.
+    normalizar: a => conId(a, 'id_factura', 'fac_'),
     eco: (a, ctx) => {
-      const input = args0<{ items: { descripcion: string; cantidad: number; precio_unitario: number }[]; moneda?: string; id_cliente: string; fecha_emision: string; fecha_vencimiento: string; notas: string }>(a)
+      const input = args0<{ items: { descripcion: string; cantidad: number; precio_unitario: number }[]; moneda?: string; id_cliente: string; fecha_emision: string; fecha_vencimiento: string; notas: string; id_factura?: string }>(a)
       const cfg = ctx.configActual?.()
       const moneda = input.moneda || cfg?.moneda || 'USD'
       const { totals } = buildFactura(input.items, cfg?.iva_porcentaje ?? 16, getCurrency(moneda).decimals)
       return {
-        id_factura: uid('fac_'),
+        id_factura: input.id_factura || uid('fac_'),
         folio: '(folio pendiente)',
         id_cliente: input.id_cliente,
         nombre_cliente: '',
@@ -239,6 +248,24 @@ const METODOS_COLA: Record<string, OpcionesMetodo> = {
   saveProducto: { normalizar: a => conId(a, 'id_producto', 'prod_'), eco: a => args0(a) },
   saveGastoFijo: { normalizar: a => conId(a, 'id_gastofijo', 'gfj_'), eco: a => args0(a) },
   registrarMovimiento: { eco: () => undefined },
+  // Eco local de CxP: sin él la cuenta registrada offline no aparecía en la
+  // tabla hasta el pull online (aplicarEscrituraLocal salía temprano).
+  createCxp: {
+    normalizar: a => conId(a, 'id_cxp', 'cxp_'),
+    eco: (a, ctx) => {
+      const i = args0<{ id_proveedor: string; folio_documento: string; categoria: string; descripcion: string; fecha_emision: string; fecha_vencimiento: string; monto_total: number; notas: string; moneda?: string }>(a)
+      const cfg = ctx.configActual?.()
+      return {
+        ...i,
+        nombre_proveedor: '',
+        saldo: Number(i.monto_total) || 0,
+        estado: 'pendiente',
+        notas: i.notas ?? '',
+        moneda: i.moneda || cfg?.moneda || 'USD',
+        tipo_cambio: 1
+      }
+    }
+  },
   registerPago: {
     eco: a => ({ id_pago: uid('pag_'), ...args0<object>(a) })
   }

@@ -60,7 +60,10 @@ export async function guardarRegistroSesion(almacen: StorageAdapter, datos: { cu
     cuenta: datos.cuenta,
     creado_en: datos.creado_en ?? previo?.creado_en ?? ahora,
     ultimo_pull: datos.ultimo_pull ?? ahora,
-    ...(previo?.pin ? { pin: previo.pin } : {})
+    ...(previo?.pin ? { pin: previo.pin } : {}),
+    // El flag sobrevive re-logins: perderlo dejaba al espejo CIFRADO ilegible
+    // en modo offline (la app entraría sin clave aunque el PIN fuera bueno).
+    ...(previo?.cifrado ? { cifrado: true } : {})
   }
   await almacen.set(KEY_SESION_LOCAL, JSON.stringify(reg))
   return reg

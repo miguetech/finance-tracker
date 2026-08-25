@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react'
-import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import type { Repository } from '../data/repository'
 import { useAppStore } from './appStore'
 import type { Config, Cliente, Empleado, Asistencia, Factura, FacturaItem, Gasto, Proveedor, CuentaPagar, MetodoPago, Producto, TipoMovimiento, CodigoAcceso, GastoFijo, TasaHistorial } from '../types/entities'
@@ -34,6 +34,9 @@ export function AppProvider({ repo, children }: { repo: Repository; children: Re
         // TODO al cambiar de pestaña solo quemaba cuota de Sheets (60/min).
         refetchOnWindowFocus: false,
         staleTime: 30_000,
+        // Contra el parpadeo: al rotar la clave (version/filtro) se sigue
+        // mostrando la data previa hasta que la nueva llegue (espejo <5 ms).
+        placeholderData: keepPreviousData,
         retry: 1 // los 429 no se martillan con 3 reintentos
       }
     }
@@ -285,14 +288,16 @@ export function useMetodosPago(): string[] {
 
 export function useCxpById(id: string | null) {
   const repo = useRepo()
+  const { espejo, esperaEspejo, version } = useOrigenLectura()
+  useSyncSeccion(['Cuentas_Pagar'])
   return useQuery({
-    queryKey: ['cxpById', id],
+    queryKey: ['cxpById', id, version],
     queryFn: async (): Promise<CuentaPagar | null> => {
       if (!id) return null
-      const all = await repo.listCxp({})
+      const all = espejo ? await listCxpEspejo(espejo) : await repo.listCxp({})
       return all.find(c => c.id_cxp === id) ?? null
     },
-    enabled: !!id
+    enabled: !!id && !esperaEspejo
   })
 }
 
