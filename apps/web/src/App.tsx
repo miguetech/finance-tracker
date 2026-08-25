@@ -71,6 +71,8 @@ function OwnerShell() {
         setIdHoja(id)
         try {
           await ensureTables(makeApi(), id)
+          // Hoja-por-año (spec §8): garantiza EVENTOS-{año} desde el arranque.
+          void repoBase.prepararAnioActual().catch(() => { /* sin permiso de creación: modo monolítico */ })
           const email = (await webAuth.getSignedInUser())?.email
           if (email) void guardarRegistroSesion(localStorageAdapter, { cuenta: email })
           const reg = await cargarRegistroSesion(localStorageAdapter)

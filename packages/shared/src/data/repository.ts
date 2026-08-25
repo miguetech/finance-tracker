@@ -265,6 +265,12 @@ export function createRepository(ctx: RepoContext) {
       return res.url
     },
 
+    /** F4 (spec hoja-por-año §8): garantiza el spreadsheet EVENTOS-{año actual}
+     *  desde el arranque, sin esperar la primera escritura. Idempotente. */
+    async prepararAnioActual(): Promise<void> {
+      await storeDeEventos(String(new Date().getFullYear()))
+    },
+
     /** F1 (spec hoja-por-año §11): migra imágenes base64 embebidas a Drive.
      *  Cubre Productos.imagen y Config.empresa_logo. Idempotente: salta lo
      *  que ya es URL. Pacing de 300 ms por subida (cuota). */

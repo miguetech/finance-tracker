@@ -41,6 +41,8 @@ export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & {
     uploadImagen: (input: UploadImagenInput) => callPost('uploadImagen', input),
     // El visitante no sube imágenes propias; la migración es del dueño.
     migrarImagenesADrive: async () => ({ migradas: 0, fallidas: 0 }),
+    // El visitante no crea hojas de año (su vista es de solo lectura).
+    prepararAnioActual: async () => {},
     saveConfig: c => call('saveConfig', c),
     listClientes: () => call('listClientes'),
     saveCliente: c => call('saveCliente', c),
