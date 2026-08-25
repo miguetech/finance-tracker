@@ -63,6 +63,21 @@ export class DriveApi {
     }
   }
 
+  /** Lista spreadsheets de la cuenta cuyo nombre contenga el filtro
+   *  (buscador del panel Almacenamiento). Excluye papelera. */
+  async listarHojas(filtro: string): Promise<{ id: string; name: string }[]> {
+    const termino = filtro.trim().replace(/'/g, "\\'")
+    const clausulaNombre = termino ? ` and name contains '${termino}'` : ''
+    const qs = new URLSearchParams({
+      q: `mimeType='application/vnd.google-apps.spreadsheet' and trashed=false${clausulaNombre}`,
+      orderBy: 'modifiedByMeTime desc',
+      pageSize: '25',
+      fields: 'files(id,name)'
+    })
+    const res = await this.request<{ files?: { id: string; name: string }[] }>(`https://www.googleapis.com/drive/v3/files?${qs}`)
+    return res.files ?? []
+  }
+
   /** Sube una imagen, la deja pública por link y devuelve la URL de vista. */
   async uploadBase64(input: DriveUploadInput): Promise<DriveUploadResult> {
     const base64 = stripDataPrefix(input.base64)

@@ -673,6 +673,28 @@ export const messages = {
     enviando: 'Reconectado — enviando cambios {i}/{n}…',
     actualizando: 'Actualizando datos…'
   },
+  almacen: {
+    titulo: 'Almacenamiento',
+    principalTitulo: 'Archivo principal',
+    principalDescripcion: 'Catálogos y ajustes. Los movimientos de cada año viven en su propio archivo.',
+    abrir: 'Abrir',
+    cambiar: 'Cambiar…',
+    cargando: 'Cargando…',
+    buscarPlaceholder: 'Filtrar tus hojas de cálculo…',
+    buscando: 'Buscando en tu Drive…',
+    sinResultados: 'Sin resultados. Escribe parte del nombre.',
+    vinculada: 'Hoja vinculada. Recargando…',
+    actual: 'Actual',
+    vincular: 'Vincular',
+    añosTitulo: 'Años',
+    añosDescripcion: 'Un archivo por año con facturas, pagos, gastos y cuentas por pagar.',
+    activo: 'activo',
+    sinAños: 'Todavía no hay archivo de año creado.',
+    crearAño: 'Crear hoja del año actual',
+    creando: 'Creando…',
+    añoCreado: 'Hoja del año creada y registrada.',
+    añoError: 'No se pudo crear la hoja del año'
+  },
   cola: {
     pendientes: '{n} pendientes de sincronizar',    conError: '{n} operaciones con error',
     reintentar: 'Reintentar',

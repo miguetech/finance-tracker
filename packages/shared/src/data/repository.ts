@@ -1093,6 +1093,23 @@ export function createRepository(ctx: RepoContext) {
       return { spreadsheetId: creada.spreadsheetId, url: creada.url, creada: true }
     },
 
+    /** Buscador del panel Almacenamiento: spreadsheets de la cuenta. */
+    async listarHojasDisponibles(filtro: string): Promise<{ id: string; name: string }[]> {
+      return new DriveApi(() => api.getToken()).listarHojas(filtro)
+    },
+
+    /** Vincula el BASE por ID directo (desde el buscador). Valida edición. */
+    async conectarHojaPorId(spreadsheetId: string): Promise<void> {
+      const id = spreadsheetId.trim()
+      if (!/^[A-Za-z0-9_-]{15,}$/.test(id)) throw new Error('ID de hoja inválido')
+      try {
+        await ensureTables(api, id)
+      } catch {
+        throw new Error('Esta cuenta no tiene permisos de edición sobre esa hoja')
+      }
+      await ctx.storage.set(KEYS.spreadsheetId, id)
+    },
+
     /** Varias tablas en una sola petición batchGet (para pulls del espejo). */
     async leerVariasTablas(ts: TableName[]): Promise<Partial<Record<TableName, Record<string, string | number>[]>>> {
       return getVariasUnificado<Record<string, string | number>>(ts)

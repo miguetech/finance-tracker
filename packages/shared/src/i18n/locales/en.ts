@@ -359,6 +359,32 @@ const en: Partial<Dict> = {
     cifrarDatos: 'Encrypt local data with this PIN (recommended on shared computers)',
     pedirPinCifrado: 'Enter your PIN to unlock the encrypted local data'
   },
+  sync: {
+    enviando: 'Reconnected — sending changes {i}/{n}…',
+    actualizando: 'Refreshing data…'
+  },
+  almacen: {
+    titulo: 'Storage',
+    principalTitulo: 'Main file',
+    principalDescripcion: 'Catalogs and settings. Each year’s movements live in their own file.',
+    abrir: 'Open',
+    cambiar: 'Change…',
+    cargando: 'Loading…',
+    buscarPlaceholder: 'Filter your spreadsheets…',
+    buscando: 'Searching your Drive…',
+    sinResultados: 'No results. Type part of the name.',
+    vinculada: 'Sheet linked. Reloading…',
+    actual: 'Current',
+    vincular: 'Link',
+    añosTitulo: 'Years',
+    añosDescripcion: 'One file per year with invoices, payments, expenses and payables.',
+    activo: 'active',
+    sinAños: 'No year file created yet.',
+    crearAño: 'Create current year sheet',
+    creando: 'Creating…',
+    añoCreado: 'Year sheet created and registered.',
+    añoError: 'Could not create the year sheet'
+  },
   cola: {
     pendientes: '{n} pending changes to sync',
     conError: '{n} failed operations',

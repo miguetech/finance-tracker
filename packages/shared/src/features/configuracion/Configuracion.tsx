@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react'
 import { todayLocal } from '../../lib/date'
 import { useConfig, useRepo } from '../../store/queries'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Repository } from '../../data/repository'
 import { cargarRegistroSesion, configurarPin, verificarPin, activarCifradoEspejo, desactivarCifradoEspejo } from '../../auth/sesionOffline'
 import { localStorageAdapter } from '../../data/storage'
 import type { RegistroSesion } from '../../auth/sesionOffline'
+import { AlmacenamientoCard } from './AlmacenamientoCard'
 import { Card, Button, Input, Select, Dialog, Tooltip, useToast } from '../../ui/components'
 import { IconPlus, IconX, IconAlert, IconSwap, IconCoins } from '../../ui/icons'
 import { CURRENCIES, parseRates, tasasFrescas, fetchExchangeRates, parseCustomCurrencies, registerCurrency } from '../../currency'
@@ -26,8 +27,6 @@ export function Configuracion() {
   const { config, saveConfig } = useConfig()
   const repo = useRepo()
   const qc = useQueryClient()
-  const hojaQ = useQuery({ queryKey: ['hojaActual'], queryFn: () => (repo as Repository).hojaActual() })
-  const [nombreHoja, setNombreHoja] = useState('')
   const [regPin, setRegPin] = useState<RegistroSesion | null>(null)
   const [pinActual, setPinActual] = useState('')
   const [pinNuevo, setPinNuevo] = useState('')
@@ -54,21 +53,6 @@ export function Configuracion() {
       toast(t('seguridad.actualizado'))
     } catch (e) {
       toast((e as Error).message, 'error')
-    }
-  }
-  const [conectandoHoja, setConectandoHoja] = useState(false)
-  const conectarHoja = async () => {
-    if (!nombreHoja.trim()) return
-    setConectandoHoja(true)
-    try {
-      const res = await (repo as Repository).conectarHojaPorNombre(nombreHoja)
-      toast(res.creada ? t('hoja.creada') : t('hoja.conectada'))
-      await qc.invalidateQueries({ queryKey: ['hojaActual'] })
-      setTimeout(() => window.location.reload(), 900) // reset de cachés al cambiar de hoja
-    } catch (e) {
-      toast((e as Error).message, 'error')
-    } finally {
-      setConectandoHoja(false)
     }
   }
   const toast = useToast()
@@ -122,25 +106,9 @@ export function Configuracion() {
   )
   const tarjetaHoja = (
     <section className="mb-6 rounded-xl border border-gray-200 bg-surface p-5">
-      <h2 className="font-semibold mb-1">{t('hoja.titulo')}</h2>
+      <h2 className="font-semibold mb-1">{t('almacen.titulo')}</h2>
       <p className="text-xs text-muted-foreground mb-3">{t('hoja.descripcion')}</p>
-      {hojaQ.data ? (
-        <div className="text-sm space-y-1 mb-4">
-          <div><span className="text-muted-foreground">{t('hoja.nombre')}:</span> <span className="font-medium">{hojaQ.data.titulo}</span></div>
-          <div className="truncate"><span className="text-muted-foreground">ID:</span> <code className="text-xs">{hojaQ.data.id}</code></div>
-          <a className="text-blue-600 hover:underline text-xs" href={hojaQ.data.url} target="_blank" rel="noreferrer">{t('hoja.abrir')}</a>
-        </div>
-      ) : (
-        <div className="text-sm text-muted-foreground mb-4">{t('common.cargando')}</div>
-      )}
-      <label className="block text-xs text-gray-500 mb-1">{t('hoja.conectarPorNombre')}</label>
-      <div className="flex gap-2">
-        <Input value={nombreHoja} onChange={e => setNombreHoja(e.target.value)} placeholder={`FinanceTracker — ${config.empresa_nombre}`} />
-        <Button onClick={() => void conectarHoja()} disabled={conectandoHoja || !nombreHoja.trim()}>
-          {conectandoHoja ? t('imagenes.subiendo') : t('hoja.botonConectar')}
-        </Button>
-      </div>
-      <p className="text-[11px] text-muted-foreground mt-1">{t('hoja.hint')}</p>
+      <AlmacenamientoCard />
     </section>
   )
   const docLabel = getDocLabel(form.tipo_doc, form.tipo_doc_etiqueta)

@@ -46,6 +46,9 @@ export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & {
     estadoAlmacenamiento: async () => ({ anioActivo: '', eventos: [], baseId: '', creadoAñoActual: false }),
     // Sin alcance vivo: su fuente no es Sheets por años.
     leerVariasTablasVivas: async ts => ({ filas: Object.fromEntries(ts.map(t => [t, []])), alcance: {} }),
+    // Buscador/vinculación: solo el dueño administra almacenamiento.
+    listarHojasDisponibles: async () => [],
+    conectarHojaPorId: async () => {},
     saveConfig: c => call('saveConfig', c),
     listClientes: () => call('listClientes'),
     saveCliente: c => call('saveCliente', c),
