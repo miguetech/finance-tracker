@@ -53,21 +53,156 @@ export function createRepository(ctx: RepoContext) {
   const store: TableStore = createSheetsTableStore(api, sid)
   const drive = new DriveApi(() => api.getToken())
 
+  // ── Hoja-por-año (spec 2026-08-25 §2-§7) ──────────────────────────────────
+  // Catálogos/config viven en el BASE (sid principal); los documentos se
+  // escriben en el spreadsheet del AÑO DE SU FECHA. El espejo/UI siguen viendo
+  // tablas lógicas únicas: las lecturas unen los fragmentos por año.
+
+  const TABLAS_EVENTO: ReadonlySet<string> = new Set(['Facturas', 'Factura_Items', 'Pagos', 'Gastos', 'Cuentas_Pagar'])
+
+  const storesEvento = new Map<string, TableStore>()
+
+  function añoDeFila(fila: Record<string, unknown>): string {
+    const f = String(fila.fecha_emision ?? fila.fecha ?? '')
+    return /^\d{4}/.test(f) ? f.slice(0, 4) : ''
+  }
+
+  /** Años con spreadsheet registrado en la Config del BASE (solo lectura). */
+  async function añosRegistrados(): Promise<string[]> {
+    const cfg = await readConfigSafe()
+    const años = Object.keys(cfg as unknown as Record<string, unknown>)
+      .filter(k => /^eventos_\d{4}$/.test(k))
+      .map(k => k.slice('eventos_'.length))
+    const activo = String((cfg as unknown as Record<string, unknown>).anio_activo ?? '')
+    if (/^\d{4}$/.test(activo) && !años.includes(activo)) años.push(activo)
+    return años.sort()
+  }
+
+  async function readConfigSafe(): Promise<Config | null> {
+    try { return await readConfig() } catch { return null }
+  }
+
+  function storeDeAñoSoloLectura(id: string): TableStore {
+    let s = storesEvento.get(id)
+    if (!s) { s = createSheetsTableStore(api, async () => id); storesEvento.set(id, s) }
+    return s
+  }
+
+  /** Garantiza el spreadsheet EVENTOS-{año}: crea, registra en Config y
+   *  devuelve el store apuntándole. Si la creación falla (permisos Drive,
+   *  entorno de prueba), degrada al BASE en modo monolítico en vez de romper
+   *  la escritura. */
+  async function storeDeEventos(anio: string): Promise<TableStore> {
+    const clave = `eventos_${anio}`
+    const existente = await mutexReadRow(clave)
+    let id = existente && existente.includes('-') ? existente : ''
+    if (!id) {
+      try {
+        // Sonda: entornos que no implementan estructura de hojas (fakes de
+        // test) abortan AQUÍ, antes de escribir un solo header ajeno.
+        const sonda = await api.getSpreadsheet(`probe_${anio}`).catch(() => null)
+        if (!sonda || !Array.isArray(sonda.sheets)) throw new Error('estructura de hojas no disponible')
+        const cfg = await readConfig().catch(() => null)
+        const nombre = `FinanceTracker${cfg?.empresa_nombre ? ` ${cfg.empresa_nombre}` : ''} ${anio}`
+        const creada = await createInitialSpreadsheet(api, nombre.trim())
+        id = creada.spreadsheetId
+        await ensureTables(api, id)
+        await mutexWriteRow(clave, id)
+      } catch (e) {
+        console.warn(`[hoja-año] EVENTOS-${anio} no disponible; escribiendo en el BASE:`, e instanceof Error ? e.message : e)
+        return store
+      }
+    }
+    if (!storesEvento.has(id)) storesEvento.set(id, createSheetsTableStore(api, async () => id))
+    void mutexWriteRow('anio_activo', anio).catch(() => {})
+    return storesEvento.get(id)!
+  }
+
+  /** Store destino de una escritura: evento → su año; catálogo → BASE. */
+  async function storeDestino(t: keyof typeof TABLES, muestra: Record<string, unknown>): Promise<TableStore> {
+    if (!TABLAS_EVENTO.has(t)) return store
+    const anio = añoDeFila(muestra) || String(new Date().getFullYear())
+    return storeDeEventos(anio)
+  }
+
+  /** Reemplazo fragmentado por año. Filas de años SIN spreadsheet registrado
+   *  son legado del BASE: se reescriben ahí completas (nunca se duplican en
+   *  un año nuevo). Requiere que `filas` sea el conjunto íntegro de la tabla
+   *  (contrato actual de los flujos delete/update). */
+  async function reemplazarEventoFragmentado<T extends object>(t: keyof typeof TABLES, filas: T[]): Promise<void> {
+    const cfg = await readConfigSafe()
+    const registro = (cfg ?? {}) as unknown as Record<string, unknown>
+    const idDeAño = new Map<string, string>()
+    for (const k of Object.keys(registro)) {
+      if (/^eventos_\d{4}$/.test(k) && String(registro[k] ?? '').includes('-')) idDeAño.set(k.slice('eventos_'.length), String(registro[k]))
+    }
+    const enBase: T[] = []
+    const porAño = new Map<string, T[]>()
+    for (const f of filas) {
+      const r = f as Record<string, unknown>
+      const anio = añoDeFila(r) || String(new Date().getFullYear())
+      const id = idDeAño.get(anio)
+      if (!id) enBase.push(f)
+      else (porAño.get(anio) ?? porAño.set(anio, []).get(anio)!).push(f)
+    }
+    if (enBase.length) await store.replace(t, enBase as Record<string, string | number>[])
+    for (const [anio, grupo] of porAño) {
+      const st = storeDeAñoSoloLectura(idDeAño.get(anio)!)
+      await st.replace(t, grupo as Record<string, string | number>[])
+    }
+  }
+
+  /** Lectura multi-tabla con unión de años (espejo/reportes/historial). */
+  async function getVariasUnificado<T = Record<string, string | number>>(ts: TableName[]): Promise<Partial<Record<TableName, T[]>>> {
+    const evento = ts.filter(t => TABLAS_EVENTO.has(t as TableName))
+    const base = ts.filter(t => !TABLAS_EVENTO.has(t as TableName))
+    const out: Partial<Record<TableName, T[]>> = {}
+    if (base.length) Object.assign(out, await store.getVarias<T>(base as TableName[]))
+    if (evento.length) {
+      const cfg = await readConfigSafe()
+      const registro = (cfg ?? {}) as unknown as Record<string, unknown>
+      const idsAño = Object.keys(registro)
+        .filter(k => /^eventos_\d{4}$/.test(k) && String(registro[k] ?? '').includes('-'))
+        .map(k => String(registro[k]))
+      const fuentes = [store, ...idsAño.map(id => storeDeAñoSoloLectura(id))]
+      const partes = await Promise.all(fuentes.map(f => f.getVarias<T>(evento as TableName[])))
+      for (const t of evento as TableName[]) out[t] = partes.flatMap(p => p[t] ?? []) as T[]
+    }
+    return out
+  }
+
   function tipoCambioDe(cfg: Config, moneda: string): number {
     if (!moneda || moneda === cfg.moneda) return 1
     return rateFor(cfg, cfg.moneda, moneda)
   }
 
   function readTable<T = Record<string, string | number>>(t: keyof typeof TABLES): Promise<T[]> {
+    if (TABLAS_EVENTO.has(t)) {
+      // Unión: fragmento LEGACY del BASE (usuarios previos a hoja-por-año) +
+      // todos los años registrados en Config (los ausentes se omiten).
+      return (async () => {
+        const cfg = await readConfigSafe()
+        const registro = (cfg ?? {}) as unknown as Record<string, unknown>
+        const idsAño = Object.keys(registro)
+          .filter(k => /^eventos_\d{4}$/.test(k) && String(registro[k] ?? '').includes('-'))
+          .map(k => String(registro[k]))
+        const base = await store.getAll<T>(t)
+        const partes = await Promise.all(idsAño.map(id => storeDeAñoSoloLectura(id).getAll<T>(t)))
+        return [...base, ...partes.flat()]
+      })()
+    }
     return store.getAll<T>(t)
   }
 
   async function appendRows<T extends object>(t: keyof typeof TABLES, rows: T[]): Promise<void> {
-    await store.append(t, rows)
+    if (!rows.length) return
+    const st = await storeDestino(t, rows[0] as Record<string, unknown>)
+    await st.append(t, rows as Record<string, string | number>[])
   }
 
   async function replaceTable<T extends object>(t: keyof typeof TABLES, rows: T[]): Promise<void> {
-    await store.replace(t, rows)
+    if (TABLAS_EVENTO.has(t)) return reemplazarEventoFragmentado(t, rows)
+    await store.replace(t, rows as Record<string, string | number>[])
   }
 
   async function readConfig(): Promise<Config> {
@@ -618,7 +753,7 @@ export function createRepository(ctx: RepoContext) {
 
     async getReportes(mes: string) {
       // Una sola petición para las 4 tablas (cuota de lectura de Sheets: 60/min/usuario).
-      const tablas = await store.getVarias<Record<string, string | number>>(['Facturas', 'Gastos', 'Cuentas_Pagar', 'Pagos'])
+      const tablas = await getVariasUnificado<Record<string, string | number>>(['Facturas', 'Gastos', 'Cuentas_Pagar', 'Pagos'])
       const facturas = (tablas.Facturas ?? []) as unknown as Factura[]
       const gastos = (tablas.Gastos ?? []) as unknown as Gasto[]
       const cxps = (tablas.Cuentas_Pagar ?? []) as unknown as CuentaPagar[]
@@ -818,7 +953,7 @@ export function createRepository(ctx: RepoContext) {
       movimientosMensuales: ReturnType<typeof movimientosPorMes>
       statsProductos: StatsProducto[]
     }> {
-      const tablasInv = await store.getVarias<Record<string, string | number>>(['Productos', 'Movimientos_Stock', 'Facturas', 'Factura_Items'])
+      const tablasInv = await getVariasUnificado<Record<string, string | number>>(['Productos', 'Movimientos_Stock', 'Facturas', 'Factura_Items'])
       const productos = (tablasInv.Productos ?? []) as unknown as Producto[]
       const movimientos = (tablasInv.Movimientos_Stock ?? []) as unknown as MovimientoStock[]
       const facturas = (tablasInv.Facturas ?? []) as unknown as Factura[]
@@ -871,12 +1006,12 @@ export function createRepository(ctx: RepoContext) {
 
     /** Varias tablas en una sola petición batchGet (para pulls del espejo). */
     async leerVariasTablas(ts: TableName[]): Promise<Partial<Record<TableName, Record<string, string | number>[]>>> {
-      return store.getVarias(ts)
+      return getVariasUnificado(ts)
     },
 
     /** Historial de ventas de un producto individual en un rango. */
     async getVentasProducto(idProducto: string, rango: RangoFecha): Promise<VentaProductoFila[]> {
-      const t = await store.getVarias<Record<string, string | number>>(['Factura_Items', 'Facturas'])
+      const t = await getVariasUnificado<Record<string, string | number>>(['Factura_Items', 'Facturas'])
       return historialVentasProducto(
         (t.Factura_Items ?? []) as unknown as (FacturaItem & { id_factura: string })[],
         (t.Facturas ?? []) as unknown as Factura[],
@@ -889,7 +1024,7 @@ export function createRepository(ctx: RepoContext) {
     async getMetasVsLogros(meses: string[]) {
       const [cfg, tablasMeta] = await Promise.all([
         readConfig(),
-        store.getVarias<Record<string, string | number>>(['Facturas'])
+        getVariasUnificado<Record<string, string | number>>(['Facturas'])
       ])
       return metasVsLogros((tablasMeta.Facturas ?? []) as unknown as Factura[], parseMetas(cfg.metas_mensuales), meses)
     }
