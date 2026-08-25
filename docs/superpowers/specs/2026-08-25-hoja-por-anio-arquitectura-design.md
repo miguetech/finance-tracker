@@ -29,8 +29,8 @@ EMPRESA
 │     Usuarios, Gastos_Fijos, Tasas_Historial, Nomina_Detalles*
 │
 └── Spreadsheet EVENTOS-{año} ("FinanceTracker-{Empresa}-{año}")
-      Facturas_{año}, Factura_Items_{año}, Pagos_{año},
-      Gastos_{año}, Cuentas_Pagar_{año}
+      Facturas, Factura_Items, Pagos, Gastos, Cuentas_Pagar
+      (pestañas SIN sufijo: el año vive en el nombre del archivo)
 ```
 
 \* `Nomina_Detalles` es evento mensual pero de bajo volumen; permanece en BASE

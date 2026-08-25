@@ -67,15 +67,34 @@ export function createRepository(ctx: RepoContext) {
     return /^\d{4}/.test(f) ? f.slice(0, 4) : ''
   }
 
+  /** Registro de años vive como filas CRUDAS en Config (claves eventos_{año}
+   *  y anio_activo). NO pasa por configFromRows: el parser de Config descarta
+   *  claves desconocidas y las haría invisibles tras cada lectura. */
+  async function leerFilasConfigRaw(): Promise<Record<string, string>> {
+    const id = await sid()
+    const res = await api.batchGet(id, [`'Config'!A1:B500`])
+    const filas = res[Object.keys(res)[0]] ?? []
+    const out: Record<string, string> = {}
+    for (const r of filas) {
+      if (!Array.isArray(r)) continue
+      const clave = String(r[0] ?? '')
+      if (!clave || clave === 'mutex') continue
+      out[clave] = String(r[1] ?? '')
+    }
+    return out
+  }
+
+  async function idsDeAñosRegistrados(quien = '?'): Promise<{ año: string; id: string }[]> {
+    const raw = await leerFilasConfigRaw()
+    return Object.keys(raw)
+      .filter(k => /^eventos_\d{4}$/.test(k) && raw[k].trim().length >= 15)
+      .map(k => ({ año: k.slice('eventos_'.length), id: raw[k] }))
+      .sort((a, b) => a.año.localeCompare(b.año))
+  }
+
   /** Años con spreadsheet registrado en la Config del BASE (solo lectura). */
   async function añosRegistrados(): Promise<string[]> {
-    const cfg = await readConfigSafe()
-    const años = Object.keys(cfg as unknown as Record<string, unknown>)
-      .filter(k => /^eventos_\d{4}$/.test(k))
-      .map(k => k.slice('eventos_'.length))
-    const activo = String((cfg as unknown as Record<string, unknown>).anio_activo ?? '')
-    if (/^\d{4}$/.test(activo) && !años.includes(activo)) años.push(activo)
-    return años.sort()
+    return (await idsDeAñosRegistrados()).map(x => x.año)
   }
 
   async function readConfigSafe(): Promise<Config | null> {
@@ -88,6 +107,30 @@ export function createRepository(ctx: RepoContext) {
     return s
   }
 
+  /** Creación ESTRICTA del spreadsheet EVENTOS-{año}: lanza en fallo.
+   *  `storeDeEventos` la usa con fallback; la UI la usa para reportar. */
+  async function crearHojaEventos(anio: string): Promise<string> {
+    const clave = `eventos_${anio}`
+    // Sonda de capacidad: la API REAL responde 404/throw para un id que no
+    // existe (=> soportada); los fakes de test responden 200 sin `sheets`
+    // (=> abortamos ANTES de escribir un solo header ajeno).
+    let soportada = true
+    try {
+      const sonda = await api.getSpreadsheet(`probe_${anio}`)
+      soportada = Array.isArray(sonda?.sheets)
+    } catch { soportada = true } // 404 real: la API sí existe
+    if (!soportada) throw new Error('estructura de hojas no disponible')
+    console.info(`[hoja-año] creando EVENTOS-${anio}…`)
+    const cfg = await readConfig().catch(() => null)
+    const nombre = `FinanceTracker${cfg?.empresa_nombre ? ` ${cfg.empresa_nombre}` : ''} ${anio}`
+    const creada = await createInitialSpreadsheet(api, nombre.trim())
+    const id = creada.spreadsheetId
+    await ensureTables(api, id)
+    await mutexWriteRow(clave, id)
+    console.info(`[hoja-año] EVENTOS-${anio} creado (${id})`)
+    return id
+  }
+
   /** Garantiza el spreadsheet EVENTOS-{año}: crea, registra en Config y
    *  devuelve el store apuntándole. Si la creación falla (permisos Drive,
    *  entorno de prueba), degrada al BASE en modo monolítico en vez de romper
@@ -95,26 +138,10 @@ export function createRepository(ctx: RepoContext) {
   async function storeDeEventos(anio: string): Promise<TableStore> {
     const clave = `eventos_${anio}`
     const existente = await mutexReadRow(clave)
-    let id = existente && existente.includes('-') ? existente : ''
+    let id = existente && existente.trim().length >= 15 ? existente : ''
     if (!id) {
       try {
-        // Sonda de capacidad: la API REAL responde 404/throw para un id que no
-        // existe (=> soportada); los fakes de test responden 200 sin `sheets`
-        // (=> abortamos ANTES de escribir un solo header ajeno).
-        let soportada = true
-        try {
-          const sonda = await api.getSpreadsheet(`probe_${anio}`)
-          soportada = Array.isArray(sonda?.sheets)
-        } catch { soportada = true } // 404 real: la API sí existe
-        if (!soportada) throw new Error('estructura de hojas no disponible')
-        console.info(`[hoja-año] creando EVENTOS-${anio}…`)
-        const cfg = await readConfig().catch(() => null)
-        const nombre = `FinanceTracker${cfg?.empresa_nombre ? ` ${cfg.empresa_nombre}` : ''} ${anio}`
-        const creada = await createInitialSpreadsheet(api, nombre.trim())
-        id = creada.spreadsheetId
-        await ensureTables(api, id)
-        await mutexWriteRow(clave, id)
-        console.info(`[hoja-año] EVENTOS-${anio} creado (${id})`)
+        id = await crearHojaEventos(anio)
       } catch (e) {
         console.warn(`[hoja-año] EVENTOS-${anio} no disponible; escribiendo en el BASE:`, e instanceof Error ? e.message : e)
         return store
@@ -137,12 +164,7 @@ export function createRepository(ctx: RepoContext) {
    *  un año nuevo). Requiere que `filas` sea el conjunto íntegro de la tabla
    *  (contrato actual de los flujos delete/update). */
   async function reemplazarEventoFragmentado<T extends object>(t: keyof typeof TABLES, filas: T[]): Promise<void> {
-    const cfg = await readConfigSafe()
-    const registro = (cfg ?? {}) as unknown as Record<string, unknown>
-    const idDeAño = new Map<string, string>()
-    for (const k of Object.keys(registro)) {
-      if (/^eventos_\d{4}$/.test(k) && String(registro[k] ?? '').includes('-')) idDeAño.set(k.slice('eventos_'.length), String(registro[k]))
-    }
+    const idDeAño = new Map((await idsDeAñosRegistrados()).map(x => [x.año, x.id]))
     const enBase: T[] = []
     const porAño = new Map<string, T[]>()
     for (const f of filas) {
@@ -166,11 +188,7 @@ export function createRepository(ctx: RepoContext) {
     const out: Partial<Record<TableName, T[]>> = {}
     if (base.length) Object.assign(out, await store.getVarias<T>(base as TableName[]))
     if (evento.length) {
-      const cfg = await readConfigSafe()
-      const registro = (cfg ?? {}) as unknown as Record<string, unknown>
-      const idsAño = Object.keys(registro)
-        .filter(k => /^eventos_\d{4}$/.test(k) && String(registro[k] ?? '').includes('-'))
-        .map(k => ({ año: k.slice('eventos_'.length), id: String(registro[k]) }))
+      const idsAño = await idsDeAñosRegistrados()
       const fuentes = [
         { id: '__base__', st: store },
         ...idsAño.map(x => ({ id: x.id, st: storeDeAñoSoloLectura(x.id) }))
@@ -202,8 +220,8 @@ export function createRepository(ctx: RepoContext) {
     filas: Partial<Record<TableName, Record<string, string | number>[] | null>>
     alcance: Partial<Record<TableName, string[]>>
   }> {
-    const cfg = await readConfigSafe()
-    const activo = String((cfg as unknown as Record<string, unknown>)?.anio_activo ?? '') || String(new Date().getFullYear())
+    const raw = await leerFilasConfigRaw()
+    const activo = /^\d{4}$/.test(raw.anio_activo ?? '') ? raw.anio_activo : String(new Date().getFullYear())
     const filas = await getVariasUnificado<Record<string, string | number>>(ts, (anio, t) => añosVivosPara(t, activo)(anio))
     const alcance: Partial<Record<TableName, string[]>> = {}
     for (const t of ts) {
@@ -223,11 +241,7 @@ export function createRepository(ctx: RepoContext) {
       // Unión: fragmento LEGACY del BASE (usuarios previos a hoja-por-año) +
       // todos los años registrados en Config (los ausentes se omiten).
       return (async () => {
-        const cfg = await readConfigSafe()
-        const registro = (cfg ?? {}) as unknown as Record<string, unknown>
-        const idsAño = Object.keys(registro)
-          .filter(k => /^eventos_\d{4}$/.test(k) && String(registro[k] ?? '').includes('-'))
-          .map(k => String(registro[k]))
+        const idsAño = (await idsDeAñosRegistrados()).map(x => x.id)
         const base = await store.getAll<T>(t)
         const partes = await Promise.all(idsAño.map(id => storeDeAñoSoloLectura(id).getAll<T>(t)))
         return [...base, ...partes.flat()]
@@ -263,7 +277,10 @@ export function createRepository(ctx: RepoContext) {
     const id = await sid()
     const res = await api.batchGet(id, [`'Config'!A1:B500`])
     const rows = res[Object.keys(res)[0]] ?? []
-    for (const [k, v] of rows) if (String(k) === clave) return String(v ?? '')
+    for (const r of rows) {
+      if (!Array.isArray(r)) continue
+      if (String(r[0]) === clave) return String(r[1] ?? '')
+    }
     return null
   }
 
@@ -272,7 +289,10 @@ export function createRepository(ctx: RepoContext) {
     const res = await api.batchGet(id, [`'Config'!A1:B500`])
     const rows = res[Object.keys(res)[0]] ?? []
     let row = -1
-    for (let i = 0; i < rows.length; i++) if (String(rows[i][0]) === clave) { row = i + 1; break }
+    for (let i = 0; i < rows.length; i++) {
+      if (!Array.isArray(rows[i])) continue
+      if (String(rows[i][0]) === clave) { row = i + 1; break }
+    }
     if (row === -1) row = Math.max(rows.length + 1, 27)
     await api.batchUpdate(id, [{ range: `'Config'!A${row}:B${row}`, values: [[clave, valor]] }])
   }
@@ -308,10 +328,30 @@ export function createRepository(ctx: RepoContext) {
     },
 
     /** F4 (spec hoja-por-año §8): garantiza el spreadsheet EVENTOS-{año actual}
-     *  desde el arranque, sin esperar la primera escritura. Idempotente. */
-    async prepararAnioActual(): Promise<void> {
-      if (!(await sid()).trim()) throw new Error('sin spreadsheet base vinculado todavía')
-      await storeDeEventos(String(new Date().getFullYear()))
+     *  desde el arranque. NO traga errores: devuelve diagnóstico para la UI. */
+    async prepararAnioActual(): Promise<{ ok: boolean; modo: 'año' | 'monolítico'; error?: string }> {
+      if (!(await sid()).trim()) return { ok: false, modo: 'monolítico', error: 'sin spreadsheet base vinculado todavía' }
+      const anio = String(new Date().getFullYear())
+      try {
+        await crearHojaEventos(anio)
+        return { ok: true, modo: 'año' }
+      } catch (e) {
+        return { ok: false, modo: 'monolítico', error: e instanceof Error ? e.message : String(e) }
+      }
+    },
+
+    /** Panel Almacenamiento: dónde vive cada cosa (ids de Drive). */
+    async estadoAlmacenamiento(): Promise<{
+      anioActivo: string
+      eventos: { año: string; id: string }[]
+      baseId: string
+      creadoAñoActual: boolean
+    }> {
+      const baseId = await sid()
+      const eventos = await idsDeAñosRegistrados()
+      const raw = await leerFilasConfigRaw()
+      const anioActivo = /^\d{4}$/.test(raw.anio_activo ?? '') ? raw.anio_activo : String(new Date().getFullYear())
+      return { anioActivo, eventos, baseId, creadoAñoActual: eventos.some(e => e.año === anioActivo) }
     },
 
     /** F1 (spec hoja-por-año §11): migra imágenes base64 embebidas a Drive.

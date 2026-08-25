@@ -42,7 +42,8 @@ export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & {
     // El visitante no sube imágenes propias; la migración es del dueño.
     migrarImagenesADrive: async () => ({ migradas: 0, fallidas: 0 }),
     // El visitante no crea hojas de año (su vista es de solo lectura).
-    prepararAnioActual: async () => {},
+    prepararAnioActual: async () => ({ ok: false, modo: 'monolítico' as const, error: 'modo visitante' }),
+    estadoAlmacenamiento: async () => ({ anioActivo: '', eventos: [], baseId: '', creadoAñoActual: false }),
     // Sin alcance vivo: su fuente no es Sheets por años.
     leerVariasTablasVivas: async ts => ({ filas: Object.fromEntries(ts.map(t => [t, []])), alcance: {} }),
     saveConfig: c => call('saveConfig', c),
