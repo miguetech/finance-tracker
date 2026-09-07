@@ -247,6 +247,62 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
       const cols = TABLES[t]
       const placeholders = cols.map(() => '?').join(', ')
       const colSql = cols.map(c => `"${c.key}"`).join(', ')
+
+      if (t === 'Factura_Items') {
+        const updateCols = cols.slice(2).map(c => `"${c.key}"=excluded."${c.key}"`).join(', ')
+        const sql = `INSERT INTO "Factura_Items" (${colSql}) VALUES (${placeholders})
+                     ON CONFLICT("id_factura","linea") DO UPDATE SET ${updateCols}`
+        let stmt: ReturnType<SqliteDb['prepare']>
+        dbActivo.exec('BEGIN')
+        try {
+          stmt = dbActivo.prepare(sql)
+          for (const f of filas) {
+            stmt.bind(cols.map(c => {
+              const v = f[c.key]
+              if (v === undefined || v === null || v === '') return c.type === 'number' ? 0 : ''
+              return c.type === 'number' ? Number(v) : String(v)
+            }))
+            stmt.step()
+            stmt.reset()
+          }
+          dbActivo.exec('COMMIT')
+        } catch (e) {
+          try { dbActivo.exec('ROLLBACK') } catch { }
+          // Fallback para esquemas viejos sin PK compuesta: DELETE + INSERT
+          if (e instanceof Error && e.message.includes('ON CONFLICT clause does not match')) {
+            dbActivo.exec('BEGIN')
+            try {
+              const delStmt = dbActivo.prepare(`DELETE FROM "Factura_Items"`)
+              try { delStmt.step() } finally { delStmt.finalize() }
+              const insStmt = dbActivo.prepare(`INSERT INTO "Factura_Items" (${colSql}) VALUES (${placeholders})`)
+              try {
+                for (const f of filas) {
+                  insStmt.bind(cols.map(c => {
+                    const v = f[c.key]
+                    if (v === undefined || v === null || v === '') return c.type === 'number' ? 0 : ''
+                    return c.type === 'number' ? Number(v) : String(v)
+                  }))
+                  insStmt.step()
+                  insStmt.reset()
+                }
+                dbActivo.exec('COMMIT')
+              } finally {
+                insStmt.finalize()
+              }
+            } catch (e2) {
+              try { dbActivo.exec('ROLLBACK') } catch { }
+              throw e2
+            }
+          } else {
+            throw e
+          }
+        } finally {
+          try { stmt?.finalize() } catch { }
+        }
+        programarPersistir()
+        return
+      }
+
       dbActivo.exec('BEGIN')
       let stmt = dbActivo.prepare(`DELETE FROM "${t}"`)
       try {
