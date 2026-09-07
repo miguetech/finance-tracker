@@ -62,6 +62,7 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
   ],
   Factura_Items: [
     { key: 'id_factura', header: 'id_factura', type: S },
+    { key: 'linea', header: 'linea', type: N },
     { key: 'descripcion', header: 'descripcion', type: S },
     { key: 'cantidad', header: 'cantidad', type: N },
     { key: 'precio_unitario', header: 'precio_unitario', type: N },
