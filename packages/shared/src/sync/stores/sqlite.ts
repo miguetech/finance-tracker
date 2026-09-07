@@ -242,6 +242,27 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
       }
     },
 
+    async getAllRowsWithRowid(t: TableName): Promise<(Row & { rowid: number })[]> {
+      const dbActivo = await abrir()
+      const stmt = dbActivo.prepare(`SELECT rowid, * FROM "${t}"`)
+      try {
+        const nombres = stmt.getColumnNames()
+        const out: (Row & { rowid: number })[] = []
+        while (stmt.step()) {
+          const fila: Row & { rowid: number } = { rowid: 0 }
+          for (let i = 0; i < nombres.length; i++) {
+            const val = stmt.get(i) as string | number
+            if (nombres[i] === 'rowid') fila.rowid = Number(val)
+            else fila[nombres[i]] = val
+          }
+          out.push(fila)
+        }
+        return out
+      } finally {
+        stmt.finalize()
+      }
+    },
+
     async replaceTable(t: TableName, filas: Row[]): Promise<void> {
       const dbActivo = await abrir()
       const cols = TABLES[t]
@@ -337,6 +358,24 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
         await persistir()
         db.close()
         db = null
+      }
+    },
+
+    async clearTable(t: TableName): Promise<void> {
+      const dbActivo = await abrir()
+      dbActivo.exec('BEGIN')
+      try {
+        const stmt = dbActivo.prepare(`DELETE FROM "${t}"`)
+        try {
+          stmt.step()
+        } finally {
+          stmt.finalize()
+        }
+        dbActivo.exec('COMMIT')
+        programarPersistir()
+      } catch (e) {
+        try { dbActivo.exec('ROLLBACK') } catch { /* sin transacción abierta */ }
+        throw e
       }
     }
   }

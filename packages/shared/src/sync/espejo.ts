@@ -1,13 +1,16 @@
 import { ddlDesdeTables } from './ddl'
 import { hashTabla } from './hash'
 import { TABLES, type TableName } from '../sheets/tables'
+import { migrarFacturaItemsLinea } from './migrate-factura-items-linea'
 
 export type Row = Record<string, string | number>
 
 export interface EspejoStore {
   init(ddl: string[]): Promise<void>
   getAllRows(t: TableName): Promise<Row[]>
+  getAllRowsWithRowid(t: TableName): Promise<(Row & { rowid: number })[]>
   replaceTable(t: TableName, filas: Row[]): Promise<void>
+  clearTable(t: TableName): Promise<void>
   close(): Promise<void>
 }
 
@@ -45,6 +48,7 @@ export function crearEspejo(deps: EspejoDeps) {
     initPromise ??= (async () => {
       const ddl = ddlDesdeTables().flatMap(d => [d.create, ...d.indexes])
       await store.init(ddl)
+      await migrarFacturaItemsLinea(store)
     })()
     return initPromise
   }

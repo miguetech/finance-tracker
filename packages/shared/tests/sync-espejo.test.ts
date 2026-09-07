@@ -8,7 +8,9 @@ function storeMemoria(): EspejoStore & { datos: Map<string, unknown[]> } {
     datos,
     init: vi.fn(async () => {}),
     getAllRows: async (t) => (datos.get(t) ?? []) as never,
+    getAllRowsWithRowid: async (t) => ((datos.get(t) ?? []) as never).map((r, i) => ({ ...r, rowid: i + 1 })),
     replaceTable: vi.fn(async (t, filas) => { datos.set(t, filas) }),
+    clearTable: vi.fn(async (t) => { datos.set(t, []) }),
     close: vi.fn(async () => {})
   }
 }

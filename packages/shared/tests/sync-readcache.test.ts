@@ -7,7 +7,9 @@ function storeCon(tabla: string, filas: Record<string, string | number>[]) {
   const store: EspejoStore = {
     init: async () => {}, close: async () => {},
     getAllRows: async t => (datos.get(t) ?? []) as never,
-    replaceTable: async () => {}
+    getAllRowsWithRowid: async t => ((datos.get(t) ?? []) as never).map((r, i) => ({ ...r, rowid: i + 1 })),
+    replaceTable: async () => {},
+    clearTable: async () => {}
   }
   return crearEspejo({ store, fetchTable: async () => [] })
 }
