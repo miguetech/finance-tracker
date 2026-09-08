@@ -66,4 +66,17 @@ describe.skipIf(!moduloDisponible)('Factura_Items UPSERT', () => {
     expect(line1!.descripcion).toBe('Actualizado')
     expect(line2!.descripcion).toBe('Nueva linea')
   })
+
+  it('composite PK constraint rejects duplicate (id_factura, linea)', async () => {
+    await store.replaceTable('Factura_Items', [{
+      id_factura: 'F-001', linea: 1, descripcion: 'A', cantidad: 1, precio_unitario: 100, importe: 100, id_producto: ''
+    }])
+
+    const db = store.getDb()
+    expect(db).not.toBeNull()
+    expect(() => {
+      db!.exec(`INSERT INTO "Factura_Items" ("id_factura","linea","descripcion","cantidad","precio_unitario","importe","id_producto")
+               VALUES ('F-001', 1, 'B', 1, 100, 100, '')`)
+    }).toThrow(/UNIQUE constraint failed|PRIMARY KEY/)
+  })
 })

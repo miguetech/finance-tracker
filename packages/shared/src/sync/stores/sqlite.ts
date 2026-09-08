@@ -377,6 +377,10 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
         try { dbActivo.exec('ROLLBACK') } catch { /* sin transacción abierta */ }
         throw e
       }
+    },
+
+    getDb(): SqliteDb | null {
+      return db
     }
   }
 }
