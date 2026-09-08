@@ -122,3 +122,59 @@ describe('tablas sin origen (fetchTablas → null)', () => {
     expect(new Set(fetchTablas.mock.calls.at(-1)![0])).toEqual(new Set(TABLAS_CALIENTES))
   })
 })
+
+describe('Factura_Items composite PK integration', () => {
+  it('full pull cycle with Factura_Items composite PK works', async () => {
+    const { crearSqliteStore } = await import('../src/sync/stores/sqlite')
+    const { ddlDesdeTables } = await import('../src/sync/ddl')
+    const { TABLES } = await import('../src/sheets/tables')
+    const { crearEspejo } = await import('../src/sync/espejo')
+
+    const store = await crearSqliteStore(':memory:')
+    const ddl = (await ddlDesdeTables()).flatMap(d => [d.create, ...d.indexes])
+    await store.init(ddl)
+
+    const espejo = crearEspejo({
+      store,
+      fetchTablas: async (tablas) => {
+        if (tablas.includes('Factura_Items')) {
+          return {
+            Factura_Items: [
+              { id_factura: 'F-001', linea: 1, descripcion: 'Item 1', cantidad: 1, precio_unitario: 100, importe: 100, id_producto: '' },
+              { id_factura: 'F-001', linea: 2, descripcion: 'Item 2', cantidad: 2, precio_unitario: 50, importe: 100, id_producto: '' }
+            ]
+          }
+        }
+        return {}
+      }
+    })
+
+    const changed = await espejo.pull(['Factura_Items'], { soloVivo: true })
+    expect(changed).toContain('Factura_Items')
+
+    const rows = await store.getAllRows('Factura_Items')
+    expect(rows).toHaveLength(2)
+    expect(rows.find(r => r.linea === 1)!.descripcion).toBe('Item 1')
+    expect(rows.find(r => r.linea === 2)!.descripcion).toBe('Item 2')
+
+    const espejo2 = crearEspejo({
+      store,
+      fetchTablas: async () => ({
+        Factura_Items: [
+          { id_factura: 'F-001', linea: 1, descripcion: 'Item 1 MODIFICADO', cantidad: 3, precio_unitario: 100, importe: 300, id_producto: '' },
+          { id_factura: 'F-001', linea: 2, descripcion: 'Item 2', cantidad: 2, precio_unitario: 50, importe: 100, id_producto: '' }
+        ]
+      })
+    })
+
+    const changed2 = await espejo2.pull(['Factura_Items'], { soloVivo: true })
+    expect(changed2).toContain('Factura_Items')
+
+    const rows2 = await store.getAllRows('Factura_Items')
+    expect(rows2).toHaveLength(2)
+    expect(rows2.find(r => r.linea === 1)!.descripcion).toBe('Item 1 MODIFICADO')
+    expect(rows2.find(r => r.linea === 1)!.cantidad).toBe(3)
+
+    await store.close()
+  })
+})
