@@ -208,7 +208,7 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
         await store.replaceTable(baja.tabla, filas.filter(f => String(f[baja.idKey]) !== idBaja))
         if (baja.tabla === 'Facturas') {
           const items = await store.getAllRows('Factura_Items')
-          await store.replaceTable('Factura_Items', items.filter(i => String(i.id_factura) !== idBaja))
+          await store.replaceTable('Factura_Items', items.filter(i => String(i.invoice_id) !== idBaja))
         }
         for (const key of QUERY_KEYS_POR_TABLA[baja.tabla] ?? []) void qc.invalidateQueries({ queryKey: [key] })
       } catch { /* la baja llegará con el pull al reconectar */ }

@@ -7,6 +7,6 @@ test('Factura_Items DDL has composite PK and not in SIN_PK', () => {
   const facturaItems = result.find(t => t.tabla === 'Factura_Items')
   
   expect(facturaItems).toBeDefined()
-  expect(facturaItems!.create).toContain('PRIMARY KEY ("id_factura", "linea")')
-  expect(facturaItems!.create).not.toContain('"id_factura" TEXT PRIMARY KEY')
+  expect(facturaItems!.create).toContain('PRIMARY KEY ("invoice_id", "linea")')
+  expect(facturaItems!.create).not.toContain('"invoice_id" TEXT PRIMARY KEY')
 })

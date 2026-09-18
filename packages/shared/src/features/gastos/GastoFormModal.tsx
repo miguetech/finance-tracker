@@ -13,9 +13,9 @@ export function GastoFormModal({ open, onClose, initial }: { open: boolean; onCl
   const { saveGasto } = useGastos()
   const metodos = useMetodosPago()
   const toast = useToast()
-  const [form, setForm] = useState({ fecha: todayLocal(), categoria: '', descripcion: '', monto: '', metodo_pago: 'Efectivo', proveedor: '', moneda: '' })
+  const [form, setForm] = useState({ fecha: todayLocal(), categoria: '', descripcion: '', monto: '', payment_method: 'Efectivo', proveedor: '', moneda: '' })
   useEffect(() => {
-    if (open) setForm(initial ? { ...initial, monto: String(initial.monto) } : { fecha: todayLocal(), categoria: '', descripcion: '', monto: '', metodo_pago: 'Efectivo', proveedor: '', moneda: '' })
+    if (open) setForm(initial ? { ...initial, monto: String(initial.monto) } : { fecha: todayLocal(), categoria: '', descripcion: '', monto: '', payment_method: 'Efectivo', proveedor: '', moneda: '' })
   }, [open, initial])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   const setCategoria = (v: string) => setForm(f => ({
@@ -44,14 +44,14 @@ export function GastoFormModal({ open, onClose, initial }: { open: boolean; onCl
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">{t('common.fecha')}</label><Input type="date" value={form.fecha} onChange={set('fecha')} /></div>
           <div><label className="text-xs text-gray-500">{t('common.categoria')}</label>
-            <CategoriaQuickSelect configKey="categorias_gastos" value={form.categoria} onChange={setCategoria} />
+            <CategoriaQuickSelect configKey="expense_categories" value={form.categoria} onChange={setCategoria} />
           </div>
         </div>
         <div><label className="text-xs text-gray-500">{t('gastos.descripcion')} *</label><Input value={form.descripcion} onChange={set('descripcion')} /></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">{t('common.monto')} *</label><Input type="number" value={form.monto} onChange={set('monto')} /></div>
           <div><label className="text-xs text-gray-500">{t('common.metodo')}</label>
-            <Select value={form.metodo_pago} onChange={v => setForm(f => ({ ...f, metodo_pago: v }))} options={metodos.map(v => ({ value: v, label: v }))} />
+            <Select value={form.payment_method} onChange={v => setForm(f => ({ ...f, payment_method: v }))} options={metodos.map(v => ({ value: v, label: v }))} />
           </div>
         </div>
         <CurrencySelect label={t('gastos.monedaGasto')} value={form.moneda} onChange={v => setForm(f => ({ ...f, moneda: v }))} />

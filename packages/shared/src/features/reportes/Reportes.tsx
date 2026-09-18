@@ -141,7 +141,7 @@ function TabResumen({ mes, isLoading, reportes, moneda }: { mes: string; isLoadi
 export function MetasChart({ meses }: { meses: string[] }) {
   const { config } = useConfig()
   const moneda = config?.moneda ?? 'USD'
-  const metas = parseMetas(config?.metas_mensuales ?? '')
+  const metas = parseMetas(config?.monthly_goals ?? '')
   const activos = meses.filter(m => metas[m] > 0)
   return <MetasChartInner meses={[...new Set(activos.length ? activos : meses)].sort()} moneda={moneda} />
 }

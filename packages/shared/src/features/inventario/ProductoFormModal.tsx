@@ -21,14 +21,14 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
   const { saveProducto } = useProductos()
   const repo = useRepo()
   const toast = useToast()
-  const [form, setForm] = useState({ nombre: '', categoria: '', unidad: 'pieza', stock: '', stock_minimo: '', moneda: '', precio_costo: '', precio_venta: '', id_proveedor: '', imagen: '', notas: '' })
+  const [form, setForm] = useState({ nombre: '', categoria: '', unidad: 'pieza', stock: '', minimum_stock: '', moneda: '', cost_price: '', sale_price: '', supplier_id: '', imagen: '', notas: '' })
   const [gananciaModo, setGananciaModo] = useState<'precio' | 'pct'>('pct')
   const [imagenFile, setImagenFile] = useState<File | null>(null)
   const [subiendo, setSubiendo] = useState(false)
   const [nuevoProveedor, setNuevoProveedor] = useState(false)
   const [error, setError] = useState('')
 
-  const unidades = (config?.unidades_medida ?? '').split(',').map(s => s.trim()).filter(Boolean)
+  const unidades = (config?.measure_units ?? '').split(',').map(s => s.trim()).filter(Boolean)
   const listaUnidades = unidades.length > 0 ? unidades : UNIDADES_DEFAULT
   const monedas = activeCurrencies(config)
   const monedaProducto = form.moneda || config?.moneda || 'USD'
@@ -38,36 +38,36 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
       setImagenFile(null)
       setNuevoProveedor(false)
       setForm(initial
-        ? { nombre: initial.nombre, categoria: initial.categoria, unidad: initial.unidad || 'pieza', stock: String(initial.stock), stock_minimo: String(initial.stock_minimo), moneda: initial.moneda || config?.moneda || '', precio_costo: String(initial.precio_costo), precio_venta: String(initial.precio_venta), id_proveedor: initial.id_proveedor, imagen: initial.imagen, notas: initial.notas }
-        : { nombre: '', categoria: '', unidad: listaUnidades[0] ?? 'pieza', stock: '0', stock_minimo: '', moneda: config?.moneda || '', precio_costo: '', precio_venta: '', id_proveedor: '', imagen: '', notas: '' })
+        ? { nombre: initial.nombre, categoria: initial.categoria, unidad: initial.unidad || 'pieza', stock: String(initial.stock), minimum_stock: String(initial.minimum_stock), moneda: initial.moneda || config?.moneda || '', cost_price: String(initial.cost_price), sale_price: String(initial.sale_price), supplier_id: initial.supplier_id, imagen: initial.imagen, notas: initial.notas }
+        : { nombre: '', categoria: '', unidad: listaUnidades[0] ?? 'pieza', stock: '0', minimum_stock: '', moneda: config?.moneda || '', cost_price: '', sale_price: '', supplier_id: '', imagen: '', notas: '' })
     }
   }, [open, initial])
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
 
   // Cálculo automático del precio o % de ganancia según la moneda seleccionada.
-  const costo = Number(form.precio_costo) || 0
-  const venta = Number(form.precio_venta) || 0
+  const costo = Number(form.cost_price) || 0
+  const venta = Number(form.sale_price) || 0
   const aplicarGananciaPct = (pct: number) => {
     const dec = getCurrency(monedaProducto).decimals
     const f = Math.pow(10, dec)
     const precio = Math.round(costo * (1 + pct / 100) * f) / f
-    setForm(fm => ({ ...fm, precio_venta: String(precio) }))
+    setForm(fm => ({ ...fm, sale_price: String(precio) }))
     setGananciaModo('precio')
   }
 
   const submit = async () => {
     setError('')
     if (!form.nombre.trim()) { setError(t('errors.nombreObligatorio')); return }
-    if (form.precio_costo.trim() !== '' && Number.isNaN(Number(form.precio_costo))) { setError(t('errors.costoInvalido')); return }
-    if (form.precio_venta.trim() !== '' && Number.isNaN(Number(form.precio_venta))) { setError(t('errors.precioInvalido')); return }
+    if (form.cost_price.trim() !== '' && Number.isNaN(Number(form.cost_price))) { setError(t('errors.costoInvalido')); return }
+    if (form.sale_price.trim() !== '' && Number.isNaN(Number(form.sale_price))) { setError(t('errors.precioInvalido')); return }
     setSubiendo(true)
     try {
       let imagenUrl = form.imagen
       if (imagenFile) {
         const { base64, mimeType } = await optimizeImage(imagenFile)
         try {
-          imagenUrl = await repo.uploadImagen({ nombre: `producto_${initial?.id_producto || uid('prod_')}.${mimeType.split('/')[1] || 'png'}`, mimeType, base64, modulo: 'inventario' })
+          imagenUrl = await repo.uploadImagen({ nombre: `producto_${initial?.product_id || uid('prod_')}.${mimeType.split('/')[1] || 'png'}`, mimeType, base64, modulo: 'inventario' })
         } catch {
           // Resiliencia: si Drive falla (permisos o sin conexión), se guarda la
           // imagen optimizada embebida para no perder el registro.
@@ -75,24 +75,24 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
           toast(t('imagenes.subiendo') + ': local', 'error')
         }
       }
-      const prov = proveedores.find(p => p.id_proveedor === form.id_proveedor)
+      const prov = proveedores.find(p => p.supplier_id === form.supplier_id)
       await saveProducto.mutateAsync({
         ...(initial as Producto | undefined),
-        id_producto: initial?.id_producto || uid('prod_'),
+        product_id: initial?.product_id || uid('prod_'),
         nombre: form.nombre.trim(),
         categoria: form.categoria,
         unidad: form.unidad,
         stock: Number(form.stock) || 0,
-        stock_minimo: Number(form.stock_minimo) || 0,
+        minimum_stock: Number(form.minimum_stock) || 0,
         moneda: monedaProducto,
-        precio_costo: form.precio_costo.trim() === '' ? 0 : Number(form.precio_costo),
-        precio_venta: form.precio_venta.trim() === '' ? 0 : Number(form.precio_venta),
-        id_proveedor: form.id_proveedor,
-        nombre_proveedor: prov?.nombre || '',
+        cost_price: form.cost_price.trim() === '' ? 0 : Number(form.cost_price),
+        sale_price: form.sale_price.trim() === '' ? 0 : Number(form.sale_price),
+        supplier_id: form.supplier_id,
+        supplier_name: prov?.nombre || '',
         imagen: imagenUrl,
         notas: form.notas,
         activo: initial?.activo || 'true',
-        fecha_registro: initial?.fecha_registro || todayLocal()
+        created_at: initial?.created_at || todayLocal()
       } as Producto)
       toast(initial ? t('inventario.guardado') : t('inventario.registrado'))
       onSaved?.()
@@ -120,7 +120,7 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
           <div className="sm:col-span-2"><label className="text-xs text-gray-500">{t('common.nombre')} *</label><Input value={form.nombre} onChange={set('nombre')} placeholder={t('inventario.ejNombre')} /></div>
           <div>
             <label className="text-xs text-gray-500">{t('common.categoria')}</label>
-            <CategoriaQuickSelect configKey="categorias_inventario" value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} />
+            <CategoriaQuickSelect configKey="inventory_categories" value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} />
           </div>
           <div>
             <label className="text-xs text-gray-500">{t('inventario.unidad')}</label>
@@ -130,7 +130,7 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">{t('inventario.stockActual')}</label><Input type="number" min={0} value={form.stock} onChange={set('stock')} /></div>
-          <div><label className="text-xs text-gray-500">{t('inventario.stockMinimoAlerta')}</label><Input type="number" min={0} value={form.stock_minimo} onChange={set('stock_minimo')} placeholder={t('inventario.ej5')} /></div>
+          <div><label className="text-xs text-gray-500">{t('inventario.stockMinimoAlerta')}</label><Input type="number" min={0} value={form.minimum_stock} onChange={set('minimum_stock')} placeholder={t('inventario.ej5')} /></div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -146,7 +146,7 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div><label className="text-xs text-gray-500">{t('inventario.costoCompra')} ({getCurrency(monedaProducto).symbol})</label><Input type="number" min={0} step="any" value={form.precio_costo} onChange={set('precio_costo')} placeholder={t('inventario.ejCosto')} /></div>
+          <div><label className="text-xs text-gray-500">{t('inventario.costoCompra')} ({getCurrency(monedaProducto).symbol})</label><Input type="number" min={0} step="any" value={form.cost_price} onChange={set('cost_price')} placeholder={t('inventario.ejCosto')} /></div>
           <div>
             <label className="text-xs text-gray-500 flex items-center justify-between">
               <span>{t('inventario.precioVentaLabel')}</span>
@@ -158,8 +158,8 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
             {gananciaModo === 'pct' ? (
               <div className="flex gap-1.5 items-center">
                 <div className="relative flex-1">
-                  <Input type="number" min={0} step="any" value={form.precio_venta}
-                    onChange={e => setForm(f => ({ ...f, precio_venta: e.target.value }))}
+                  <Input type="number" min={0} step="any" value={form.sale_price}
+                    onChange={e => setForm(f => ({ ...f, sale_price: e.target.value }))}
                     placeholder={`${t('inventario.ejVenta')} (${monedaProducto})`} />
                 </div>
                 {costo > 0 && (
@@ -174,7 +174,7 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
                 )}
               </div>
             ) : (
-              <Input type="number" min={0} step="any" value={form.precio_venta} onChange={set('precio_venta')}
+              <Input type="number" min={0} step="any" value={form.sale_price} onChange={set('sale_price')}
                 placeholder={`${t('inventario.ejVenta')} (${monedaProducto})`} />
             )}
             {costo > 0 && venta > 0 && (
@@ -195,11 +195,11 @@ export function ProductoFormModal({ open, onClose, initial, onSaved }: { open: b
             )}
           </div>
           {nuevoProveedor ? (
-            <QuickProveedor onCreated={(id) => { setForm(f => ({ ...f, id_proveedor: id })); setNuevoProveedor(false) }} onCancel={() => setNuevoProveedor(false)}
+            <QuickProveedor onCreated={(id) => { setForm(f => ({ ...f, supplier_id: id })); setNuevoProveedor(false) }} onCancel={() => setNuevoProveedor(false)}
               guardar={saveProveedor.mutateAsync.bind(saveProveedor)} />
           ) : (
-            <SearchSelect value={form.id_proveedor} onChange={v => setForm(f => ({ ...f, id_proveedor: v }))}
-              options={proveedores.map(p => ({ value: p.id_proveedor, label: p.nombre }))}
+            <SearchSelect value={form.supplier_id} onChange={v => setForm(f => ({ ...f, supplier_id: v }))}
+              options={proveedores.map(p => ({ value: p.supplier_id, label: p.nombre }))}
               placeholder={t('inventario.sinProveedor')} />
           )}
         </div>
@@ -226,9 +226,9 @@ function QuickProveedor({ onCreated, onCancel, guardar }: {
     if (!nombre.trim()) { setErr(t('errors.nombreObligatorio')); return }
     setGuardando(true)
     try {
-      const saved = await guardar({ id_proveedor: uid('prov_'), nombre: nombre.trim(), rfc: '', email: '', telefono: telefono.trim(), direccion: '', fecha_registro: todayLocal() })
+      const saved = await guardar({ supplier_id: uid('prov_'), nombre: nombre.trim(), rfc: '', email: '', telefono: telefono.trim(), direccion: '', created_at: todayLocal() })
       toast(t('proveedores.creadoSeleccionado'))
-      onCreated(saved.id_proveedor)
+      onCreated(saved.supplier_id)
     } catch (e) {
       setErr((e as Error).message)
     } finally {
@@ -250,11 +250,11 @@ function QuickProveedor({ onCreated, onCancel, guardar }: {
 }
 
 interface ProveedorInput {
-  id_proveedor: string
+  supplier_id: string
   nombre: string
   rfc: string
   email: string
   telefono: string
   direccion: string
-  fecha_registro: string
+  created_at: string
 }

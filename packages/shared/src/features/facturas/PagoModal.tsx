@@ -28,11 +28,11 @@ export function PagoModal({ origen, onClose }: { origen: { id: string; tipo: 'co
   // Equivalencias según la tasa del día configurada.
   const equivalente = useMemo(() => (distinta ? convert(n, monedaSel, monedaDoc, config) : n), [distinta, n, monedaSel, monedaDoc, config])
   const saldoEquivalente = useMemo(() => (distinta ? convert(origen.saldo, monedaDoc, monedaSel, config) : origen.saldo), [distinta, origen.saldo, monedaDoc, monedaSel, config])
-  const rates = parseRates(config?.tasas_cambio ?? '')
+  const rates = parseRates(config?.exchange_rates ?? '')
   const frescas = tasasFrescas(rates)
 
   // Comisión avanzada del método de pago seleccionado (% y/o fijo mínimo).
-  const comisionesMetodos = useMemo(() => parseComisionesMetodos(config?.comisiones_metodos), [config?.comisiones_metodos])
+  const comisionesMetodos = useMemo(() => parseComisionesMetodos(config?.method_fees), [config?.method_fees])
   const [comisionAbierta, setComisionAbierta] = useState(false)
   const comisionActual: ComisionMetodo = comisionesMetodos[metodo] ?? {}
   const comisionEstimada = comisionTransaccion(equivalente, comisionActual)
@@ -46,8 +46,8 @@ export function PagoModal({ origen, onClose }: { origen: { id: string; tipo: 'co
     setGuardando(true)
     try {
       await registerPago.mutateAsync({
-        tipo: origen.tipo, id_origen: origen.id, fecha: todayLocal(), monto: n,
-        metodo_pago: metodo, notas: '', ...(distinta ? { moneda: monedaSel } : {})
+        tipo: origen.tipo, origin_id: origen.id, fecha: todayLocal(), monto: n,
+        payment_method: metodo, notas: '', ...(distinta ? { moneda: monedaSel } : {})
       })
       onClose()
     } catch (e) {
@@ -117,12 +117,12 @@ function ComisionMetodoForm({ metodo, actual, monedaBase }: { metodo: string; ac
   const guardar = async () => {
     setGuardando(true)
     try {
-      const todos = parseComisionesMetodos(config?.comisiones_metodos)
+      const todos = parseComisionesMetodos(config?.method_fees)
       const p = Number(pct) || 0
       const m = Number(minimo) || 0
       if (p <= 0 && m <= 0) delete todos[metodo]
       else todos[metodo] = { ...(p > 0 ? { pct: p } : {}), ...(m > 0 ? { minimo_fijo: m } : {}) }
-      await saveConfig.mutateAsync({ ...(config as NonNullable<typeof config>), comisiones_metodos: JSON.stringify(todos) })
+      await saveConfig.mutateAsync({ ...(config as NonNullable<typeof config>), method_fees: JSON.stringify(todos) })
       toast(t('pago.comisionGuardada'))
     } catch (e) {
       toast((e as Error).message, 'error')

@@ -16,27 +16,27 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
   const { proveedores, saveProveedor } = useProveedores()
   const { createCxp } = useCxp()
   const toast = useToast()
-  const [form, setForm] = useState({ id_proveedor: '', folio_documento: '', categoria: '', descripcion: '', fecha_vencimiento: '', monto_total: '', moneda: '', notas: '' })
+  const [form, setForm] = useState({ supplier_id: '', document_serial: '', categoria: '', descripcion: '', due_date: '', total_amount: '', moneda: '', notas: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [nuevoProv, setNuevoProv] = useState(false)
   const { guardando, guardar } = useSaveGuard()
   useEffect(() => {
     if (open) {
-      setForm({ id_proveedor: '', folio_documento: '', categoria: '', descripcion: '', fecha_vencimiento: '', monto_total: '', moneda: '', notas: '' })
+      setForm({ supplier_id: '', document_serial: '', categoria: '', descripcion: '', due_date: '', total_amount: '', moneda: '', notas: '' })
       setErrors({})
     }
   }, [open])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   const submit = () => guardar(async () => {
     const errs: Record<string, string> = {}
-    if (!form.id_proveedor) errs.proveedor = t('errors.proveedorRequerido')
+    if (!form.supplier_id) errs.proveedor = t('errors.proveedorRequerido')
     if (!form.descripcion.trim()) errs.descripcion = t('errors.descripcionObligatoria')
-    if (!form.fecha_vencimiento) errs.fecha = t('errors.fechaVencimientoObligatoria')
-    if (!form.monto_total || Number(form.monto_total) <= 0) errs.monto = t('errors.montoMayorCero')
+    if (!form.due_date) errs.fecha = t('errors.fechaVencimientoObligatoria')
+    if (!form.total_amount || Number(form.total_amount) <= 0) errs.monto = t('errors.montoMayorCero')
     setErrors(errs)
     if (Object.keys(errs).length > 0) return
     try {
-      await createCxp.mutateAsync({ ...form, fecha_emision: todayLocal(), monto_total: Number(form.monto_total) })
+      await createCxp.mutateAsync({ ...form, issue_date: todayLocal(), total_amount: Number(form.total_amount) })
       toast(t('cuentas.creada'))
       onClose()
     } catch (e) {
@@ -44,7 +44,7 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
     }
   })
   const onProveedorCreado = (p: Proveedor) => {
-    setForm(f => ({ ...f, id_proveedor: p.id_proveedor }))
+    setForm(f => ({ ...f, supplier_id: p.supplier_id }))
     setNuevoProv(false)
     setErrors(e => ({ ...e, proveedor: '' }))
     toast(t('proveedores.creadoSeleccionado'))
@@ -60,19 +60,19 @@ export function CxpFormModal({ open, onClose }: { open: boolean; onClose: () => 
               <IconPlus className="w-3.5 h-3.5" /> {t('proveedores.nuevo')}
             </button>
           </div>
-          <Select value={form.id_proveedor} onChange={v => { setForm(f => ({ ...f, id_proveedor: v })); setErrors(e => ({ ...e, proveedor: '' })) }}
-            options={proveedores.map(p => ({ value: p.id_proveedor, label: p.nombre }))} placeholder={t('common.seleccionar')} error={errors.proveedor} />
+          <Select value={form.supplier_id} onChange={v => { setForm(f => ({ ...f, supplier_id: v })); setErrors(e => ({ ...e, proveedor: '' })) }}
+            options={proveedores.map(p => ({ value: p.supplier_id, label: p.nombre }))} placeholder={t('common.seleccionar')} error={errors.proveedor} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div><label className="text-xs text-gray-500">{t('cuentas.folioDoc')}</label><Input value={form.folio_documento} onChange={set('folio_documento')} /></div>
+          <div><label className="text-xs text-gray-500">{t('cuentas.folioDoc')}</label><Input value={form.document_serial} onChange={set('document_serial')} /></div>
           <div><label className="text-xs text-gray-500">{t('common.categoria')}</label>
-            <CategoriaQuickSelect configKey="categorias_cxp" value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} />
+            <CategoriaQuickSelect configKey="ap_categories" value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} />
           </div>
         </div>
         <div><label className="text-xs text-gray-500">{t('cuentas.descripcion')} *</label><Input value={form.descripcion} onChange={set('descripcion')} error={errors.descripcion} /></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div><label className="text-xs text-gray-500">{t('cuentas.fechaVencimiento')} *</label><Input type="date" value={form.fecha_vencimiento} onChange={set('fecha_vencimiento')} error={errors.fecha} /></div>
-          <div><label className="text-xs text-gray-500">{t('cuentas.montoTotal')} *</label><Input type="number" value={form.monto_total} onChange={set('monto_total')} error={errors.monto} /></div>
+          <div><label className="text-xs text-gray-500">{t('cuentas.fechaVencimiento')} *</label><Input type="date" value={form.due_date} onChange={set('due_date')} error={errors.fecha} /></div>
+          <div><label className="text-xs text-gray-500">{t('cuentas.montoTotal')} *</label><Input type="number" value={form.total_amount} onChange={set('total_amount')} error={errors.monto} /></div>
         </div>
         <div><label className="text-xs text-gray-500">{t('cuentas.monedaDeuda')}</label><CurrencySelect value={form.moneda} onChange={v => setForm(f => ({ ...f, moneda: v }))} /></div>
         <div><label className="text-xs text-gray-500">{t('common.notas')}</label><Textarea value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} rows={3} /></div>

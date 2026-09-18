@@ -5,18 +5,18 @@ import type { ProductoBajoStock, MovimientosMes, StatsProducto, RangoFecha } fro
 /** Productos por debajo (o igual) del nivel mínimo configurado. */
 export function productosStockBajo(productos: Producto[]): ProductoBajoStock[] {
   return productos
-    .filter(p => p.activo !== 'false' && Number(p.stock_minimo) > 0 && Number(p.stock) <= Number(p.stock_minimo))
+    .filter(p => p.activo !== 'false' && Number(p.minimum_stock) > 0 && Number(p.stock) <= Number(p.minimum_stock))
     .map(p => ({
-      id_producto: p.id_producto,
+      product_id: p.product_id,
       nombre: p.nombre,
       categoria: p.categoria,
       unidad: p.unidad,
       stock: Number(p.stock) || 0,
-      stock_minimo: Number(p.stock_minimo),
-      faltante: round2(Number(p.stock_minimo) - (Number(p.stock) || 0)),
-      nombre_proveedor: p.nombre_proveedor || ''
+      minimum_stock: Number(p.minimum_stock),
+      faltante: round2(Number(p.minimum_stock) - (Number(p.stock) || 0)),
+      supplier_name: p.supplier_name || ''
     }))
-    .sort((a, b) => a.stock - a.stock_minimo - (b.stock - b.stock_minimo))
+    .sort((a, b) => a.stock - a.minimum_stock - (b.stock - b.minimum_stock))
 }
 
 function monthKey(fecha: string): string {
@@ -55,21 +55,21 @@ export interface InputMultiproducto {
 export function statsMultiproducto(input: InputMultiproducto): StatsProducto[] {
   const { productos, items, facturas, movimientos, ids, rango } = input
   const idSet = new Set(ids)
-  const porId = new Map(productos.map(p => [p.id_producto, p]))
+  const porId = new Map(productos.map(p => [p.product_id, p]))
 
   // Facturas del rango con su moneda/tipo_cambio para convertir a base.
-  const facs = facturas.filter(f => enRangoF(f.fecha_emision, rango))
-  const facPorId = new Map(facs.map(f => [f.id_factura, f]))
+  const facs = facturas.filter(f => enRangoF(f.issue_date, rango))
+  const facPorId = new Map(facs.map(f => [f.invoice_id, f]))
 
   const vendidas = new Map<string, number>()
   const ingresosBase = new Map<string, number>()
   for (const it of items) {
-    const pid = (it as FacturaItem & { id_producto?: string }).id_producto
+    const pid = (it as FacturaItem & { product_id?: string }).product_id
     if (!pid || !idSet.has(pid)) continue
-    const fac = facPorId.get((it as FacturaItem & { id_factura?: string }).id_factura ?? '')
+    const fac = facPorId.get((it as FacturaItem & { invoice_id?: string }).invoice_id ?? '')
     if (!fac) continue
     vendidas.set(pid, round2((vendidas.get(pid) ?? 0) + it.cantidad))
-    const tc = Number(fac.tipo_cambio) || 1
+    const tc = Number(fac.exchange_rate) || 1
     const ingresoBase = tc > 0 ? it.importe / tc : it.importe
     ingresosBase.set(pid, round2((ingresosBase.get(pid) ?? 0) + ingresoBase))
   }
@@ -77,9 +77,9 @@ export function statsMultiproducto(input: InputMultiproducto): StatsProducto[] {
   const dias = diasRango(rango)
   const salidaPeriodo = new Map<string, number>()
   for (const m of movimientos) {
-    if (!idSet.has(m.id_producto) || m.tipo !== 'salida') continue
+    if (!idSet.has(m.product_id) || m.tipo !== 'salida') continue
     if ((rango.desde && m.fecha.slice(0, 10) < rango.desde) || (rango.hasta && m.fecha.slice(0, 10) > rango.hasta)) continue
-    salidaPeriodo.set(m.id_producto, round2((salidaPeriodo.get(m.id_producto) ?? 0) + m.cantidad))
+    salidaPeriodo.set(m.product_id, round2((salidaPeriodo.get(m.product_id) ?? 0) + m.cantidad))
   }
 
   const rows: Omit<StatsProducto, 'contribucion_pct'>[] = []
@@ -87,11 +87,11 @@ export function statsMultiproducto(input: InputMultiproducto): StatsProducto[] {
     const p = porId.get(pid)
     if (!p) continue
     const unidades = round2(vendidas.get(pid) ?? 0)
-    const margenUnitario = round2((Number(p.precio_venta) || 0) - (Number(p.precio_costo) || 0))
-    const pv = Number(p.precio_venta) || 0
+    const margenUnitario = round2((Number(p.sale_price) || 0) - (Number(p.cost_price) || 0))
+    const pv = Number(p.sale_price) || 0
     const salidas = salidaPeriodo.get(pid) ?? 0
     rows.push({
-      id_producto: pid,
+      product_id: pid,
       nombre: p.nombre,
       categoria: p.categoria,
       unidad: p.unidad,
@@ -117,7 +117,7 @@ export function ventasRapidas(productos: Producto[], movimientos: MovimientoStoc
     items: [],
     facturas: [],
     movimientos,
-    ids: productos.map(p => p.id_producto),
+    ids: productos.map(p => p.product_id),
     rango
   })
     .filter(r => r.velocidad_salida > 0)
@@ -143,31 +143,31 @@ export interface VentaProductoFila {
   folio: string
   cliente: string
   cantidad: number
-  precio_unitario: number
+  unit_price: number
   importe_base: number
 }
 
 /** Historial cronológico de ventas de un producto dentro del rango (importes en base). */
 export function historialVentasProducto(
-  items: (FacturaItem & { id_factura?: string })[],
+  items: (FacturaItem & { invoice_id?: string })[],
   facturas: Factura[],
   idProducto: string,
   rango: RangoFecha
 ): VentaProductoFila[] {
-  const facPorId = new Map(facturas.map(f => [f.id_factura, f]))
+  const facPorId = new Map(facturas.map(f => [f.invoice_id, f]))
   const filas: VentaProductoFila[] = []
   for (const it of items) {
-    const pid = (it as FacturaItem & { id_producto?: string }).id_producto
+    const pid = (it as FacturaItem & { product_id?: string }).product_id
     if (!pid || pid !== idProducto) continue
-    const fac = facPorId.get((it as FacturaItem & { id_factura?: string }).id_factura ?? '')
-    if (!fac || !enRangoF(fac.fecha_emision, rango)) continue
-    const tc = Number(fac.tipo_cambio) || 1
+    const fac = facPorId.get((it as FacturaItem & { invoice_id?: string }).invoice_id ?? '')
+    if (!fac || !enRangoF(fac.issue_date, rango)) continue
+    const tc = Number(fac.exchange_rate) || 1
     filas.push({
-      fecha: fac.fecha_emision,
+      fecha: fac.issue_date,
       folio: fac.folio,
-      cliente: fac.nombre_cliente,
+      cliente: fac.customer_name,
       cantidad: Number(it.cantidad),
-      precio_unitario: Number(it.precio_unitario),
+      unit_price: Number(it.unit_price),
       importe_base: round2(tc > 0 ? Number(it.importe) / tc : Number(it.importe))
     })
   }

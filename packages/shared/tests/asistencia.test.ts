@@ -81,10 +81,10 @@ describe('asistencia de empleados', () => {
   it('saveAsistencia crea y reemplaza por empleado+fecha', async () => {
     const f = fakeApi({ Empleados: [[], ['emp_1', 'Luis', '', 'Mozo', 200, 'USD', '2026-01-01', 'true', '08:00', '17:00', 'mensual', 0]] })
     const repo = makeRepo(f)
-    await repo.saveAsistencia({ id_empleado: 'emp_1', fecha: '2026-08-10', hora_entrada: '08:00', hora_salida: '17:00', notas: '' })
+    await repo.saveAsistencia({ employee_id: 'emp_1', fecha: '2026-08-10', clock_in: '08:00', clock_out: '17:00', notas: '' })
     expect((f.grid.get('Asistencias') ?? []).filter(r => r.some(v => v !== ''))).toHaveLength(1)
     // Mismo día: se reemplaza, no duplica
-    await repo.saveAsistencia({ id_empleado: 'emp_1', fecha: '2026-08-10', hora_entrada: '08:30', hora_salida: '16:00', notas: '' })
+    await repo.saveAsistencia({ employee_id: 'emp_1', fecha: '2026-08-10', clock_in: '08:30', clock_out: '16:00', notas: '' })
     const rows = (f.grid.get('Asistencias') ?? []).filter(r => r.some(v => v !== ''))
     expect(rows).toHaveLength(1)
     expect(String(rows[0][4])).toContain('08:30')
@@ -100,7 +100,7 @@ describe('asistencia de empleados', () => {
       ]
     })
     const repo = makeRepo(f)
-    const deLuisAgosto = await repo.listAsistencias({ id_empleado: 'emp_1', desde: '2026-08-01', hasta: '2026-08-31' })
+    const deLuisAgosto = await repo.listAsistencias({ employee_id: 'emp_1', desde: '2026-08-01', hasta: '2026-08-31' })
     expect(deLuisAgosto).toHaveLength(1)
     expect(deLuisAgosto[0].fecha).toBe('2026-08-10')
   })
@@ -115,10 +115,10 @@ describe('asistencia de empleados', () => {
 
 describe('desglose de empleado (expeditillo)', () => {
   const emp: Empleado = {
-    id_empleado: 'emp_1', nombre: 'Luis', rfc: '', puesto: 'Mozo', salario: 300,
-    salario_moneda: 'USD', fecha_ingreso: '2026-01-01', activo: 'true',
-    hora_entrada: '08:00', hora_salida: '17:00', esquema_pago: 'mensual', tarifa_hora_extra: 5,
-    dias_laborales: '1,2,3,4,5'
+    employee_id: 'emp_1', nombre: 'Luis', rfc: '', puesto: 'Mozo', salario: 300,
+    salary_currency: 'USD', hire_date: '2026-01-01', activo: 'true',
+    clock_in: '08:00', clock_out: '17:00', pay_schedule: 'mensual', overtime_rate: 5,
+    work_days: '1,2,3,4,5'
   }
 
   it('horasEntre calcula horas entre marcas HH:MM', () => {
@@ -130,12 +130,12 @@ describe('desglose de empleado (expeditillo)', () => {
   it('desgloseEmpleado consolida días, horas y pagos del mes', () => {
     const d = desgloseEmpleado(emp, {
       asistencias: [
-        { fecha: '2026-08-03', hora_entrada: '08:00', hora_salida: '17:00' },
-        { fecha: '2026-08-04', hora_entrada: '08:00', hora_salida: '17:00' },
-        { fecha: '2026-07-20', hora_entrada: '08:00', hora_salida: '17:00' }
+        { fecha: '2026-08-03', clock_in: '08:00', clock_out: '17:00' },
+        { fecha: '2026-08-04', clock_in: '08:00', clock_out: '17:00' },
+        { fecha: '2026-07-20', clock_in: '08:00', clock_out: '17:00' }
       ],
-      detalles: [{ id_detalle: 'd1', id_empleado: 'emp_1', mes: '2026-08', sueldo_base: 300, horas_extra: 4, tarifa_hora_extra: 5, monto_horas_extra: 20, bonos: 0, comisiones: 0, total: 320, moneda: 'USD', metodo_pago: 'Efectivo', pagos_divididos: '', fecha: '2026-08-30', id_gasto: '' }],
-      gastos: [{ id_gasto: 'g1', fecha: '2026-08-30', categoria: 'Nómina', descripcion: '', monto: 160, metodo_pago: 'Efectivo', proveedor: 'Luis', moneda: 'USD', tipo_cambio: 1 }]
+      detalles: [{ id_detalle: 'd1', employee_id: 'emp_1', mes: '2026-08', base_salary: 300, horas_extra: 4, overtime_rate: 5, overtime_amount: 20, bonos: 0, comisiones: 0, total: 320, moneda: 'USD', payment_method: 'Efectivo', split_payments: '', fecha: '2026-08-30', expense_id: '' }],
+      gastos: [{ expense_id: 'g1', fecha: '2026-08-30', categoria: 'Nómina', descripcion: '', monto: 160, payment_method: 'Efectivo', proveedor: 'Luis', moneda: 'USD', exchange_rate: 1 }]
     }, '2026-08')
     expect(d.diasTrabajados).toBe(2)
     expect(d.horasTrabajadas).toBe(18)

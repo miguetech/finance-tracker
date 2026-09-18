@@ -9,7 +9,7 @@ afterEach(() => {
 
 const c = (over: Partial<CodigoAcceso> = {}): CodigoAcceso => ({
   codigo: 'ABC-2026-XXXX', rol: 'solo_lectura', modulos_ver: '', modulos_editar: '',
-  expira_en: '', usos_max: '', usos: '', responsable: '', email: '', creado: '2026-01-01', activo: 'true', ...over
+  expires_at: '', max_uses: '', usos: '', responsable: '', email: '', creado: '2026-01-01', activo: 'true', ...over
 })
 
 describe('prefijoDesdeNombre', () => {
@@ -71,9 +71,9 @@ describe('esCodigoValido', () => {
 })
 
 describe('usos', () => {
-  it('usosInfinitos con usos_max vacío', () => {
-    expect(usosInfinitos(c({ usos_max: '' }))).toBe(true)
-    expect(usosInfinitos(c({ usos_max: '5' }))).toBe(false)
+  it('usosInfinitos con max_uses vacío', () => {
+    expect(usosInfinitos(c({ max_uses: '' }))).toBe(true)
+    expect(usosInfinitos(c({ max_uses: '5' }))).toBe(false)
   })
   it('usosRestantes devuelve Infinity con usos vacío y número si no', () => {
     expect(usosRestantes(c({ usos: '' }))).toBe(Infinity)
@@ -82,17 +82,17 @@ describe('usos', () => {
 })
 
 describe('expirado / vigente', () => {
-  it('expirado con expira_en vacío nunca expira', () => {
-    expect(expirado(c({ expira_en: '' }), '2026-08-17')).toBe(false)
+  it('expirado con expires_at vacío nunca expira', () => {
+    expect(expirado(c({ expires_at: '' }), '2026-08-17')).toBe(false)
   })
   it('expirado compara contra hoy', () => {
-    expect(expirado(c({ expira_en: '2026-08-16' }), '2026-08-17')).toBe(true)
-    expect(expirado(c({ expira_en: '2026-08-17' }), '2026-08-17')).toBe(false)
-    expect(expirado(c({ expira_en: '2026-08-18' }), '2026-08-17')).toBe(false)
+    expect(expirado(c({ expires_at: '2026-08-16' }), '2026-08-17')).toBe(true)
+    expect(expirado(c({ expires_at: '2026-08-17' }), '2026-08-17')).toBe(false)
+    expect(expirado(c({ expires_at: '2026-08-18' }), '2026-08-17')).toBe(false)
   })
   it('vigente requiere activo y no expirado', () => {
-    expect(vigente(c({ activo: 'true', expira_en: '' }), '2026-08-17')).toBe(true)
-    expect(vigente(c({ activo: 'false', expira_en: '' }), '2026-08-17')).toBe(false)
-    expect(vigente(c({ activo: 'true', expira_en: '2026-08-10' }), '2026-08-17')).toBe(false)
+    expect(vigente(c({ activo: 'true', expires_at: '' }), '2026-08-17')).toBe(true)
+    expect(vigente(c({ activo: 'false', expires_at: '' }), '2026-08-17')).toBe(false)
+    expect(vigente(c({ activo: 'true', expires_at: '2026-08-10' }), '2026-08-17')).toBe(false)
   })
 })

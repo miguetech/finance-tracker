@@ -8,7 +8,7 @@ function denied(): never {
 }
 
 function sanitizeConfig(cfg: Record<string, unknown>): Record<string, unknown> {
-  const { contador_folio: _c, prefijo_folio: _p, ...rest } = cfg
+  const { serial_counter: _c, serial_prefix: _p, ...rest } = cfg
   return rest
 }
 

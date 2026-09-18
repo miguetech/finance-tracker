@@ -128,28 +128,28 @@ export function Configuracion() {
       </div>
     )
   }
-  const docLabel = getDocLabel(form.tipo_doc, form.tipo_doc_etiqueta)
+  const docLabel = getDocLabel(form.tipo_doc, form.doc_type_label)
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => f && ({ ...f, [k]: e.target.value }))
   const hoy = todayLocal()
-  const folioPreview = expandFolioTemplate(String(form.prefijo_folio), hoy) + String(Math.max(1, Number(form.contador_folio) || 1)).padStart(3, '0')
-  const tokensInvalidos = invalidFolioTokens(String(form.prefijo_folio))
-  const numIva = Number(form.iva_porcentaje)
-  const numContador = Number(form.contador_folio)
+  const folioPreview = expandFolioTemplate(String(form.serial_prefix), hoy) + String(Math.max(1, Number(form.serial_counter) || 1)).padStart(3, '0')
+  const tokensInvalidos = invalidFolioTokens(String(form.serial_prefix))
+  const numIva = Number(form.vat_percent)
+  const numContador = Number(form.serial_counter)
   const errors: Record<string, string> = {}
-  if (!form.empresa_nombre.trim()) errors.nombre = t('errors.nombreObligatorio')
-  if (!String(form.prefijo_folio).trim()) errors.prefijo = t('errors.prefijoObligatorio')
-  if (String(form.iva_porcentaje).trim() === '' || isNaN(numIva) || numIva < 0 || numIva > 100) errors.iva = t('errors.ivaRango')
-  if (String(form.contador_folio).trim() === '' || !Number.isInteger(numContador) || numContador < 0) errors.contador = t('errors.contadorEntero')
+  if (!form.company_name.trim()) errors.nombre = t('errors.nombreObligatorio')
+  if (!String(form.serial_prefix).trim()) errors.prefijo = t('errors.prefijoObligatorio')
+  if (String(form.vat_percent).trim() === '' || isNaN(numIva) || numIva < 0 || numIva > 100) errors.iva = t('errors.ivaRango')
+  if (String(form.serial_counter).trim() === '' || !Number.isInteger(numContador) || numContador < 0) errors.contador = t('errors.contadorEntero')
 
   const sampleFactura = (): { factura: Factura; items: FacturaItem[] } => {
-    const items = [{ descripcion: 'Concepto de ejemplo', cantidad: 1, precio_unitario: 100, importe: 100 }]
+    const items = [{ descripcion: 'Concepto de ejemplo', cantidad: 1, unit_price: 100, importe: 100 }]
     const subtotal = 100
     const iva = Math.round(subtotal * (numIva || 0)) / 100
     return {
       factura: {
-        id_factura: 'preview', folio: folioPreview, id_cliente: '', nombre_cliente: 'Cliente de ejemplo',
-        fecha_emision: hoy, fecha_vencimiento: '', subtotal, iva, total: subtotal + iva,
-        saldo: subtotal + iva, fecha_pago: '', notas: 'Factura de ejemplo', moneda: form.moneda, tipo_cambio: 1, editada: '', fecha_edicion: ''
+        invoice_id: 'preview', folio: folioPreview, customer_id: '', customer_name: 'Cliente de ejemplo',
+        issue_date: hoy, due_date: '', subtotal, iva, total: subtotal + iva,
+        saldo: subtotal + iva, paid_at: '', notas: 'Factura de ejemplo', moneda: form.moneda, exchange_rate: 1, editada: '', edited_at: ''
       },
       items
     }
@@ -159,7 +159,7 @@ export function Configuracion() {
     if (Object.keys(errors).length > 0) { toast(t('configuracion.revisaCampos'), 'error'); return }
     setSubiendo(true)
     try {
-      let logo = form.empresa_logo
+      let logo = form.company_logo
       if (logoFile) {
         const { base64, mimeType } = await optimizeImage(logoFile)
         logo = await repo.uploadImagen({ nombre: `logo_${Date.now()}.${mimeType.split('/')[1] || 'png'}`, mimeType, base64, modulo: 'configuracion' })
@@ -167,9 +167,9 @@ export function Configuracion() {
       const fresh = await qc.fetchQuery({ queryKey: ['config'], queryFn: () => repo.getConfig() })
       await saveConfig.mutateAsync({
         ...form,
-        empresa_logo: logo,
-        contador_folio: Math.max(fresh.contador_folio, numContador),
-        iva_porcentaje: numIva
+        company_logo: logo,
+        serial_counter: Math.max(fresh.serial_counter, numContador),
+        vat_percent: numIva
       })
       toast(t('configuracion.guardada'))
     } catch (e) { toast((e as Error).message, 'error') }
@@ -186,7 +186,7 @@ export function Configuracion() {
       </Card>
       <Card title={t('configuracion.datosEmpresa')}>
         <div className="space-y-3">
-          <div><label className="text-xs text-muted-foreground">{t('configuracion.empresaNombre')} *</label><Input value={form.empresa_nombre} onChange={set('empresa_nombre')} error={errors.nombre} /></div>
+          <div><label className="text-xs text-muted-foreground">{t('configuracion.empresaNombre')} *</label><Input value={form.company_name} onChange={set('empresa_nombre')} error={errors.nombre} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground">{t('configuracion.tipoDoc')}</label>
@@ -194,23 +194,23 @@ export function Configuracion() {
             </div>
             <div>
               <label className="text-xs text-muted-foreground">{docLabel}</label>
-              <Input value={form.empresa_rfc} onChange={set('empresa_rfc')} />
+              <Input value={form.company_tax_id} onChange={set('empresa_rfc')} />
             </div>
             {form.tipo_doc === 'Otro' && (
               <div className="sm:col-span-2">
                 <label className="text-xs text-muted-foreground">{t('configuracion.etiquetaDoc')}</label>
-                <Input value={form.tipo_doc_etiqueta} onChange={set('tipo_doc_etiqueta')} placeholder={t('configuracion.ejTipoDoc')} />
+                <Input value={form.doc_type_label} onChange={set('tipo_doc_etiqueta')} placeholder={t('configuracion.ejTipoDoc')} />
               </div>
             )}
-            <div><label className="text-xs text-muted-foreground">{t('common.telefono')}</label><Input value={form.empresa_telefono} onChange={set('empresa_telefono')} /></div>
+            <div><label className="text-xs text-muted-foreground">{t('common.telefono')}</label><Input value={form.company_phone} onChange={set('empresa_telefono')} /></div>
           </div>
-          <div><label className="text-xs text-muted-foreground">{t('common.email')}</label><Input value={form.empresa_email} onChange={set('empresa_email')} /></div>
-          <div><label className="text-xs text-muted-foreground">{t('common.direccion')}</label><Input value={form.empresa_direccion} onChange={set('empresa_direccion')} /></div>
+          <div><label className="text-xs text-muted-foreground">{t('common.email')}</label><Input value={form.company_email} onChange={set('empresa_email')} /></div>
+          <div><label className="text-xs text-muted-foreground">{t('common.direccion')}</label><Input value={form.company_address} onChange={set('empresa_direccion')} /></div>
           <div>
             <label className="text-xs text-muted-foreground">{t('configuracion.logo')}</label>
-            <div className="mt-1"><ImageUploader value={form.empresa_logo} onChange={f => setLogoFile(f)} /></div>
+            <div className="mt-1"><ImageUploader value={form.company_logo} onChange={f => setLogoFile(f)} /></div>
             <p className="mt-1 text-xs text-muted-foreground">{t('configuracion.logoUrlOpcional')}</p>
-            <Input value={form.empresa_logo} onChange={set('empresa_logo')} placeholder="https://…" className="mt-1" />
+            <Input value={form.company_logo} onChange={set('empresa_logo')} placeholder="https://…" className="mt-1" />
             {/* F1: migra imágenes base64 embebidas (productos/logo) a Drive */}
             <button type="button" className="mt-2 text-xs text-blue-600 hover:underline disabled:opacity-50"
               disabled={migrandoImgs} onClick={() => void migrarImgs()}>
@@ -218,14 +218,14 @@ export function Configuracion() {
             </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div><label className="text-xs text-muted-foreground">{t('configuracion.codigoPostal')}</label><Input value={form.empresa_cp} onChange={set('empresa_cp')} /></div>
-            <div><label className="text-xs text-muted-foreground">{t('configuracion.ciudad')}</label><Input value={form.empresa_ciudad} onChange={set('empresa_ciudad')} /></div>
-            <div><label className="text-xs text-muted-foreground">{t('configuracion.pais')}</label><Input value={form.empresa_pais} onChange={set('empresa_pais')} /></div>
+            <div><label className="text-xs text-muted-foreground">{t('configuracion.codigoPostal')}</label><Input value={form.company_zip} onChange={set('empresa_cp')} /></div>
+            <div><label className="text-xs text-muted-foreground">{t('configuracion.ciudad')}</label><Input value={form.company_city} onChange={set('empresa_ciudad')} /></div>
+            <div><label className="text-xs text-muted-foreground">{t('configuracion.pais')}</label><Input value={form.company_country} onChange={set('empresa_pais')} /></div>
           </div>
           <div className="mt-3 pt-3 border-t border-gray-100">
             <label className="text-xs text-muted-foreground">{t('configuracion.nombreBaseHoja')}</label>
             <div className="mt-1 flex items-center gap-2">
-              <Input value={form.nombreBaseHoja} onChange={set('nombreBaseHoja')} placeholder="FinanceTracker" className="max-w-md" />
+              <Input value={form.baseSheetName} onChange={set('nombreBaseHoja')} placeholder="FinanceTracker" className="max-w-md" />
               <span className="text-xs text-gray-400">→ FinanceTracker 2026, FinanceTracker 2027…</span>
             </div>
             <p className="mt-1 text-xs text-gray-500">{t('configuracion.nombreBaseHojaAyuda')}</p>
@@ -243,7 +243,7 @@ export function Configuracion() {
                 </Tooltip>
                 <button type="button" onClick={() => setAyudaFolio(a => !a)} className="text-xs text-primary underline decoration-dotted underline-offset-2 hover:text-primary-hover">{t('configuracion.comoConfigurar')}</button>
               </div>
-              <Input value={form.prefijo_folio} onChange={set('prefijo_folio')} error={errors.prefijo} />
+              <Input value={form.serial_prefix} onChange={set('prefijo_folio')} error={errors.prefijo} />
               {ayudaFolio && (
                 <div className="mt-2 rounded-lg border border-gray-100 bg-muted/50 p-3 text-xs text-muted-foreground space-y-1.5">
                   {FOLIO_TOKENS.map(tk => (
@@ -263,7 +263,7 @@ export function Configuracion() {
                   <IconAlert className="w-3.5 h-3.5 text-muted-foreground" />
                 </Tooltip>
               </div>
-              <Input type="number" min={0} value={form.contador_folio} onChange={set('contador_folio')} error={errors.contador} />
+              <Input type="number" min={0} value={form.serial_counter} onChange={set('contador_folio')} error={errors.contador} />
             </div>
             <div>
               <div className="flex items-center gap-1.5 mb-1">
@@ -272,7 +272,7 @@ export function Configuracion() {
                   <IconAlert className="w-3.5 h-3.5 text-muted-foreground" />
                 </Tooltip>
               </div>
-              <Input type="number" min={0} max={100} step="any" value={form.iva_porcentaje} onChange={set('iva_porcentaje')} error={errors.iva} />
+              <Input type="number" min={0} max={100} step="any" value={form.vat_percent} onChange={set('iva_porcentaje')} error={errors.iva} />
             </div>
             <div>
               <div className="flex items-center gap-1.5 mb-1">
@@ -305,10 +305,10 @@ export function Configuracion() {
       </Card>
       <Card title={t('configuracion.categorias')}>
         <div className="space-y-5">
-          <CategoriasEditor title={t('gastos.title')} value={form.categorias_gastos} onChange={v => setForm(f => f && ({ ...f, categorias_gastos: v }))} />
-          <CategoriasEditor title={t('cuentas.title')} value={form.categorias_cxp} onChange={v => setForm(f => f && ({ ...f, categorias_cxp: v }))} />
-          <CategoriasEditor title={t('inventario.title')} value={form.categorias_inventario} onChange={v => setForm(f => f && ({ ...f, categorias_inventario: v }))} />
-          <CategoriasEditor title={t('configuracion.metodosPago')} value={form.metodos_pago} onChange={v => setForm(f => f && ({ ...f, metodos_pago: v }))} />
+          <CategoriasEditor title={t('gastos.title')} value={form.expense_categories} onChange={v => setForm(f => f && ({ ...f, expense_categories: v }))} />
+          <CategoriasEditor title={t('cuentas.title')} value={form.ap_categories} onChange={v => setForm(f => f && ({ ...f, ap_categories: v }))} />
+          <CategoriasEditor title={t('inventario.title')} value={form.inventory_categories} onChange={v => setForm(f => f && ({ ...f, inventory_categories: v }))} />
+          <CategoriasEditor title={t('configuracion.metodosPago')} value={form.payment_methods} onChange={v => setForm(f => f && ({ ...f, payment_methods: v }))} />
         </div>
       </Card>
       <Card title={t('configuracion.zonaPeligrosa')} className="border-red-200 bg-red-50">
@@ -415,24 +415,24 @@ function MonedasCard({ config, setForm }: { config: Config; setForm: (fn: (f: Co
   const [custom, setCustom] = useState({ code: '', symbol: '', decimals: '2' })
   const [actualizando, setActualizando] = useState(false)
 
-  const all = [...CURRENCIES, ...parseCustomCurrencies(config.monedas_custom)]
-  const activeCodes = (config.monedas_activas || '').split(',').map(s => s.trim()).filter(Boolean)
+  const all = [...CURRENCIES, ...parseCustomCurrencies(config.custom_currencies)]
+  const activeCodes = (config.active_currencies || '').split(',').map(s => s.trim()).filter(Boolean)
   const active = activeCodes.length ? all.filter(c => activeCodes.includes(c.code)) : all
-  const rates = parseRates(config.tasas_cambio)
+  const rates = parseRates(config.exchange_rates)
   const frescas = tasasFrescas(rates)
   const base = config.moneda
 
   const toggleActiva = (code: string, on: boolean) => {
     const cur = new Set(activeCodes)
     if (on) cur.add(code); else cur.delete(code)
-    setForm(f => ({ ...f, monedas_activas: [...cur].join(',') }))
+    setForm(f => ({ ...f, active_currencies: [...cur].join(',') }))
   }
 
   const saveRate = (code: string) => {
     const v = Number(rateDrafts[code])
     if (!rateDrafts[code] || !Number.isFinite(v) || v <= 0) { toast('Tasa inválida', 'error'); return }
-    const r = parseRates(config.tasas_cambio) ?? { base, fecha: '', rates: {} }
-    setForm(f => ({ ...f, tasas_cambio: JSON.stringify({ ...r, base, fecha: r.fecha, rates: { ...r.rates, [code]: v } }) }))
+    const r = parseRates(config.exchange_rates) ?? { base, fecha: '', rates: {} }
+    setForm(f => ({ ...f, exchange_rates: JSON.stringify({ ...r, base, fecha: r.fecha, rates: { ...r.rates, [code]: v } }) }))
     setRateDrafts(d => { const n = { ...d }; delete n[code]; return n })
     toast(`Tasa de ${code} guardada`)
   }
@@ -441,10 +441,10 @@ function MonedasCard({ config, setForm }: { config: Config; setForm: (fn: (f: Co
     setActualizando(true)
     try {
       const { rates: fetched, fecha } = await fetchExchangeRates(base)
-      const r = parseRates(config.tasas_cambio) ?? { base, fecha: '', rates: {} }
+      const r = parseRates(config.exchange_rates) ?? { base, fecha: '', rates: {} }
       const merged: Record<string, number> = { ...r.rates }
       for (const c of all) if (fetched[c.code]) merged[c.code] = fetched[c.code]
-      setForm(f => ({ ...f, tasas_cambio: JSON.stringify({ base, fecha, rates: merged }) }))
+      setForm(f => ({ ...f, exchange_rates: JSON.stringify({ base, fecha, rates: merged }) }))
       toast(`Tasas actualizadas (${fecha})`)
     } catch (e) {
       toast((e as Error).message, 'error')
@@ -456,10 +456,10 @@ function MonedasCard({ config, setForm }: { config: Config; setForm: (fn: (f: Co
     const code = custom.code.trim().toUpperCase()
     if (!code || code.length < 2) { toast('Escribe el código ISO (ej. XYZ)', 'error'); return }
     const dec = Math.max(0, Math.min(4, Number(custom.decimals) || 0))
-    const existing = parseCustomCurrencies(config.monedas_custom)
+    const existing = parseCustomCurrencies(config.custom_currencies)
     if (existing.some(c => c.code === code) || CURRENCIES.some(c => c.code === code)) { toast('Esa moneda ya existe', 'error'); return }
     const cur = { code, symbol: custom.symbol.trim() || code, decimals: dec, locale: 'es-VE', name: code }
-    setForm(f => ({ ...f, monedas_custom: JSON.stringify([...existing, cur]) }))
+    setForm(f => ({ ...f, custom_currencies: JSON.stringify([...existing, cur]) }))
     registerCurrency(cur)
     setCustom({ code: '', symbol: '', decimals: '2' })
     toast(`Moneda ${code} agregada`)
@@ -539,10 +539,10 @@ function TasaDiaCard({ config, setForm, onSaved }: { config: Config; setForm: (f
   const { t } = useI18n()
   const toast = useToast()
   const { tasas } = useTasasHistorial()
-  const activa = config.tasa_dia_activa === 'true'
+  const activa = config.daily_rate_active === 'true'
 
   const toggle = async () => {
-    setForm(f => ({ ...f, tasa_dia_activa: f.tasa_dia_activa === 'true' ? 'false' : 'true' }))
+    setForm(f => ({ ...f, daily_rate_active: f.daily_rate_active === 'true' ? 'false' : 'true' }))
     toast(t('configuracion.guardada'))
     setTimeout(() => { void onSaved() }, 0)
   }
@@ -566,7 +566,7 @@ function TasaDiaCard({ config, setForm, onSaved }: { config: Config; setForm: (f
               <thead><tr className="text-xs uppercase text-muted-foreground bg-muted/60"><th className="px-3 py-1.5 text-left">Fecha</th><th className="px-3 py-1.5 text-left">Moneda</th><th className="px-3 py-1.5 text-right">Tasa</th></tr></thead>
               <tbody>
                 {recientes.map(x => (
-                  <tr key={x.id_tasa} className="border-t border-gray-50">
+                  <tr key={x.rate_id} className="border-t border-gray-50">
                     <td className="px-3 py-1.5">{x.fecha}</td>
                     <td className="px-3 py-1.5">{x.base} → {x.moneda}</td>
                     <td className="px-3 py-1.5 text-right tabular-nums">{Number(x.tasa).toLocaleString()}</td>
@@ -584,11 +584,11 @@ function TasaDiaCard({ config, setForm, onSaved }: { config: Config; setForm: (f
 /** Comisiones por transacción en Gastos, CXP, Nómina y métodos de pago. */
 function ComisionesCard({ config, setForm }: { config: Config; setForm: (fn: (f: Config) => Config) => void }) {
   const { t } = useI18n()
-  const parsed = parseComisiones(config.comisiones_transaccion)
+  const parsed = parseComisiones(config.transaction_fees)
 
   const update = (patch: Partial<ReturnType<typeof parseComisiones>>) => {
     const next = { ...parsed, ...patch }
-    setForm(f => ({ ...f, comisiones_transaccion: JSON.stringify(next) }))
+    setForm(f => ({ ...f, transaction_fees: JSON.stringify(next) }))
   }
 
   const numInput = (label: string, value: number, onChange: (n: number) => void) => (
@@ -615,7 +615,7 @@ function ComisionesCard({ config, setForm }: { config: Config; setForm: (fn: (f:
 /** Metas mensuales de venta (JSON en config). */
 function MetasCard({ config, setForm, moneda }: { config: Config; setForm: (fn: (f: Config) => Config) => void; moneda: string }) {
   const { t } = useI18n()
-  const metas = parseMetas(config.metas_mensuales)
+  const metas = parseMetas(config.monthly_goals)
   const [mes, setMes] = useState(() => new Date().toISOString().slice(0, 7))
   const [monto, setMonto] = useState('')
 
@@ -625,7 +625,7 @@ function MetasCard({ config, setForm, moneda }: { config: Config; setForm: (fn: 
     const next = { ...metas }
     if (!m || m <= 0) delete next[mes]
     else next[mes] = m
-    setForm(f => ({ ...f, metas_mensuales: JSON.stringify(next) }))
+    setForm(f => ({ ...f, monthly_goals: JSON.stringify(next) }))
     setMonto('')
   }
 
@@ -654,11 +654,11 @@ function MetasCard({ config, setForm, moneda }: { config: Config; setForm: (fn: 
 function PermisosGoogleCard({ config, setForm }: { config: Config; setForm: (fn: (f: Config) => Config) => void }) {
   const { t } = useI18n()
   let permisos: Record<string, string> = {}
-  try { permisos = JSON.parse(config.google_permisos || '{}') } catch { permisos = {} }
+  try { permisos = JSON.parse(config.google_permissions || '{}') } catch { permisos = {} }
 
   const togglePermiso = (key: string) => {
     const cur = permisos[key] === 'granted' ? 'revoked' : 'granted'
-    setForm(f => ({ ...f, google_permisos: JSON.stringify({ ...permisos, [key]: cur }) }))
+    setForm(f => ({ ...f, google_permissions: JSON.stringify({ ...permisos, [key]: cur }) }))
   }
 
   const filas = [

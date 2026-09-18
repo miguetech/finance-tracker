@@ -53,8 +53,8 @@ function TabProductoIndividual({ data, desde, hasta }: { data: InvData; desde: s
   const { productos } = useProductos()
   const [idProducto, setIdProducto] = useState('')
   const activos = productos.filter(p => p.activo !== 'false')
-  const producto = activos.find(p => p.id_producto === idProducto)
-  const stats = data.statsProductos.find(s => s.id_producto === idProducto)
+  const producto = activos.find(p => p.product_id === idProducto)
+  const stats = data.statsProductos.find(s => s.product_id === idProducto)
   const ventasQ = useVentasProducto(idProducto || null, { desde, hasta })
   const ventas = ventasQ.data ?? []
   const totalIngresos = ventas.reduce((s, v) => s + v.importe_base, 0)
@@ -64,7 +64,7 @@ function TabProductoIndividual({ data, desde, hasta }: { data: InvData; desde: s
     <div className="space-y-4">
       <Card title={t('reportesFin.tabProducto')}>
         <SearchSelect value={idProducto} onChange={setIdProducto}
-          options={activos.map(p => ({ value: p.id_producto, label: `${p.nombre}${p.categoria ? ` · ${p.categoria}` : ''}` }))}
+          options={activos.map(p => ({ value: p.product_id, label: `${p.nombre}${p.categoria ? ` · ${p.categoria}` : ''}` }))}
           placeholder={t('facturas.buscarProducto')} />
       </Card>
       {!idProducto && <p className="p-6 text-sm text-gray-500">{t('reportesFin.seleccionaProducto')}</p>}
@@ -95,7 +95,7 @@ function TabProductoIndividual({ data, desde, hasta }: { data: InvData; desde: s
                     <td className="px-4 py-2">{v.folio}</td>
                     <td className="px-4 py-2 max-w-40 truncate" title={v.cliente}>{v.cliente}</td>
                     <td className="px-4 py-2 text-right tabular-nums">{v.cantidad}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{formatMoney(v.precio_unitario, moneda)}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{formatMoney(v.unit_price, moneda)}</td>
                     <td className="px-4 py-2 text-right tabular-nums font-medium">{formatMoney(v.importe_base, moneda)}</td>
                   </tr>
                 ))}
@@ -107,7 +107,7 @@ function TabProductoIndividual({ data, desde, hasta }: { data: InvData; desde: s
             <div className="flex justify-end">
               <Button size="sm" variant="outline" onClick={() => exportCSV(`ventas_${producto?.nombre ?? idProducto}_${desde}_${hasta}`, ventas, [
                 { key: 'fecha', header: t('common.fecha') }, { key: 'folio', header: t('facturas.folio') }, { key: 'cliente', header: t('facturas.cliente') },
-                { key: 'cantidad', header: t('facturas.cant') }, { key: 'precio_unitario', header: t('facturas.precio') }, { key: 'importe_base', header: `${t('facturas.importe')} (${moneda})` }
+                { key: 'cantidad', header: t('facturas.cant') }, { key: 'unit_price', header: t('facturas.precio') }, { key: 'importe_base', header: `${t('facturas.importe')} (${moneda})` }
               ])}>{t('reportesFin.exportarCSV')}</Button>
             </div>
           )}
@@ -119,17 +119,17 @@ function TabProductoIndividual({ data, desde, hasta }: { data: InvData; desde: s
 
 function TabStockBajo({ data, hasta }: { data: InvData; hasta: string }) {
   const { t } = useI18n()
-  const empresa = useConfig().config?.empresa_nombre ?? ''
+  const empresa = useConfig().config?.company_name ?? ''
   const lista = data.stockBajo
 
   const exportCSVStock = () => exportCSV(`stock_bajo_${hasta || 'hoy'}`, lista, [
     { key: 'nombre', header: 'Producto' },
     { key: 'categoria', header: 'Categoría' },
     { key: 'stock', header: 'Stock actual' },
-    { key: 'stock_minimo', header: 'Stock mínimo' },
+    { key: 'minimum_stock', header: 'Stock mínimo' },
     { key: 'faltante', header: 'Faltante' },
     { key: 'unidad', header: 'Unidad' },
-    { key: 'nombre_proveedor', header: 'Proveedor' }
+    { key: 'supplier_name', header: 'Proveedor' }
   ])
 
   const pdfStock = () => exportPDF(t('reportesFin.stockBajoTitulo'), {
@@ -138,7 +138,7 @@ function TabStockBajo({ data, hasta }: { data: InvData; hasta: string }) {
     tablas: [{
       columnas: ['Producto', 'Categoría', 'Stock', 'Mínimo', 'Faltante', 'Unidad', 'Proveedor'],
       numericas: [2, 3, 4],
-      filas: lista.map(p => [p.nombre, p.categoria, p.stock, p.stock_minimo, p.faltante, p.unidad, p.nombre_proveedor] as (string | number)[])
+      filas: lista.map(p => [p.nombre, p.categoria, p.stock, p.minimum_stock, p.faltante, p.unidad, p.supplier_name] as (string | number)[])
     }]
   })
 
@@ -159,17 +159,17 @@ function TabStockBajo({ data, hasta }: { data: InvData; hasta: string }) {
           </thead>
           <tbody>
             {lista.map(p => (
-              <tr key={p.id_producto} className="border-t border-gray-100 hover:bg-muted/50">
+              <tr key={p.product_id} className="border-t border-gray-100 hover:bg-muted/50">
                 <td className="px-4 py-2 font-medium">{p.nombre}</td>
                 <td className="px-4 py-2">{p.categoria}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{p.stock.toLocaleString()} {p.unidad}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{p.stock_minimo.toLocaleString()}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{p.minimum_stock.toLocaleString()}</td>
                 <td className="px-4 py-2 text-right tabular-nums font-medium text-danger">{p.faltante.toLocaleString()}</td>
-                <td className="px-4 py-2">{p.nombre_proveedor || '—'}</td>
+                <td className="px-4 py-2">{p.supplier_name || '—'}</td>
                 <td className="px-4 py-2">
-                  {p.nombre_proveedor && (
+                  {p.supplier_name && (
                     <a className="text-xs text-emerald-700 hover:underline" target="_blank" rel="noreferrer"
-                      href={`https://wa.me/?text=${encodeURIComponent(`Hola ${p.nombre_proveedor}, necesito reordenar: ${p.faltante} ${p.unidad} de ${p.nombre}. Gracias.`)}`}>
+                      href={`https://wa.me/?text=${encodeURIComponent(`Hola ${p.supplier_name}, necesito reordenar: ${p.faltante} ${p.unidad} de ${p.nombre}. Gracias.`)}`}>
                       {t('whatsapp.abrirWhatsApp')}
                     </a>
                   )}
@@ -214,7 +214,7 @@ function TabMultiproducto({ data, desde, hasta }: { data: InvData; desde: string
   const { t } = useI18n()
   const { config } = useConfig()
   const moneda = config?.moneda ?? 'USD'
-  const empresa = config?.empresa_nombre ?? ''
+  const empresa = config?.company_name ?? ''
   const { productos } = useProductos()
   const [q, setQ] = useState('')
   const [ids, setIds] = useState<string[]>([])
@@ -225,7 +225,7 @@ function TabMultiproducto({ data, desde, hasta }: { data: InvData; desde: string
   }, [productos, q])
 
   const toggle = (id: string) => setIds(cur => cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id])
-  const stats = useMemo(() => ids.length >= 2 ? data.statsProductos.filter(s => ids.includes(s.id_producto)) : [], [data.statsProductos, ids])
+  const stats = useMemo(() => ids.length >= 2 ? data.statsProductos.filter(s => ids.includes(s.product_id)) : [], [data.statsProductos, ids])
 
   const exportStats = () => exportCSV(`comparador_productos_${desde}_${hasta}`, stats, [
     { key: 'nombre', header: 'Producto' },
@@ -249,8 +249,8 @@ function TabMultiproducto({ data, desde, hasta }: { data: InvData; desde: string
         </div>
         <div className="mt-2 max-h-52 overflow-auto rounded-xl border border-gray-100 divide-y divide-gray-50">
           {filtrados.map((p, i) => (
-            <label key={p.id_producto} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/60 cursor-pointer text-sm">
-              <input type="checkbox" checked={ids.includes(p.id_producto)} onChange={() => toggle(p.id_producto)} className="h-4 w-4" style={{ accentColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+            <label key={p.product_id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/60 cursor-pointer text-sm">
+              <input type="checkbox" checked={ids.includes(p.product_id)} onChange={() => toggle(p.product_id)} className="h-4 w-4" style={{ accentColor: CHART_COLORS[i % CHART_COLORS.length] }} />
               <span className="flex-1 truncate">{p.nombre}</span>
               <span className="text-xs text-muted-foreground shrink-0">{p.categoria}</span>
             </label>
@@ -279,7 +279,7 @@ function TabMultiproducto({ data, desde, hasta }: { data: InvData; desde: string
               </thead>
               <tbody>
                 {stats.map(s => (
-                  <tr key={s.id_producto} className="border-t border-gray-100 hover:bg-muted/50">
+                  <tr key={s.product_id} className="border-t border-gray-100 hover:bg-muted/50">
                     <td className="px-4 py-2 font-medium max-w-40 truncate" title={s.nombre}>{s.nombre}</td>
                     <td className="px-4 py-2 text-right tabular-nums">{s.unidades_vendidas.toLocaleString()} {s.unidad}</td>
                     <td className="px-4 py-2 text-right tabular-nums">{formatMoney(s.ingresos, moneda)}</td>

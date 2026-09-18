@@ -5,38 +5,38 @@ import { route } from '../src/actions'
 const OWNER = 'owner@ft.com'
 
 const defaultConfig: Config = {
-  empresa_nombre: 'X',
-  empresa_rfc: '',
-  empresa_direccion: '',
-  empresa_telefono: '',
-  empresa_email: '',
-  empresa_logo: '',
-  empresa_cp: '',
-  empresa_ciudad: '',
-  empresa_pais: '',
-  prefijo_folio: 'FAC-',
-  contador_folio: 1,
+  company_name: 'X',
+  company_tax_id: '',
+  company_address: '',
+  company_phone: '',
+  company_email: '',
+  company_logo: '',
+  company_zip: '',
+  company_city: '',
+  company_country: '',
+  serial_prefix: 'FAC-',
+  serial_counter: 1,
   moneda: 'MXN',
-  iva_porcentaje: 16,
-  categorias_gastos: 'Renta,Sueldos',
-  categorias_cxp: '',
-  categorias_inventario: '',
-  monedas_activas: 'MXN',
-  monedas_custom: '',
-  tasas_cambio: '',
-  metodos_pago: '',
+  vat_percent: 16,
+  expense_categories: 'Renta,Sueldos',
+  ap_categories: '',
+  inventory_categories: '',
+  active_currencies: 'MXN',
+  custom_currencies: '',
+  exchange_rates: '',
+  payment_methods: '',
   tipo_doc: 'RFC',
-  tipo_doc_etiqueta: 'RFC',
+  doc_type_label: 'RFC',
   share_backend_url: '',
-  metas_mensuales: '',
-  comisiones_transaccion: '',
-  tasa_dia_activa: '',
-  google_permisos: '',
-  notif_gastos_activa: '',
-  notif_cxc_activa: '',
-  comisiones_metodos: '',
-  unidades_medida: 'pieza,kg',
-  nombreBaseHoja: ''
+  monthly_goals: '',
+  transaction_fees: '',
+  daily_rate_active: '',
+  google_permissions: '',
+  notifications_expense_active: '',
+  notifications_ar_active: '',
+  method_fees: '',
+  measure_units: 'pieza,kg',
+  baseSheetName: ''
 }
 
 function fakeRepo(overrides: Partial<Repository> = {}): Repository {
@@ -80,12 +80,12 @@ describe('route', () => {
 
   it('getConfig admin devuelve config completa, no-admin sanitizada', async () => {
     const full = await route(fakeRepo(), 'getConfig', {}, permsFor(OWNER, OWNER, null)) as Record<string, unknown>
-    expect(full.contador_folio).toBe(1)
-    expect(full.prefijo_folio).toBe('FAC-')
+    expect(full.serial_counter).toBe(1)
+    expect(full.serial_prefix).toBe('FAC-')
     const sanitized = await route(fakeRepo(), 'getConfig', {}, permsFor('user@ft.com', OWNER, usuario())) as Record<string, unknown>
     expect(sanitized).not.toHaveProperty('contador_folio')
     expect(sanitized).not.toHaveProperty('prefijo_folio')
-    expect(sanitized.empresa_nombre).toBe('X')
+    expect(sanitized.company_name).toBe('X')
   })
 
   it('listClientes denegado sin canView(clientes)', async () => {
@@ -154,8 +154,8 @@ describe('route', () => {
 
   it('listPagos con solo facturas devuelve únicamente cobros', async () => {
     const pagos = [
-      { id_pago: 'p1', tipo: 'cobro', id_origen: 'f1' },
-      { id_pago: 'p2', tipo: 'abono', id_origen: 'c1' }
+      { payment_id: 'p1', tipo: 'cobro', origin_id: 'f1' },
+      { payment_id: 'p2', tipo: 'abono', origin_id: 'c1' }
     ]
     const repo = fakeRepo({ listPagos: async () => pagos as never })
     const p = permsFor('user@ft.com', OWNER, usuario({ rol: 'ver_facturas', modulos_ver: 'facturas', modulos_editar: '' }))

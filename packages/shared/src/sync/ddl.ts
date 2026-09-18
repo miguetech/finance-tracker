@@ -2,12 +2,12 @@ import { TABLES, type TableName } from '../sheets/tables'
 
 /** Índices lógicos del espejo por tabla. */
 const INDEXES: Partial<Record<TableName, string[]>> = {
-  Factura_Items: ['id_factura'],
-  Pagos: ['id_origen', 'fecha'],
-  Movimientos_Stock: ['id_producto'],
-  Asistencias: ['id_empleado', 'fecha'],
-  Nomina_Detalles: ['id_empleado'],
-  Cuentas_Pagar: ['fecha_vencimiento']
+  Factura_Items: ['invoice_id'],
+  Pagos: ['origin_id', 'fecha'],
+  Movimientos_Stock: ['product_id'],
+  Asistencias: ['employee_id', 'fecha'],
+  Nomina_Detalles: ['employee_id'],
+  Cuentas_Pagar: ['due_date']
 }
 
 /** Tablas donde la primera columna NO es única (N filas por clave padre):
@@ -26,7 +26,7 @@ export function ddlDesdeTables(): DdlTabla[] {
     const cols = TABLES[tabla]
     if (tabla === 'Factura_Items') {
       const colSql = cols.map(c => `"${c.key}" ${sqlType(c.type)}`).join(', ')
-      const create = `CREATE TABLE IF NOT EXISTS "Factura_Items" (${colSql}, PRIMARY KEY ("id_factura", "linea"))`
+      const create = `CREATE TABLE IF NOT EXISTS "Factura_Items" (${colSql}, PRIMARY KEY ("invoice_id", "linea"))`
       const idxCols = INDEXES[tabla] ?? []
       return {
         tabla,

@@ -4,14 +4,14 @@ import { flujoCaja } from '../src/reports/financieros'
 import type { Pago, Gasto } from '../src/types/entities'
 
 const pago = (over: Partial<Pago>): Pago => ({
-  id_pago: 'pag_1', tipo: 'cobro', id_origen: 'f1', fecha: '2026-08-15',
-  monto: 100, metodo_pago: 'Zelle', notas: '', moneda: 'USD', tipo_cambio: 1,
+  payment_id: 'pag_1', tipo: 'cobro', origin_id: 'f1', fecha: '2026-08-15',
+  monto: 100, payment_method: 'Zelle', notas: '', moneda: 'USD', exchange_rate: 1,
   ...over
 } as Pago)
 
 const _gasto = (over: Partial<Gasto>): Gasto => ({
-  id_gasto: 'gas_1', fecha: '2026-08-15', categoria: 'Servicios', descripcion: 'd',
-  monto: 50, metodo_pago: 'Efectivo', proveedor: '', moneda: 'USD', tipo_cambio: 1,
+  expense_id: 'gas_1', fecha: '2026-08-15', categoria: 'Servicios', descripcion: 'd',
+  monto: 50, payment_method: 'Efectivo', proveedor: '', moneda: 'USD', exchange_rate: 1,
   ...over
 } as Gasto)
 
@@ -39,12 +39,12 @@ describe('comisiones por método de pago (avanzadas)', () => {
   })
 
   it('flujoCaja suma comisión por transacción (no sobre el agregado)', () => {
-    const pagos = [pago({ id_pago: 'a', monto: 10 }), pago({ id_pago: 'b', monto: 10 }), pago({ id_pago: 'c', monto: 200, metodo_pago: 'Efectivo' })]
+    const pagos = [pago({ payment_id: 'a', monto: 10 }), pago({ payment_id: 'b', monto: 10 }), pago({ payment_id: 'c', monto: 200, payment_method: 'Efectivo' })]
     const r = flujoCaja(pagos, [], { Zelle: { pct: 3, minimo_fijo: 1 }, Efectivo: {} }, { desde: '', hasta: '' })
-    const zelle = r.porMetodo.find(m => m.metodo_pago === 'Zelle')!
+    const zelle = r.porMetodo.find(m => m.payment_method === 'Zelle')!
     // Dos transacciones de 10 con mínimo 1 ⇒ comisión 2 (no 3% de 20 = 0.6)
     expect(zelle.comisiones).toBe(2)
-    const efectivo = r.porMetodo.find(m => m.metodo_pago === 'Efectivo')!
+    const efectivo = r.porMetodo.find(m => m.payment_method === 'Efectivo')!
     expect(efectivo.comisiones).toBe(0)
   })
 

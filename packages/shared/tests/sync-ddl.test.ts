@@ -11,28 +11,28 @@ describe('DDL del espejo', () => {
     const facturas = ddlDesdeTables().find(d => d.tabla === 'Facturas')!
     expect(facturas.create).toContain('"moneda" TEXT')
     expect(facturas.create).toContain('"total" REAL')
-    expect(facturas.create).toContain('"fecha_emision" TEXT')
+    expect(facturas.create).toContain('"issue_date" TEXT')
   })
 
   it('primera columna es PRIMARY KEY (salvo tablas hijas)', () => {
     const clientes = ddlDesdeTables().find(t => t.tabla === 'Clientes')!
-    expect(clientes.create).toMatch(/"id_cliente" TEXT PRIMARY KEY/)
+    expect(clientes.create).toMatch(/"customer_id" TEXT PRIMARY KEY/)
   })
 
   it('crea índices sobre claves foráneas lógicas', () => {
     const defs = ddlDesdeTables()
     const items = defs.find(d => d.tabla === 'Factura_Items')!
-    expect(items.indexes.some(i => i.includes('idx_Factura_Items_id_factura'))).toBe(true)
+    expect(items.indexes.some(i => i.includes('idx_Factura_Items_invoice_id'))).toBe(true)
     const pagos = defs.find(d => d.tabla === 'Pagos')!
-    expect(pagos.indexes.some(i => i.includes('idx_Pagos_id_origen'))).toBe(true)
+    expect(pagos.indexes.some(i => i.includes('idx_Pagos_origin_id'))).toBe(true)
   })
 })
 
 describe('DDL de tablas hijas (N filas por clave padre)', () => {
-  it('Factura_Items tiene composite PK (id_factura, linea)', () => {
+  it('Factura_Items tiene composite PK (invoice_id, linea)', () => {
     const items = ddlDesdeTables().find(t => t.tabla === 'Factura_Items')!
-    expect(items.create).toContain('PRIMARY KEY ("id_factura", "linea")')
-    expect(items.create).not.toContain('"id_factura" TEXT PRIMARY KEY')
-    expect(items.indexes.some(i => i.includes('idx_Factura_Items_id_factura'))).toBe(true)
+    expect(items.create).toContain('PRIMARY KEY ("invoice_id", "linea")')
+    expect(items.create).not.toContain('"invoice_id" TEXT PRIMARY KEY')
+    expect(items.indexes.some(i => i.includes('idx_Factura_Items_invoice_id'))).toBe(true)
   })
 })

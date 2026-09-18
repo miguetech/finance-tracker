@@ -29,7 +29,7 @@ export function RateBubble({ onNavigate }: { onNavigate?: (k: NavKey) => void })
   const [error, setError] = useState('')
 
   const base = config?.moneda || 'USD'
-  const rates = parseRates(config?.tasas_cambio ?? '')
+  const rates = parseRates(config?.exchange_rates ?? '')
   const frescas = tasasFrescas(rates)
   const divisas = useMemo(() =>
     activeCurrencies(config).filter(c => c.code !== base),
@@ -42,10 +42,10 @@ export function RateBubble({ onNavigate }: { onNavigate?: (k: NavKey) => void })
     setError('')
     try {
       const { rates: fetched, fecha } = await fetchExchangeRates(base)
-      const r = parseRates(config.tasas_cambio) ?? { base, fecha: '', rates: {} }
+      const r = parseRates(config.exchange_rates) ?? { base, fecha: '', rates: {} }
       const merged: Record<string, number> = { ...r.rates }
       for (const c of divisas) if (fetched[c.code]) merged[c.code] = fetched[c.code]
-      await saveConfig.mutateAsync({ ...config, tasas_cambio: JSON.stringify({ base, fecha, rates: merged }) })
+      await saveConfig.mutateAsync({ ...config, exchange_rates: JSON.stringify({ base, fecha, rates: merged }) })
     } catch (e) {
       setError((e as Error).message)
     }

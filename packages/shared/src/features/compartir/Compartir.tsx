@@ -104,7 +104,7 @@ function CodigoFormModal({ onClose }: { onClose: () => void }) {
   const [generated, setGenerated] = useState<CodigoAcceso | null>(null)
   const submit = async () => {
     try {
-      const c = await saveCodigo.mutateAsync({ rol, modulos_ver: ver, modulos_editar: editar, expira_en: expira, usos_max: usosMax, responsable, email })
+      const c = await saveCodigo.mutateAsync({ rol, modulos_ver: ver, modulos_editar: editar, expires_at: expira, max_uses: usosMax, responsable, email })
       setGenerated(c)
       toast(t('compartir.codigoGenerado', { codigo: c.codigo }))
     } catch (e) { toast((e as Error).message, 'error') }
@@ -239,7 +239,7 @@ export function Compartir() {
           { key: 'codigo', header: t('compartir.codigos'), render: r => <span className="font-mono text-xs">{String(r.codigo)}</span> },
           { key: 'rol', header: t('compartir.rol'), render: r => rolLabel(t, String(r.rol) as UserRole) },
           { key: 'modulos', header: t('compartir.modulosCodigo'), render: r => { const v = String(r.modulos_ver || ''); const e = String(r.modulos_editar || ''); return <span className="text-xs text-gray-600">{[v, e && t('compartir.edita', { modulos: e })].filter(Boolean).join(' · ') || '—'}</span> } },
-          { key: 'expira', header: t('compartir.expira'), render: r => String(r.expira_en) || t('compartir.infinito') },
+          { key: 'expira', header: t('compartir.expira'), render: r => String(r.expires_at) || t('compartir.infinito') },
           { key: 'usos', header: t('compartir.usos'), render: r => { const c = r as unknown as CodigoAcceso; const u = usosRestantes(c); return u === Infinity ? t('compartir.infinito') : String(u) } },
           { key: 'responsable', header: t('compartir.responsable'), render: r => String(r.responsable || '—') },
           { key: 'acciones', header: '', render: r => {
@@ -270,7 +270,7 @@ export function Compartir() {
             } },
             { key: 'dispositivo', header: t('compartir.dispositivo'), render: r => <span className="font-mono text-xs truncate max-w-40 block" title={String(r.dispositivo)}>{String(r.dispositivo)}</span> },
             { key: 'ip_info', header: t('compartir.ipInfo'), render: r => String(r.ip_info || '—') },
-            { key: 'registrado_en', header: t('compartir.registradoEn'), render: r => String(r.registrado_en || '—') },
+            { key: 'registered_at', header: t('compartir.registradoEn'), render: r => String(r.registered_at || '—') },
             { key: 'acciones', header: '', render: r => (
               <Button size="sm" variant="danger" icon={<IconTrash className="w-3 h-3" />} onClick={() => setDeleteDispositivo(String((r as unknown as Dispositivo).dispositivo))}>{t('compartir.removerDispositivo')}</Button>
             ) }

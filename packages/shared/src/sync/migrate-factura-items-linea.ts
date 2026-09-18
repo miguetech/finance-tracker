@@ -9,7 +9,7 @@ export async function migrarFacturaItemsLinea(store: EspejoStore): Promise<void>
   
   const byFactura = new Map<string, (Row & { rowid: number })[]>()
   for (const r of rows) {
-    const id = String(r.id_factura)
+    const id = String(r.invoice_id)
     if (!byFactura.has(id)) byFactura.set(id, [])
     byFactura.get(id)!.push(r)
   }

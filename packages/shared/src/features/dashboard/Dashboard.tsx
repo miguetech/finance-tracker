@@ -34,13 +34,13 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
 
   if (isLoading && !reportes) return <div className="p-8 text-gray-500">{t('common.cargando')}</div>
   const k = reportes?.kpis
-  const pendientes = facturas.filter(f => f.saldo > 0).sort((a, b) => (a.fecha_vencimiento || '9999').localeCompare(b.fecha_vencimiento || '9999'))
-  const vencidas = cxps.filter(c => c.saldo > 0 && c.fecha_vencimiento < todayLocal())
+  const pendientes = facturas.filter(f => f.saldo > 0).sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999'))
+  const vencidas = cxps.filter(c => c.saldo > 0 && c.due_date < todayLocal())
   const alertas = productos
-    .filter(p => stockLevel(Number(p.stock), Number(p.stock_minimo)) !== 'ok' && String(p.activo) !== 'false')
-    .sort((a, b) => Number(a.stock) / Math.max(1, Number(a.stock_minimo)) - Number(b.stock) / Math.max(1, Number(b.stock_minimo)))
+    .filter(p => stockLevel(Number(p.stock), Number(p.minimum_stock)) !== 'ok' && String(p.activo) !== 'false')
+    .sort((a, b) => Number(a.stock) / Math.max(1, Number(a.minimum_stock)) - Number(b.stock) / Math.max(1, Number(b.minimum_stock)))
     .slice(0, 5)
-  const provMap = new Map(proveedores.map(p => [p.id_proveedor, p]))
+  const provMap = new Map(proveedores.map(p => [p.supplier_id, p]))
 
   return (
     <div className="space-y-6">
@@ -70,8 +70,8 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
           </div>
           {pendientes.length === 0 && <p className="text-sm text-gray-500">{t('dashboard.sinFacturasPendientes')}</p>}
           {pendientes.map(f => (
-            <div key={f.id_factura} className="flex justify-between py-1 text-sm border-b border-gray-50">
-              <span>{f.folio} · {f.nombre_cliente}</span><span>{formatMoneyConverted(f.saldo, f.moneda, moneda, config)}</span>
+            <div key={f.invoice_id} className="flex justify-between py-1 text-sm border-b border-gray-50">
+              <span>{f.folio} · {f.customer_name}</span><span>{formatMoneyConverted(f.saldo, f.moneda, moneda, config)}</span>
             </div>
           ))}
         </div>
@@ -79,8 +79,8 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
           <div className="font-semibold mb-3">{t('dashboard.cxpVencidas')}</div>
           {vencidas.length === 0 && <p className="text-sm text-gray-500">{t('dashboard.sinCuentasVencidas')}</p>}
           {vencidas.map(c => (
-            <div key={c.id_cxp} className="flex justify-between py-1 text-sm border-b border-gray-50">
-              <span>{c.nombre_proveedor} · {c.folio_documento || c.descripcion}</span><span>{formatMoneyConverted(c.saldo, c.moneda, moneda, config)}</span>
+            <div key={c.ap_id} className="flex justify-between py-1 text-sm border-b border-gray-50">
+              <span>{c.supplier_name} · {c.document_serial || c.descripcion}</span><span>{formatMoneyConverted(c.saldo, c.moneda, moneda, config)}</span>
             </div>
           ))}
         </div>
@@ -91,10 +91,10 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
             <Button variant="ghost" size="sm" onClick={() => onNavigate('inventario')}>{t('dashboard.verInventario')}</Button>
           </div>
           {alertas.map(p => {
-            const prov = provMap.get(String(p.id_proveedor))
+            const prov = provMap.get(String(p.supplier_id))
             return (
-              <div key={p.id_producto} className="flex justify-between items-center py-1 text-sm border-b border-gray-50">
-                <span>{p.nombre} <StockBadge stock={Number(p.stock)} minimo={Number(p.stock_minimo)} /></span>
+              <div key={p.product_id} className="flex justify-between items-center py-1 text-sm border-b border-gray-50">
+                <span>{p.nombre} <StockBadge stock={Number(p.stock)} minimo={Number(p.minimum_stock)} /></span>
                 <span className="text-xs text-gray-500">{t('dashboard.quedan')} {p.stock} {p.unidad || 'pieza'}{prov ? ` · ${prov.nombre}` : ''}</span>
               </div>
             )

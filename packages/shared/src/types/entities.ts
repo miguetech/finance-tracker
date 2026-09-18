@@ -6,7 +6,7 @@ export type TipoPago = 'cobro' | 'abono'
 export type EstadoFactura = 'pendiente' | 'parcial' | 'pagada'
 
 export interface Cliente {
-  id_cliente: string
+  customer_id: string
   nombre: string
   /** Alias comercial de uso interno (búsquedas rápidas; no se imprime en factura) */
   alias?: string
@@ -15,83 +15,83 @@ export interface Cliente {
   telefono: string
   /** Dirección exacta: calle, número, referencias */
   direccion: string
-  direccion_pais?: string
-  direccion_estado?: string
-  direccion_cp?: string
-  fecha_registro: string
+  address_country?: string
+  address_state?: string
+  address_zip?: string
+  created_at: string
 }
 
 export interface FacturaItem {
   descripcion: string
   cantidad: number
-  precio_unitario: number
+  unit_price: number
   importe: number
-  id_producto?: string
+  product_id?: string
 }
 
 export interface Factura {
-  id_factura: string
+  invoice_id: string
   folio: string
-  id_cliente: string
-  nombre_cliente: string
-  fecha_emision: string
-  fecha_vencimiento: string
+  customer_id: string
+  customer_name: string
+  issue_date: string
+  due_date: string
   subtotal: number
   iva: number
   total: number
   saldo: number
-  fecha_pago: string
+  paid_at: string
   notas: string
   moneda: string
-  tipo_cambio: number
+  exchange_rate: number
   editada: string
-  fecha_edicion: string
+  edited_at: string
 }
 
 export interface Empleado {
-  id_empleado: string
+  employee_id: string
   nombre: string
   rfc: string
   puesto: string
   salario: number
-  salario_moneda: string
-  fecha_ingreso: string
+  salary_currency: string
+  hire_date: string
   activo: string
-  hora_entrada: string
-  hora_salida: string
-  esquema_pago: 'semanal' | 'quincenal' | 'mensual' | ''
-  tarifa_hora_extra: number
+  clock_in: string
+  clock_out: string
+  pay_schedule: 'semanal' | 'quincenal' | 'mensual' | ''
+  overtime_rate: number
   /** Días laborales semanales: números ISO separados por coma (1=Lun … 7=Dom) */
-  dias_laborales?: string
+  work_days?: string
 }
 
 /** Registro diario de asistencia de un empleado. */
 export interface Asistencia {
-  id_asistencia: string
-  id_empleado: string
-  nombre_empleado: string
+  attendance_id: string
+  employee_id: string
+  employee_name: string
   fecha: string
-  hora_entrada: string
-  hora_salida: string
+  clock_in: string
+  clock_out: string
   notas: string
 }
 
 export interface GastoFijo {
-  id_gasto_fijo: string
+  fixed_expense_id: string
   descripcion: string
   categoria: string
   monto: number
   moneda: string
-  dia_vencimiento: number
-  id_proveedor: string
-  nombre_proveedor: string
-  enlace_pago: string
+  due_day: number
+  supplier_id: string
+  supplier_name: string
+  payment_link: string
   notas: string
   activo: string
 }
 
 export interface TasaHistorial {
-  id_tasa: string
+  rate_id: string
   fecha: string
   base: string
   moneda: string
@@ -100,129 +100,129 @@ export interface TasaHistorial {
 }
 
 export interface Gasto {
-  id_gasto: string
+  expense_id: string
   fecha: string
   categoria: string
   descripcion: string
   monto: number
-  metodo_pago: MetodoPago
+  payment_method: MetodoPago
   proveedor: string
   moneda: string
-  tipo_cambio: number
+  exchange_rate: number
 }
 
 export interface Proveedor {
-  id_proveedor: string
+  supplier_id: string
   nombre: string
   rfc: string
   email: string
   telefono: string
   direccion: string
-  fecha_registro: string
+  created_at: string
 }
 
 export interface CuentaPagar {
-  id_cxp: string
-  id_proveedor: string
-  nombre_proveedor: string
-  folio_documento: string
+  ap_id: string
+  supplier_id: string
+  supplier_name: string
+  document_serial: string
   categoria: string
   descripcion: string
-  fecha_emision: string
-  fecha_vencimiento: string
-  monto_total: number
+  issue_date: string
+  due_date: string
+  total_amount: number
   saldo: number
   estado: EstadoFactura
   notas: string
   moneda: string
-  tipo_cambio: number
+  exchange_rate: number
 }
 
 export interface Pago {
-  id_pago: string
+  payment_id: string
   tipo: TipoPago
-  id_origen: string
+  origin_id: string
   fecha: string
   monto: number
-  metodo_pago: MetodoPago
+  payment_method: MetodoPago
   notas: string
   moneda: string
-  tipo_cambio: number
+  exchange_rate: number
 }
 
 export interface Producto {
-  id_producto: string
+  product_id: string
   nombre: string
   categoria: string
   unidad: string
   stock: number
-  stock_minimo: number
+  minimum_stock: number
   /** Moneda en la que están cotizados precio_costo y precio_venta */
   moneda: string
-  precio_costo: number
-  precio_venta: number
-  id_proveedor: string
-  nombre_proveedor: string
+  cost_price: number
+  sale_price: number
+  supplier_id: string
+  supplier_name: string
   imagen: string
   notas: string
   activo: string
-  fecha_registro: string
+  created_at: string
 }
 
 export type TipoMovimiento = 'entrada' | 'salida' | 'ajuste'
 
 export interface MovimientoStock {
-  id_movimiento: string
-  id_producto: string
+  movement_id: string
+  product_id: string
   tipo: TipoMovimiento
   cantidad: number
   motivo: string
-  id_proveedor: string
+  supplier_id: string
   fecha: string
 }
 
 export interface Config {
-  empresa_nombre: string
-  empresa_rfc: string
-  empresa_direccion: string
-  empresa_telefono: string
-  empresa_email: string
-  empresa_logo: string
-  empresa_cp: string
-  empresa_ciudad: string
-  empresa_pais: string
-  prefijo_folio: string
-  contador_folio: number
+  company_name: string
+  company_tax_id: string
+  company_address: string
+  company_phone: string
+  company_email: string
+  company_logo: string
+  company_zip: string
+  company_city: string
+  company_country: string
+  serial_prefix: string
+  serial_counter: number
   moneda: string
-  iva_porcentaje: number
-  categorias_gastos: string
-  categorias_cxp: string
-  categorias_inventario: string
-  monedas_activas: string
-  monedas_custom: string
-  tasas_cambio: string
-  metodos_pago: string
+  vat_percent: number
+  expense_categories: string
+  ap_categories: string
+  inventory_categories: string
+  active_currencies: string
+  custom_currencies: string
+  exchange_rates: string
+  payment_methods: string
   tipo_doc: TipoDoc
-  tipo_doc_etiqueta: string
+  doc_type_label: string
   share_backend_url: string
   /** Metas de venta mensuales: JSON { "YYYY-MM": monto } */
-  metas_mensuales: string
+  monthly_goals: string
   /** Comisiones por transacción: JSON { metodos: { [metodo]: % }, gastos: %, cxp: %, nomina: % } */
-  comisiones_transaccion: string
+  transaction_fees: string
   /** Comisiones avanzadas por método de pago: JSON { [metodo]: { pct?: number, minimo_fijo?: number } } */
-  comisiones_metodos: string
+  method_fees: string
   /** Registro automático de la tasa del día activado */
-  tasa_dia_activa: string
+  daily_rate_active: string
   /** Permisos otorgados a Google: JSON { scope: 'granted' | 'revoked' } */
-  google_permisos: string
+  google_permissions: string
   /** Recordatorios de pago por notificación del navegador */
-  notif_gastos_activa: string
+  notifications_expense_active: string
   /** Recordatorios de vencimientos de cobro (CxC) por notificación del navegador */
-  notif_cxc_activa: string
+  notifications_ar_active: string
   /** Unidades de medida del inventario separadas por coma */
-  unidades_medida: string
+  measure_units: string
   /** Nombre base para spreadsheets de años (estable, no cambia con empresa_nombre) */
-  nombreBaseHoja: string
+  baseSheetName: string
 }
 
 export interface InvoiceTotals {
@@ -236,8 +236,8 @@ export interface CodigoAcceso {
   rol: UserRole
   modulos_ver: string
   modulos_editar: string
-  expira_en: string
-  usos_max: string
+  expires_at: string
+  max_uses: string
   usos: string
   responsable: string
   email: string
@@ -249,5 +249,5 @@ export interface Dispositivo {
   codigo: string
   dispositivo: string
   ip_info: string
-  registrado_en: string
+  registered_at: string
 }

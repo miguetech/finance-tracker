@@ -43,8 +43,8 @@ export function esCodigoValido(codigo: string): boolean {
   return CODIGO_REGEX.test(codigo)
 }
 
-export function usosInfinitos(c: Pick<CodigoAcceso, 'usos_max' | 'usos'>): boolean {
-  return c.usos_max === '' || c.usos_max === undefined || c.usos_max === null
+export function usosInfinitos(c: Pick<CodigoAcceso, 'max_uses' | 'usos'>): boolean {
+  return c.max_uses === '' || c.max_uses === undefined || c.max_uses === null
 }
 
 export function usosRestantes(c: Pick<CodigoAcceso, 'usos'>): number {
@@ -52,11 +52,11 @@ export function usosRestantes(c: Pick<CodigoAcceso, 'usos'>): number {
   return Number(c.usos)
 }
 
-export function expirado(c: Pick<CodigoAcceso, 'expira_en'>, hoy: string): boolean {
-  if (!c.expira_en) return false
-  return c.expira_en < hoy
+export function expirado(c: Pick<CodigoAcceso, 'expires_at'>, hoy: string): boolean {
+  if (!c.expires_at) return false
+  return c.expires_at < hoy
 }
 
-export function vigente(c: Pick<CodigoAcceso, 'activo' | 'expira_en'>, hoy: string): boolean {
+export function vigente(c: Pick<CodigoAcceso, 'activo' | 'expires_at'>, hoy: string): boolean {
   return c.activo === 'true' && !expirado(c, hoy)
 }

@@ -5,7 +5,7 @@ import { IconPlus } from './icons'
 import { Button, Input, useToast } from './components'
 import type { Config } from '../types/entities'
 
-type ConfigKey = 'categorias_gastos' | 'categorias_cxp' | 'categorias_inventario'
+type ConfigKey = 'expense_categories' | 'ap_categories' | 'inventory_categories'
 
 /** Selector de categorías estandarizado con creación rápida (+ Nueva categoría).
  *  `configKey` indica la lista de configuración donde se guarda la nueva categoría. */

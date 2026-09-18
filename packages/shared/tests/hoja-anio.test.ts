@@ -31,10 +31,10 @@ describe('hoja-por-año contra API estilo Google', () => {
     const cli = await repo.saveCliente({ nombre: 'ACME' } as never)
     const año = String(new Date().getFullYear())
     await repo.createFactura({
-      id_cliente: cli.id_cliente,
-      items: [{ descripcion: 'x', cantidad: 1, precio_unitario: 10 }],
-      fecha_emision: `${año}-08-25`,
-      fecha_vencimiento: '',
+      customer_id: cli.customer_id,
+      items: [{ descripcion: 'x', cantidad: 1, unit_price: 10 }],
+      issue_date: `${año}-08-25`,
+      due_date: '',
       notas: ''
     })
     const evento = [...docs.entries()].find(([id]) => id !== 'BASE' && id.length >= 20)
@@ -102,10 +102,10 @@ describe('hoja-por-año contra API estilo Google', () => {
     const cli = await repo.saveCliente({ nombre: 'LEGACY' } as never)
     // Factura de un año PASADO sin spreadsheet registrado → Facturas va al BASE.
     await repo.createFactura({
-      id_cliente: cli.id_cliente,
-      items: [{ descripcion: 'legacy', cantidad: 1, precio_unitario: 1 }],
-      fecha_emision: '1995-06-01',
-      fecha_vencimiento: '',
+      customer_id: cli.customer_id,
+      items: [{ descripcion: 'legacy', cantidad: 1, unit_price: 1 }],
+      issue_date: '1995-06-01',
+      due_date: '',
       notas: ''
     })
     // Las Facturas del año sin hoja NUNCA fabrican un spreadsheet nuevo:
@@ -125,18 +125,18 @@ describe('hoja-por-año contra API estilo Google', () => {
     await repo.prepararAnioActual()
     const cli = await repo.saveCliente({ nombre: 'ACME' } as never)
     const f = await repo.createFactura({
-      id_cliente: cli.id_cliente,
-      items: [{ descripcion: 'x', cantidad: 1, precio_unitario: 10 }],
-      fecha_emision: `${año}-08-25`,
-      fecha_vencimiento: '',
+      customer_id: cli.customer_id,
+      items: [{ descripcion: 'x', cantidad: 1, unit_price: 10 }],
+      issue_date: `${año}-08-25`,
+      due_date: '',
       notas: ''
     })
     fetchMock.mockClear()
 
     const todas = await repo.listFacturas()
     // El fake devuelve el grid completo (header + datos): filtrar la fila real.
-    expect(todas.filter(r => String(r.id_factura) !== 'id_factura').length).toBe(1)
-    expect(todas.some(r => r.id_factura === f.id_factura)).toBe(true)
+    expect(todas.filter(r => String(r.invoice_id) !== 'invoice_id').length).toBe(1)
+    expect(todas.some(r => r.invoice_id === f.invoice_id)).toBe(true)
 
     const añoId = [...docs.keys()].find(id => id !== 'BASE' && id.length >= 20)!
     const batchBase = fetchMock.mock.calls
@@ -172,7 +172,7 @@ describe('hoja-por-año contra API estilo Google', () => {
     // Usuario pre-refactor: el BASE SÍ tiene la pestaña Facturas (legado).
     // Rango '!A2:P' devuelve SOLO filas de datos (sin header): una por doc.
     const año = String(new Date().getFullYear())
-    const header = ['id_factura', 'folio', 'id_cliente', 'nombre_cliente', 'fecha_emision', 'fecha_vencimiento', 'subtotal', 'iva', 'total', 'saldo', 'fecha_pago', 'notas', 'moneda', 'tipo_cambio', 'editada', 'fecha_edicion']
+    const header = ['invoice_id', 'folio', 'customer_id', 'customer_name', 'issue_date', 'due_date', 'subtotal', 'iva', 'total', 'saldo', 'paid_at', 'notas', 'moneda', 'exchange_rate', 'editada', 'edited_at']
     const f2020 = ['fac_0', 'FAC-000', 'cli_0', 'LEGACY', '2020-06-01', '', 9, 1.44, 10.44, 10.44, '', '', 'USD', 1, '', '']
     const f26 = ['fac_1', 'FAC-001', 'cli_0', 'LEGACY', `${año}-08-25`, '', 9, 1.44, 10.44, 10.44, '', '', 'USD', 1, '', '']
     docs.get('BASE')!.set('Facturas', [header, f2020])
@@ -184,8 +184,8 @@ describe('hoja-por-año contra API estilo Google', () => {
 
     const todas = await repo.listFacturas()
     expect(todas.length).toBe(2)
-    expect(todas.some(f => f.fecha_emision.startsWith('2020'))).toBe(true)
-    expect(todas.some(f => f.fecha_emision.startsWith(año))).toBe(true)
+    expect(todas.some(f => f.issue_date.startsWith('2020'))).toBe(true)
+    expect(todas.some(f => f.issue_date.startsWith(año))).toBe(true)
   })
 
   it('registerPago con BASE sin pestañas de evento: cobro viaja SOLO al archivo del año', async () => {
@@ -194,17 +194,17 @@ describe('hoja-por-año contra API estilo Google', () => {
     const cli = await repo.saveCliente({ nombre: 'A' } as never)
     const año = String(new Date().getFullYear())
     const f = await repo.createFactura({
-      id_cliente: cli.id_cliente,
-      items: [{ descripcion: 'a', cantidad: 1, precio_unitario: 100 }],
-      fecha_emision: `${año}-08-25`,
-      fecha_vencimiento: '',
+      customer_id: cli.customer_id,
+      items: [{ descripcion: 'a', cantidad: 1, unit_price: 100 }],
+      issue_date: `${año}-08-25`,
+      due_date: '',
       notas: ''
     })
     fetchMock.mockClear()
-    await repo.registerPago({ tipo: 'cobro', id_origen: f.id_factura, fecha: `${año}-08-26`, monto: 116, metodo_pago: 'Transferencia', notas: '' })
+    await repo.registerPago({ tipo: 'cobro', origin_id: f.invoice_id, fecha: `${año}-08-26`, monto: 116, payment_method: 'Transferencia', notas: '' })
     // Saldo actualizado en la vista unificada (buscar la fila real por id).
     const todos = await repo.listFacturas({})
-    expect(todos.find(r => r.id_factura === f.id_factura)?.saldo).toBe(0)
+    expect(todos.find(r => r.invoice_id === f.invoice_id)?.saldo).toBe(0)
     // El batchUpdate de saldo + pago fue SOLO al documento del año, NUNCA al BASE.
     const añoId = [...docs.keys()].find(id => id !== 'BASE' && id.length >= 20)!
     const updates = fetchMock.mock.calls
@@ -225,21 +225,21 @@ describe('hoja-por-año contra API estilo Google', () => {
     const { docs, repo, fetchMock } = setupConBase()
     await repo.prepararAnioActual()
     // Usuario PRE-refactor: el BASE conserva la pestaña de evento (legado).
-    const headerFacturas = ['id_factura', 'folio', 'id_cliente', 'nombre_cliente', 'fecha_emision', 'fecha_vencimiento', 'subtotal', 'iva', 'total', 'saldo', 'fecha_pago', 'notas', 'moneda', 'tipo_cambio', 'editada', 'fecha_edicion']
+    const headerFacturas = ['invoice_id', 'folio', 'customer_id', 'customer_name', 'issue_date', 'due_date', 'subtotal', 'iva', 'total', 'saldo', 'paid_at', 'notas', 'moneda', 'exchange_rate', 'editada', 'edited_at']
     docs.get('BASE')!.set('Facturas', [headerFacturas])
     const cli = await repo.saveCliente({ nombre: 'LEGACY' } as never)
     // Año pasado sin hoja registrada → la factura vive en el fragmento del BASE.
     const f = await repo.createFactura({
-      id_cliente: cli.id_cliente,
-      items: [{ descripcion: 'l', cantidad: 1, precio_unitario: 100 }],
-      fecha_emision: '1995-06-01',
-      fecha_vencimiento: '',
+      customer_id: cli.customer_id,
+      items: [{ descripcion: 'l', cantidad: 1, unit_price: 100 }],
+      issue_date: '1995-06-01',
+      due_date: '',
       notas: ''
     })
     fetchMock.mockClear()
-    await repo.registerPago({ tipo: 'cobro', id_origen: f.id_factura, fecha: '1995-06-15', monto: 116, metodo_pago: 'Efectivo', notas: '' })
+    await repo.registerPago({ tipo: 'cobro', origin_id: f.invoice_id, fecha: '1995-06-15', monto: 116, payment_method: 'Efectivo', notas: '' })
     const todos = await repo.listFacturas({})
-    expect(todos.find(r => r.id_factura === f.id_factura)?.saldo).toBe(0)
+    expect(todos.find(r => r.invoice_id === f.invoice_id)?.saldo).toBe(0)
     // El batchUpdate atómico (saldo + pago) fue al BASE, no inventó año nuevo.
     const atomic = fetchMock.mock.calls
       .filter(([u]) => String(u).includes('values:batchUpdate'))
@@ -250,7 +250,7 @@ describe('hoja-por-año contra API estilo Google', () => {
     // Los documentos del año no recibieron la factura legacy ni su cobro.
     const añoIds = [...docs.keys()].filter(id => id !== 'BASE' && id.length >= 20)
     for (const id of añoIds) {
-      expect((docs.get(id)!.get('Facturas') ?? []).some(r => String(r[0]) === f.id_factura)).toBe(false)
+      expect((docs.get(id)!.get('Facturas') ?? []).some(r => String(r[0]) === f.invoice_id)).toBe(false)
       expect((docs.get(id)!.get('Pagos') ?? []).filter(r => String(r[0]).startsWith('pag_')).length).toBe(0)
     }
   })
@@ -302,35 +302,35 @@ describe('hoja-por-año contra API estilo Google', () => {
     await repo.conectarAñoPorId('2023', ev2023)
     const cli = await repo.saveCliente({ nombre: 'ACME' } as never)
     const factura = await repo.createFactura({
-      id_cliente: cli.id_cliente,
-      items: [{ descripcion: 'x', cantidad: 1, precio_unitario: 10 }],
-      fecha_emision: '2023-05-10',
-      fecha_vencimiento: '',
+      customer_id: cli.customer_id,
+      items: [{ descripcion: 'x', cantidad: 1, unit_price: 10 }],
+      issue_date: '2023-05-10',
+      due_date: '',
       notas: ''
     })
     // Items creados en la hoja del padre (2023), NO en el BASE ni en el año en curso.
     const itemsEV = (fake.docs.get(ev2023)?.get('Factura_Items') ?? []) as (string | number)[][]
     const itemsBASE = (fake.docs.get('BASE')?.get('Factura_Items') ?? []) as (string | number)[][]
-    expect(itemsEV.some(r => String(r[0]) === factura.id_factura)).toBe(true)
-    expect(itemsBASE.some(r => String(r[0]) === factura.id_factura)).toBe(false)
+    expect(itemsEV.some(r => String(r[0]) === factura.invoice_id)).toBe(true)
+    expect(itemsBASE.some(r => String(r[0]) === factura.invoice_id)).toBe(false)
 
     // El fn updateFactura hace replaceTable de TODOS los items: §8 exige que
     // no re-rutee nada al año en curso (desharía un backfill).
-    const act = await repo.updateFactura(factura.id_factura, {
-      id_cliente: cli.id_cliente,
-      items: [{ descripcion: 'y', cantidad: 2, precio_unitario: 5 }],
-      fecha_emision: '2023-06-01',
-      fecha_vencimiento: '',
+    const act = await repo.updateFactura(factura.invoice_id, {
+      customer_id: cli.customer_id,
+      items: [{ descripcion: 'y', cantidad: 2, unit_price: 5 }],
+      issue_date: '2023-06-01',
+      due_date: '',
       notas: 'edit'
     })
     const itemsEV2 = (fake.docs.get(ev2023)?.get('Factura_Items') ?? []) as (string | number)[][]
-    expect(itemsEV2.filter(r => String(r[0]) === act.id_factura)).toHaveLength(1)
+    expect(itemsEV2.filter(r => String(r[0]) === act.invoice_id)).toHaveLength(1)
     const currentYear = String(new Date().getFullYear())
     const evActual = (fake.docs.get('BASE')?.get('Sistema') ?? []) as (string | number)[][]
     const idAnioActual = evActual.find(r => String(r[0]) === `eventos_${currentYear}`)?.[1]
     if (idAnioActual && fake.docs.has(idAnioActual)) {
       const itemsActual = (fake.docs.get(idAnioActual)?.get('Factura_Items') ?? []) as (string | number)[][]
-      expect(itemsActual.some(r => String(r[0]) === act.id_factura)).toBe(false)
+      expect(itemsActual.some(r => String(r[0]) === act.invoice_id)).toBe(false)
     }
   })
 
@@ -396,16 +396,16 @@ describe('hoja-por-año contra API estilo Google', () => {
     const repo = createRepository({ api, storage: memoryStorage(), getSpreadsheetId: async () => 'BASE' })
     const cli = await repo.saveCliente({ nombre: 'RETRO' } as never)
     const f = await repo.createFactura({
-      id_cliente: cli.id_cliente,
-      items: [{ descripcion: 'r', cantidad: 1, precio_unitario: 10 }],
-      fecha_emision: '2024-06-01',
-      fecha_vencimiento: '',
+      customer_id: cli.customer_id,
+      items: [{ descripcion: 'r', cantidad: 1, unit_price: 10 }],
+      issue_date: '2024-06-01',
+      due_date: '',
       notas: ''
     })
     // Se fabricó 1 spreadsheet de año (y quedó registrado como eventos_2024).
     const idAnio = [...fake.docs.keys()].find(id => id !== 'BASE' && id.length >= 20)
     expect(idAnio).toBeTruthy()
-    expect((fake.docs.get(idAnio!)?.get('Facturas') ?? []).some(r => String(r[0]) === f.id_factura)).toBe(true)
+    expect((fake.docs.get(idAnio!)?.get('Facturas') ?? []).some(r => String(r[0]) === f.invoice_id)).toBe(true)
     const sistema = (fake.docs.get('BASE')!.get('Sistema') ?? []) as (string | number)[][]
     expect(sistema.find(r => String(r[0]) === 'eventos_2024')?.[1]).toBe(idAnio)
   })
@@ -416,28 +416,28 @@ describe('hoja-por-año contra API estilo Google', () => {
     const api = new SheetsApi(async () => 'T')
     const repo = createRepository({ api, storage: memoryStorage(), getSpreadsheetId: async () => 'BASE', modo: 'backend' })
     // El service account escribe el BASE con pestañas de evento (legado).
-    fake.docs.get('BASE')!.set('Facturas', [['id_factura', 'folio', 'id_cliente', 'nombre_cliente', 'fecha_emision', 'fecha_vencimiento', 'subtotal', 'iva', 'total', 'saldo', 'fecha_pago', 'notas', 'moneda', 'tipo_cambio', 'editada', 'fecha_edicion']])
+    fake.docs.get('BASE')!.set('Facturas', [['invoice_id', 'folio', 'customer_id', 'customer_name', 'issue_date', 'due_date', 'subtotal', 'iva', 'total', 'saldo', 'paid_at', 'notas', 'moneda', 'exchange_rate', 'editada', 'edited_at']])
     const cli = await repo.saveCliente({ nombre: 'BACK' } as never)
     const f = await repo.createFactura({
-      id_cliente: cli.id_cliente,
-      items: [{ descripcion: 'b', cantidad: 1, precio_unitario: 10 }],
-      fecha_emision: '2024-06-01',
-      fecha_vencimiento: '',
+      customer_id: cli.customer_id,
+      items: [{ descripcion: 'b', cantidad: 1, unit_price: 10 }],
+      issue_date: '2024-06-01',
+      due_date: '',
       notas: ''
     })
     expect([...fake.docs.keys()]).toEqual(['BASE'])
-    expect((fake.docs.get('BASE')!.get('Facturas') ?? []).some(r => String(r[0]) === f.id_factura)).toBe(true)
+    expect((fake.docs.get('BASE')!.get('Facturas') ?? []).some(r => String(r[0]) === f.invoice_id)).toBe(true)
   })
 
   it('re-homing: items partidos en año equivocado migran al año del padre (una pasada)', async () => {
-    const encabezadoEstado = ['id_factura', 'folio', 'id_cliente', 'nombre_cliente', 'fecha_emision', 'fecha_vencimiento', 'subtotal', 'iva', 'total', 'saldo', 'fecha_pago', 'notas', 'moneda', 'tipo_cambio', 'editada', 'fecha_edicion']
-    const encabezadoItems = ['id_factura', 'descripcion', 'cantidad', 'precio_unitario']
+    const encabezadoEstado = ['invoice_id', 'folio', 'customer_id', 'customer_name', 'issue_date', 'due_date', 'subtotal', 'iva', 'total', 'saldo', 'paid_at', 'notas', 'moneda', 'exchange_rate', 'editada', 'edited_at']
+    const encabezadoItems = ['invoice_id', 'descripcion', 'cantidad', 'unit_price']
     const fake = googleLikeApi()
     // ESTADO PRE-migración (bug F5 viejo §8): factura 2024 viva en EVENTOS-2024,
     // pero sus items quedaron partidos entre EVENTOS-2025 y el fragmento legacy del BASE.
     fake.docs.set('BASE', new Map([
       ['Config', []],
-      ['Clientes', [['id_cliente', 'cli_1', 'ACME']]],
+      ['Clientes', [['customer_id', 'cli_1', 'ACME']]],
       ['Sistema', [['ft_instancia', 'i'], ['anio_activo', '2026'], ['eventos_2024', '1AbC0dEfGhIjKlMnOpQrStUv2024'.padEnd(20, '0')], ['eventos_2025', '1AbC0dEfGhIjKlMnOpQrStUv2025'.padEnd(20, '0')]]],
       ['Factura_Items', [encabezadoItems, ['fac_1', 'en base', 1, 10]]],
     ]))

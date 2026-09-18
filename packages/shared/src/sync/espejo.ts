@@ -34,7 +34,7 @@ export interface EspejoDeps {
 }
 
 function añoDeFilaEspejo(fila: Row): string {
-  const f = String(fila.fecha_emision ?? fila.fecha ?? '')
+  const f = String(fila.issue_date ?? fila.fecha ?? '')
   return /^\d{4}/.test(f) ? f.slice(0, 4) : ''
 }
 

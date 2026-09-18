@@ -21,7 +21,7 @@ export function Proveedores() {
   const [editando, setEditando] = useState<Proveedor | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const { config } = useConfig()
-  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.tipo_doc_etiqueta ?? '')
+  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.doc_type_label ?? '')
 
   return (
     <div className="space-y-4">
@@ -30,7 +30,7 @@ export function Proveedores() {
         <div className="flex gap-2">
           {canEdit('proveedores') && <ImportarContactos onImportados={async (nuevos) => {
             for (const c of nuevos) {
-              await saveProveedor.mutateAsync({ id_proveedor: uid('prov_'), nombre: c.nombre, rfc: '', email: c.email, telefono: c.telefono, direccion: '', fecha_registro: todayLocal() })
+              await saveProveedor.mutateAsync({ supplier_id: uid('prov_'), nombre: c.nombre, rfc: '', email: c.email, telefono: c.telefono, direccion: '', created_at: todayLocal() })
             }
           }} />}
           {canEdit('proveedores') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => { setEditando(null); setFormOpen(true) }}>{t('proveedores.nuevo')}</Button>)}
@@ -54,7 +54,7 @@ export function Proveedores() {
                   <Button size="sm" variant="outline" disabled={!prov.email}>{'✉'}</Button>
                 </a>
                 {canEdit('proveedores') && (<Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(prov); setFormOpen(true) }}>{t('common.editar')}</Button>)}
-                {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_proveedor))}>{t('common.eliminar')}</Button>)}
+                {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.supplier_id))}>{t('common.eliminar')}</Button>)}
               </div>
             )
           } }

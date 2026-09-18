@@ -16,21 +16,21 @@ export function suiteContratoStore(nombre: string, factory: () => EspejoStore) {
     it('replaceTable + getAllRows roundtrip', async () => {
       const s = factory()
       await s.init(ddlDesdeTables().flatMap(d => [d.create, ...d.indexes]))
-      await s.replaceTable('Clientes', [{ id_cliente: 'c1', nombre: 'Ana' }])
+      await s.replaceTable('Clientes', [{ customer_id: 'c1', nombre: 'Ana' }])
       const filas = await s.getAllRows('Clientes')
       expect(filas).toHaveLength(1)
-      expect(filas[0]).toMatchObject({ id_cliente: 'c1', nombre: 'Ana' })
+      expect(filas[0]).toMatchObject({ customer_id: 'c1', nombre: 'Ana' })
       await s.close()
     })
 
     it('reemplazo borra filas previas (full sync)', async () => {
       const s = factory()
       await s.init(ddlDesdeTables().flatMap(d => [d.create, ...d.indexes]))
-      await s.replaceTable('Pagos', [{ id_pago: 'p1' }, { id_pago: 'p2' }])
-      await s.replaceTable('Pagos', [{ id_pago: 'p3' }])
+      await s.replaceTable('Pagos', [{ payment_id: 'p1' }, { payment_id: 'p2' }])
+      await s.replaceTable('Pagos', [{ payment_id: 'p3' }])
       const restantes = await s.getAllRows('Pagos')
       expect(restantes).toHaveLength(1)
-      expect(restantes[0].id_pago).toBe('p3')
+      expect(restantes[0].payment_id).toBe('p3')
       await s.close()
     })
 

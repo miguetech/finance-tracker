@@ -26,12 +26,12 @@ describe.skipIf(!moduloDisponible)('store sqlite-wasm', () => {
     const s = crearSqliteStore()
     await s.init(ddlDesdeTables().flatMap(d => [d.create, ...d.indexes]))
     await s.replaceTable('Facturas', [
-      { id_factura: 'f1', total: 100.5, moneda: 'VES', saldo: '' },
-      { id_factura: 'f2', total: 0, notas: 'texto con "comillas" y ,coma' }
+      { invoice_id: 'f1', total: 100.5, moneda: 'VES', saldo: '' },
+      { invoice_id: 'f2', total: 0, notas: 'texto con "comillas" y ,coma' }
     ])
     const filas = await s.getAllRows('Facturas')
     expect(filas).toHaveLength(2)
-    const f1 = filas.find(f => f.id_factura === 'f1')
+    const f1 = filas.find(f => f.invoice_id === 'f1')
     expect(Number(f1?.total)).toBe(100.5)
     expect(f1?.moneda).toBe('VES')
     await s.close()

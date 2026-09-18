@@ -22,7 +22,7 @@ describe('pipeline del espejo', () => {
 
   it('primer pull inserta; segundo idéntico no reemplaza; cambio sí', async () => {
     const store = storeMemoria()
-    let filas: Record<string, string | number>[] = [{ id_factura: 'f1', total: 10 }]
+    let filas: Record<string, string | number>[] = [{ invoice_id: 'f1', total: 10 }]
     const fetchTablas = vi.fn(async (ts: TableName[]) => Object.fromEntries(ts.map(t => [t, filas])))
     const espejo = crearEspejo({ store, fetchTablas })
     await espejo.init()
@@ -30,7 +30,7 @@ describe('pipeline del espejo', () => {
     expect(store.replaceTable).toHaveBeenCalledTimes(1)
     await espejo.pull(['Facturas'])
     expect(store.replaceTable).toHaveBeenCalledTimes(1)
-    filas = [{ id_factura: 'f1', total: 12 }]
+    filas = [{ invoice_id: 'f1', total: 12 }]
     const cambiadas = await espejo.pull(['Facturas'])
     expect(store.replaceTable).toHaveBeenCalledTimes(2)
     expect(cambiadas).toEqual(['Facturas'])
@@ -69,7 +69,7 @@ describe('pipeline del espejo', () => {
     let filas: Record<string, string | number>[] = []
     const espejo = crearEspejo({ store, fetchTablas: async ts => Object.fromEntries(ts.map(t => [t, filas])), onCambio })
     await espejo.init()
-    filas = [{ id_cliente: 'c1' }]
+    filas = [{ customer_id: 'c1' }]
     // Carga inicial: ambas pasan de desconocidas a cargadas.
     await espejo.pull(['Clientes', 'Proveedores'])
     expect(onCambio).toHaveBeenCalledWith(['Clientes', 'Proveedores'])
@@ -109,7 +109,7 @@ describe('tablas sin origen (fetchTablas → null)', () => {
     const onCambio = vi.fn()
     const soportadas = new Set(['Facturas'])
     const fetchTablas = vi.fn(async (ts: TableName[]) =>
-      Object.fromEntries(ts.map(t => [t, soportadas.has(t) ? [{ id_factura: 'x' }] : null]))
+      Object.fromEntries(ts.map(t => [t, soportadas.has(t) ? [{ invoice_id: 'x' }] : null]))
     )
     const espejo = crearEspejo({ store, fetchTablas, onCambio })
     await espejo.init()
@@ -140,8 +140,8 @@ describe('Factura_Items composite PK integration', () => {
         if (tablas.includes('Factura_Items')) {
           return {
             Factura_Items: [
-              { id_factura: 'F-001', linea: 1, descripcion: 'Item 1', cantidad: 1, precio_unitario: 100, importe: 100, id_producto: '' },
-              { id_factura: 'F-001', linea: 2, descripcion: 'Item 2', cantidad: 2, precio_unitario: 50, importe: 100, id_producto: '' }
+              { invoice_id: 'F-001', linea: 1, descripcion: 'Item 1', cantidad: 1, unit_price: 100, importe: 100, product_id: '' },
+              { invoice_id: 'F-001', linea: 2, descripcion: 'Item 2', cantidad: 2, unit_price: 50, importe: 100, product_id: '' }
             ]
           }
         }
@@ -161,8 +161,8 @@ describe('Factura_Items composite PK integration', () => {
       store,
       fetchTablas: async () => ({
         Factura_Items: [
-          { id_factura: 'F-001', linea: 1, descripcion: 'Item 1 MODIFICADO', cantidad: 3, precio_unitario: 100, importe: 300, id_producto: '' },
-          { id_factura: 'F-001', linea: 2, descripcion: 'Item 2', cantidad: 2, precio_unitario: 50, importe: 100, id_producto: '' }
+          { invoice_id: 'F-001', linea: 1, descripcion: 'Item 1 MODIFICADO', cantidad: 3, unit_price: 100, importe: 300, product_id: '' },
+          { invoice_id: 'F-001', linea: 2, descripcion: 'Item 2', cantidad: 2, unit_price: 50, importe: 100, product_id: '' }
         ]
       })
     })

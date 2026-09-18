@@ -65,11 +65,11 @@ function TabRegistrados() {
           { key: 'categoria', header: t('common.categoria'), render: r => String(r.categoria) },
           { key: 'descripcion', header: t('gastos.descripcion'), render: r => String(r.descripcion) },
           { key: 'monto', header: t('common.monto'), render: r => formatMoneyConverted(Number(r.monto), String(r.moneda), moneda, config) },
-          { key: 'metodo_pago', header: t('common.metodo'), render: r => String(r.metodo_pago) },
+          { key: 'payment_method', header: t('common.metodo'), render: r => String(r.payment_method) },
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
               {canEdit('gastos') && (<Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(r as unknown as Gasto); setFormOpen(true) }}>{t('common.editar')}</Button>)}
-              {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_gasto))}>{t('common.eliminar')}</Button>)}
+              {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.expense_id))}>{t('common.eliminar')}</Button>)}
             </div>
           ) }
         ]} rows={filtrados as unknown as Record<string, unknown>[]} />
@@ -109,22 +109,22 @@ function TabFijos() {
 
   // Notificación del navegador al cargar si hay vencimientos próximos (fácil de desactivar).
   useEffect(() => {
-    if (config?.notif_gastos_activa !== 'true' || !notif.soportadas || Notification.permission !== 'granted') return
+    if (config?.notifications_expense_active !== 'true' || !notif.soportadas || Notification.permission !== 'granted') return
     const pendientes = [...vencidos, ...porVencer]
     if (pendientes.length > 0) {
-      notif.notificar(t('gastosFijos.recordatorio'), `${pendientes[0].gasto_fijo.descripcion} — ${formatMoneyConverted(Number(pendientes[0].gasto_fijo.monto), pendientes[0].gasto_fijo.moneda, config?.moneda ?? 'USD', config)} (${pendientes[0].fecha_vencimiento})`)
+      notif.notificar(t('gastosFijos.recordatorio'), `${pendientes[0].gasto_fijo.descripcion} — ${formatMoneyConverted(Number(pendientes[0].gasto_fijo.monto), pendientes[0].gasto_fijo.moneda, config?.moneda ?? 'USD', config)} (${pendientes[0].due_date})`)
     }
-  }, [config?.notif_gastos_activa, vencidos.length, porVencer.length])
+  }, [config?.notifications_expense_active, vencidos.length, porVencer.length])
 
   const toggleNotif = async () => {
-    if (config?.notif_gastos_activa === 'true') {
-      await saveConfig.mutateAsync({ ...config!, notif_gastos_activa: 'false' })
+    if (config?.notifications_expense_active === 'true') {
+      await saveConfig.mutateAsync({ ...config!, notifications_expense_active: 'false' })
       toast(t('common.guardado'))
       return
     }
     await notif.activar()
     if (notif.permiso === 'granted' || Notification.permission === 'granted') {
-      await saveConfig.mutateAsync({ ...config!, notif_gastos_activa: 'true' })
+      await saveConfig.mutateAsync({ ...config!, notifications_expense_active: 'true' })
       toast(t('gastosFijos.notifActivada'))
     } else {
       toast(t('gastosFijos.notifPermisoDenegado'), 'error')
@@ -135,7 +135,7 @@ function TabFijos() {
 
   return (
     <>
-      <RecordatoriosCard activa={config?.notif_gastos_activa === 'true'} soportadas={notif.soportadas} permiso={notif.permiso} onToggle={toggleNotif} />
+      <RecordatoriosCard activa={config?.notifications_expense_active === 'true'} soportadas={notif.soportadas} permiso={notif.permiso} onToggle={toggleNotif} />
 
       {canEdit('gastos') && (
         <div className="flex justify-end">
@@ -146,7 +146,7 @@ function TabFijos() {
       {(porVencer.length > 0 || vencidos.length > 0) && (
         <div className={`rounded-xl border p-3 text-sm ${vencidos.length > 0 ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
           <b>{t('gastosFijos.recordatorio')}:</b>{' '}
-          {[...vencidos, ...porVencer].map(v => `${v.gasto_fijo.descripcion} (${v.fecha_vencimiento})`).join(' · ')}
+          {[...vencidos, ...porVencer].map(v => `${v.gasto_fijo.descripcion} (${v.due_date})`).join(' · ')}
         </div>
       )}
 
@@ -154,9 +154,9 @@ function TabFijos() {
         <Table columns={[
           { key: 'descripcion', header: t('gastosFijos.descripcion'), render: r => String(r.descripcion) },
           { key: 'monto', header: t('common.monto'), render: r => formatMoneyConverted(Number(r.monto), String((r as Record<string, unknown>).moneda), moneda, config) },
-          { key: 'dia', header: t('reportesFin.vencimiento'), render: r => String((r as Record<string, unknown>).dia_vencimiento) },
+          { key: 'dia', header: t('reportesFin.vencimiento'), render: r => String((r as Record<string, unknown>).due_day) },
           { key: 'estado', header: t('reportesFin.estadoPago'), render: r => {
-            const v = proyeccion.find(p => p.gasto_fijo.id_gasto_fijo === (r as Record<string, unknown>).id_gasto_fijo)
+            const v = proyeccion.find(p => p.gasto_fijo.fixed_expense_id === (r as Record<string, unknown>).fixed_expense_id)
             const est = v?.estado ?? 'por_vencer'
             return <Badge tone={est === 'pagado' ? 'green' : est === 'vencido' ? 'red' : 'yellow'}>
               {est === 'pagado' ? t('reportesFin.pagadoEstado') : est === 'vencido' ? t('reportesFin.vencidoEstado') : t('reportesFin.porVencerEstado')}
@@ -166,9 +166,9 @@ function TabFijos() {
             const gf = r as unknown as GastoFijo
             return (
               <div className="flex flex-wrap gap-2">
-                {gf.enlace_pago && <a href={gf.enlace_pago} target="_blank" rel="noreferrer"><Button size="sm" variant="outline">{t('reportesFin.enlacePago')}</Button></a>}
+                {gf.payment_link && <a href={gf.payment_link} target="_blank" rel="noreferrer"><Button size="sm" variant="outline">{t('reportesFin.enlacePago')}</Button></a>}
                 {canEdit('gastos') && gf.activo !== 'false' && (
-                  <Button size="sm" variant="success" disabled={proyeccion.find(p => p.gasto_fijo.id_gasto_fijo === gf.id_gasto_fijo)?.estado === 'pagado'}
+                  <Button size="sm" variant="success" disabled={proyeccion.find(p => p.gasto_fijo.fixed_expense_id === gf.fixed_expense_id)?.estado === 'pagado'}
                     onClick={async () => {
                       try {
                         await marcarPagado(gf, (g: unknown) => saveGasto.mutateAsync(g as Gasto), moneda)
@@ -179,7 +179,7 @@ function TabFijos() {
                   </Button>
                 )}
                 {canEdit('gastos') && (<Button size="sm" variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(gf); setFormOpen(true) }}>{t('common.editar')}</Button>)}
-                {isAdmin && (<Button size="sm" variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(gf.id_gasto_fijo)}>{t('common.eliminar')}</Button>)}
+                {isAdmin && (<Button size="sm" variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(gf.fixed_expense_id)}>{t('common.eliminar')}</Button>)}
               </div>
             )
           } }

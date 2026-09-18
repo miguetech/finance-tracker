@@ -23,16 +23,16 @@ export function estadoResultados(
   cfg: Config,
   productosCosto: Record<string, number>,
   productosMoneda: Record<string, string>,
-  itemsPorFactura: Record<string, { cantidad: number; id_producto?: string; precio_unitario?: number }[]>,
+  itemsPorFactura: Record<string, { cantidad: number; product_id?: string; unit_price?: number }[]>,
   rango: RangoFecha
 ): ResultadoPL {
-  const facs = facturas.filter(f => enRango(f.fecha_emision, rango))
+  const facs = facturas.filter(f => enRango(f.issue_date, rango))
   const gas = gastos.filter(g => enRango(g.fecha, rango))
 
   let ingresos = 0
   const lineasIngresos = new Map<string, number>()
   for (const f of facs) {
-    const total = baseMonto(f.total, f.tipo_cambio)
+    const total = baseMonto(f.total, f.exchange_rate)
     ingresos += total
     lineasIngresos.set(f.moneda || 'base', round2((lineasIngresos.get(f.moneda || 'base') ?? 0) + total))
   }
@@ -41,10 +41,10 @@ export function estadoResultados(
   // El costo del producto se convierte desde su moneda de cotización a la base.
   let cogs = 0
   for (const f of facs) {
-    for (const it of itemsPorFactura[f.id_factura] ?? []) {
-      if (!it.id_producto || productosCosto[it.id_producto] === undefined) continue
-      const monedaProd = productosMoneda[it.id_producto] || cfg.moneda
-      cogs += convert(productosCosto[it.id_producto] * it.cantidad, monedaProd, cfg.moneda, cfg)
+    for (const it of itemsPorFactura[f.invoice_id] ?? []) {
+      if (!it.product_id || productosCosto[it.product_id] === undefined) continue
+      const monedaProd = productosMoneda[it.product_id] || cfg.moneda
+      cogs += convert(productosCosto[it.product_id] * it.cantidad, monedaProd, cfg.moneda, cfg)
     }
   }
   cogs = round2(cogs)
@@ -53,7 +53,7 @@ export function estadoResultados(
   let variables = 0
   const lineasCostos = new Map<string, number>()
   for (const g of gas) {
-    const monto = baseMonto(g.monto, g.tipo_cambio)
+    const monto = baseMonto(g.monto, g.exchange_rate)
     const esFijo = CATEGORIAS_FIJAS.some(c => g.categoria.toLowerCase() === c.toLowerCase())
     if (esFijo) fijos += monto
     else variables += monto
@@ -117,27 +117,27 @@ export function reconversionMonetaria(cfg: Config, datos: {
     const actual = baseMonto(montoMoneda, tcActual)
     variaciones.push({
       fecha, descripcion, tipo, moneda: mon, monto_moneda: round2(montoMoneda),
-      tipo_cambio_registro: tcRegistro, tipo_cambio_actual: tcActual,
+      exchange_rate_registro: tcRegistro, exchange_rate_actual: tcActual,
       valor_base_registro: registro, valor_base_actual: actual,
       diferencia: round2(actual - registro)
     })
   }
 
   for (const f of datos.facturas ?? []) {
-    if (!enRango(f.fecha_emision, rango)) continue
-    push('factura', f.fecha_emision, `Factura ${f.folio} — ${f.nombre_cliente}`, f.moneda, f.total, f.tipo_cambio, tasaActual(cfg, f.moneda))
+    if (!enRango(f.issue_date, rango)) continue
+    push('factura', f.issue_date, `Factura ${f.folio} — ${f.customer_name}`, f.moneda, f.total, f.exchange_rate, tasaActual(cfg, f.moneda))
   }
   for (const g of datos.gastos ?? []) {
     if (!enRango(g.fecha, rango)) continue
-    push('gasto', g.fecha, `Gasto ${g.categoria} — ${g.descripcion}`, g.moneda, g.monto, g.tipo_cambio, tasaActual(cfg, g.moneda))
+    push('gasto', g.fecha, `Gasto ${g.categoria} — ${g.descripcion}`, g.moneda, g.monto, g.exchange_rate, tasaActual(cfg, g.moneda))
   }
   for (const c of datos.cxps ?? []) {
-    if (!enRango(c.fecha_emision, rango)) continue
-    push('cxp', c.fecha_emision, `CXP ${c.folio_documento} — ${c.nombre_proveedor}`, c.moneda, c.saldo, c.tipo_cambio, tasaActual(cfg, c.moneda))
+    if (!enRango(c.issue_date, rango)) continue
+    push('cxp', c.issue_date, `CXP ${c.document_serial} — ${c.supplier_name}`, c.moneda, c.saldo, c.exchange_rate, tasaActual(cfg, c.moneda))
   }
   for (const p of datos.pagos ?? []) {
     if (!enRango(p.fecha, rango)) continue
-    push('pago', p.fecha, `Pago ${p.tipo === 'cobro' ? 'cobro' : 'abono'}`, p.moneda, p.monto, p.tipo_cambio, tasaActual(cfg, p.moneda))
+    push('pago', p.fecha, `Pago ${p.tipo === 'cobro' ? 'cobro' : 'abono'}`, p.moneda, p.monto, p.exchange_rate, tasaActual(cfg, p.moneda))
   }
 
   const perdida = variaciones.filter(v => v.diferencia < 0).reduce((s, v) => s + v.diferencia, 0)
@@ -147,7 +147,7 @@ export function reconversionMonetaria(cfg: Config, datos: {
 
 function tasaActual(cfg: Config, moneda: string | undefined): number {
   if (!moneda || moneda === cfg.moneda) return 1
-  const r = parseRates(cfg.tasas_cambio)
+  const r = parseRates(cfg.exchange_rates)
   const rate = r && r.base === cfg.moneda ? r.rates[moneda] : undefined
   return rate && rate > 0 ? rate : rateFor(cfg, cfg.moneda, moneda)
 }
@@ -168,9 +168,9 @@ export function flujoCaja(
     m.balance = round2(m.entradas - m.salidas)
     monedas.set(moneda, m)
     const key = `${metodo}|${moneda}`
-    const fm = metodos.get(key) ?? { metodo_pago: metodo, moneda, entradas: 0, salidas: 0, comisiones: 0 }
+    const fm = metodos.get(key) ?? { payment_method: metodo, moneda, entradas: 0, salidas: 0, comisiones: 0 }
     fm.entradas = round2(fm.entradas + montoMoneda)
-    fm.comisiones = round2(fm.comisiones + comisionTransaccion(montoMoneda, comisionesMetodo[fm.metodo_pago]))
+    fm.comisiones = round2(fm.comisiones + comisionTransaccion(montoMoneda, comisionesMetodo[fm.payment_method]))
     metodos.set(key, fm)
   }
   const addSalida = (moneda: string, metodo: string, montoMoneda: number) => {
@@ -179,18 +179,18 @@ export function flujoCaja(
     m.balance = round2(m.entradas - m.salidas)
     monedas.set(moneda, m)
     const key = `${metodo}|${moneda}`
-    const fm = metodos.get(key) ?? { metodo_pago: metodo, moneda, entradas: 0, salidas: 0, comisiones: 0 }
+    const fm = metodos.get(key) ?? { payment_method: metodo, moneda, entradas: 0, salidas: 0, comisiones: 0 }
     fm.salidas = round2(fm.salidas + montoMoneda)
-    fm.comisiones = round2(fm.comisiones + comisionTransaccion(montoMoneda, comisionesMetodo[fm.metodo_pago]))
+    fm.comisiones = round2(fm.comisiones + comisionTransaccion(montoMoneda, comisionesMetodo[fm.payment_method]))
     metodos.set(key, fm)
   }
 
   for (const p of pagos) {
     if (!enRango(p.fecha, rango)) continue
-    if (p.tipo === 'cobro') addEntrada(p.moneda, p.metodo_pago, p.monto)
+    if (p.tipo === 'cobro') addEntrada(p.moneda, p.payment_method, p.monto)
   }  for (const g of gastos) {
     if (!enRango(g.fecha, rango)) continue
-    addSalida(g.moneda, g.metodo_pago, g.monto)
+    addSalida(g.moneda, g.payment_method, g.monto)
   }
 
   let totEnt = 0

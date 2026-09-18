@@ -14,19 +14,19 @@ const DIAS = [
 export function EmpleadoFormModal({ open, onClose, initial, onSave }: { open: boolean; onClose: () => void; initial: Empleado | null; onSave: (e: Empleado) => Promise<void> | void }) {
   const { t } = useI18n()
   const { config } = useConfig()
-  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.tipo_doc_etiqueta ?? '')
-  const [form, setForm] = useState({ nombre: '', rfc: '', puesto: '', salario: '', salario_moneda: '', fecha_ingreso: '', activo: 'true', hora_entrada: '', hora_salida: '', esquema_pago: 'mensual', tarifa_hora_extra: '' })
+  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.doc_type_label ?? '')
+  const [form, setForm] = useState({ nombre: '', rfc: '', puesto: '', salario: '', salary_currency: '', hire_date: '', activo: 'true', clock_in: '', clock_out: '', pay_schedule: 'mensual', overtime_rate: '' })
   const [dias, setDias] = useState<number[]>([1, 2, 3, 4, 5])
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
   useEffect(() => {
     if (open) {
-      setDias(initial?.dias_laborales
-        ? initial.dias_laborales.split(',').map(s => Number(s.trim())).filter(n => n >= 1 && n <= 7)
+      setDias(initial?.work_days
+        ? initial.work_days.split(',').map(s => Number(s.trim())).filter(n => n >= 1 && n <= 7)
         : [1, 2, 3, 4, 5])
       setForm(initial
-        ? { nombre: initial.nombre, rfc: initial.rfc, puesto: initial.puesto, salario: String(initial.salario), salario_moneda: initial.salario_moneda, fecha_ingreso: initial.fecha_ingreso, activo: initial.activo, hora_entrada: initial.hora_entrada || '', hora_salida: initial.hora_salida || '', esquema_pago: initial.esquema_pago || 'mensual', tarifa_hora_extra: String(initial.tarifa_hora_extra ?? '') }
-        : { nombre: '', rfc: '', puesto: '', salario: '', salario_moneda: '', fecha_ingreso: '', activo: 'true', hora_entrada: '', hora_salida: '', esquema_pago: 'mensual', tarifa_hora_extra: '' })
+        ? { nombre: initial.nombre, rfc: initial.rfc, puesto: initial.puesto, salario: String(initial.salario), salary_currency: initial.salary_currency, hire_date: initial.hire_date, activo: initial.activo, clock_in: initial.clock_in || '', clock_out: initial.clock_out || '', pay_schedule: initial.pay_schedule || 'mensual', overtime_rate: String(initial.overtime_rate ?? '') }
+        : { nombre: '', rfc: '', puesto: '', salario: '', salary_currency: '', hire_date: '', activo: 'true', clock_in: '', clock_out: '', pay_schedule: 'mensual', overtime_rate: '' })
     }
   }, [open, initial])
   const toggleDia = (n: number) => setDias(d => d.includes(n) ? d.filter(x => x !== n) : [...d, n].sort())
@@ -39,7 +39,7 @@ export function EmpleadoFormModal({ open, onClose, initial, onSave }: { open: bo
     if (dias.length === 0) return setError(t('errors.diasLaborales'))
     setGuardando(true)
     try {
-      await onSave({ ...initial, ...form, salario: salario || 0, esquema_pago: form.esquema_pago as Empleado['esquema_pago'], tarifa_hora_extra: Number(form.tarifa_hora_extra) || 0, dias_laborales: dias.join(',') } as Empleado)
+      await onSave({ ...initial, ...form, salario: salario || 0, pay_schedule: form.pay_schedule as Empleado['pay_schedule'], overtime_rate: Number(form.overtime_rate) || 0, work_days: dias.join(',') } as Empleado)
       onClose()
     } catch {
       /* el padre muestra el error; se mantiene abierto */
@@ -58,12 +58,12 @@ export function EmpleadoFormModal({ open, onClose, initial, onSave }: { open: bo
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-muted-foreground">{t('empleados.salarioMensual')}</label><Input type="number" min={0} value={form.salario} onChange={set('salario')} /></div>
-          <div><label className="text-xs text-muted-foreground">{t('empleados.fechaIngreso')}</label><Input type="date" value={form.fecha_ingreso} onChange={set('fecha_ingreso')} /></div>
+          <div><label className="text-xs text-muted-foreground">{t('empleados.fechaIngreso')}</label><Input type="date" value={form.hire_date} onChange={set('hire_date')} /></div>
         </div>
-        <CurrencySelect label={t('empleados.monedaSalario')} value={form.salario_moneda} onChange={v => setForm(f => ({ ...f, salario_moneda: v }))} />
+        <CurrencySelect label={t('empleados.monedaSalario')} value={form.salary_currency} onChange={v => setForm(f => ({ ...f, salary_currency: v }))} />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div><label className="text-xs text-muted-foreground">{t('nominaAv.horaEntrada')}</label><Input type="time" value={form.hora_entrada} onChange={set('hora_entrada')} /></div>
-          <div><label className="text-xs text-muted-foreground">{t('nominaAv.horaSalida')}</label><Input type="time" value={form.hora_salida} onChange={set('hora_salida')} /></div>
+          <div><label className="text-xs text-muted-foreground">{t('nominaAv.horaEntrada')}</label><Input type="time" value={form.clock_in} onChange={set('clock_in')} /></div>
+          <div><label className="text-xs text-muted-foreground">{t('nominaAv.horaSalida')}</label><Input type="time" value={form.clock_out} onChange={set('clock_out')} /></div>
         </div>
         <div>
           <label className="text-xs text-muted-foreground">{t('empleados.diasLaborales')}</label>
@@ -80,10 +80,10 @@ export function EmpleadoFormModal({ open, onClose, initial, onSave }: { open: bo
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-muted-foreground">{t('nominaAv.esquemaPago')}</label>
-            <Select value={form.esquema_pago} onChange={v => setForm(f => ({ ...f, esquema_pago: v }))}
+            <Select value={form.pay_schedule} onChange={v => setForm(f => ({ ...f, pay_schedule: v }))}
               options={[{ value: 'semanal', label: t('nominaAv.semanal') }, { value: 'quincenal', label: t('nominaAv.quincenal') }, { value: 'mensual', label: t('nominaAv.mensual') }]} />
           </div>
-          <div><label className="text-xs text-muted-foreground">{t('nominaAv.tarifaHoraExtra')}</label><Input type="number" min={0} step="any" value={form.tarifa_hora_extra} onChange={set('tarifa_hora_extra')} placeholder="0" /></div>
+          <div><label className="text-xs text-muted-foreground">{t('nominaAv.tarifaHoraExtra')}</label><Input type="number" min={0} step="any" value={form.overtime_rate} onChange={set('overtime_rate')} placeholder="0" /></div>
         </div>
         <div>
           <label className="text-xs text-muted-foreground">{t('common.estado')}</label>

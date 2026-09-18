@@ -83,10 +83,10 @@ function makeRepo(_f: { grid: Map<string, (string | number)[][]> }) {
 
 function cfg(overrides: Partial<Config> = {}): Config {
   return {
-    empresa_nombre: 'E', empresa_rfc: '', empresa_direccion: '', empresa_telefono: '', empresa_email: '', empresa_logo: '',
-    empresa_cp: '', empresa_ciudad: '', empresa_pais: '', prefijo_folio: 'FAC-', contador_folio: 1, moneda: 'USD', iva_porcentaje: 16,
-    categorias_gastos: '', categorias_cxp: '', categorias_inventario: '', monedas_activas: '', monedas_custom: '', tasas_cambio: '', metodos_pago: 'Efectivo,Transferencia,Tarjeta',
-    tipo_doc: 'RFC', tipo_doc_etiqueta: '', share_backend_url: '', metas_mensuales: '', comisiones_transaccion: '', comisiones_metodos: '', tasa_dia_activa: '', google_permisos: '', notif_gastos_activa: '', notif_cxc_activa: '', ...overrides
+    company_name: 'E', company_tax_id: '', company_address: '', company_phone: '', company_email: '', company_logo: '',
+    company_zip: '', company_city: '', company_country: '', serial_prefix: 'FAC-', serial_counter: 1, moneda: 'USD', vat_percent: 16,
+    expense_categories: '', ap_categories: '', inventory_categories: '', active_currencies: '', custom_currencies: '', exchange_rates: '', payment_methods: 'Efectivo,Transferencia,Tarjeta',
+    tipo_doc: 'RFC', doc_type_label: '', share_backend_url: '', monthly_goals: '', transaction_fees: '', method_fees: '', daily_rate_active: '', google_permissions: '', notifications_expense_active: '', notifications_ar_active: '', ...overrides
   }
 }
 
@@ -101,22 +101,22 @@ describe('tasas de cambio', () => {
     expect(parseRates('nope')).toBeNull()
   })
   it('rateFor: 1 USD = 73.5 VES y 1 VES = 1/73.5 USD', () => {
-    const c = cfg({ tasas_cambio: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":73.5}}' })
+    const c = cfg({ exchange_rates: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":73.5}}' })
     expect(rateFor(c, 'USD', 'VES')).toBe(73.5)
     expect(rateFor(c, 'VES', 'USD')).toBeCloseTo(1 / 73.5)
     expect(rateFor(c, 'USD', 'USD')).toBe(1)
   })
   it('convert redondea a decimales de la moneda destino', () => {
-    const c = cfg({ tasas_cambio: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":73.5}}' })
+    const c = cfg({ exchange_rates: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":73.5}}' })
     expect(convert(10, 'USD', 'VES', c)).toBe(735)
     expect(convert(735, 'VES', 'USD', c)).toBe(10)
   })
-  it('toBase convierte usando tipo_cambio guardado', () => {
+  it('toBase convierte usando exchange_rate guardado', () => {
     expect(toBase(735, 73.5)).toBe(10)
     expect(toBase(100, 0)).toBe(100)
   })
-  it('activeCurrencies filtra por monedas_activas', () => {
-    const all = activeCurrencies(cfg({ monedas_activas: 'USD,VES' }))
+  it('activeCurrencies filtra por active_currencies', () => {
+    const all = activeCurrencies(cfg({ active_currencies: 'USD,VES' }))
     expect(all.map(c => c.code)).toEqual(['USD', 'VES'])
     const empty = activeCurrencies(cfg())
     expect(empty.length).toBeGreaterThanOrEqual(10)
@@ -135,23 +135,23 @@ describe('tasas de cambio', () => {
 describe('configFromRows multi-moneda e IVA 0', () => {
   it('lee IVA 0 y no lo reemplaza por default', () => {
     const c = configFromRows([['iva_porcentaje', '0'], ['contador_folio', '0']])
-    expect(c.iva_porcentaje).toBe(0)
-    expect(c.contador_folio).toBe(0)
+    expect(c.vat_percent).toBe(0)
+    expect(c.serial_counter).toBe(0)
   })
-  it('lee tasas_cambio y categorias_inventario', () => {
+  it('lee exchange_rates y inventory_categories', () => {
     const c = configFromRows([['tasas_cambio', '{"base":"USD"}'], ['categorias_inventario', 'Frutas,Verduras']])
-    expect(c.tasas_cambio).toContain('USD')
-    expect(c.categorias_inventario).toBe('Frutas,Verduras')
+    expect(c.exchange_rates).toContain('USD')
+    expect(c.inventory_categories).toBe('Frutas,Verduras')
   })
 })
 
 describe('inventario repository', () => {
-  it('saveProducto asigna uid y guarda con nombre_proveedor', async () => {
+  it('saveProducto asigna uid y guarda con supplier_name', async () => {
     const f = fakeApi({ Proveedores: [[], ['prov_1', 'Don Ramón', '', '', '0412-555', '', '2026-08-01']] })
     const repo = makeRepo(f)
-    const p = await repo.saveProducto({ nombre: 'Tomate', id_proveedor: 'prov_1' } as never)
-    expect(p.id_producto).toMatch(/^prod_/)
-    expect(p.nombre_proveedor).toBe('Don Ramón')
+    const p = await repo.saveProducto({ nombre: 'Tomate', supplier_id: 'prov_1' } as never)
+    expect(p.product_id).toMatch(/^prod_/)
+    expect(p.supplier_name).toBe('Don Ramón')
     const rows = f.grid.get('Productos') ?? []
     expect(rows.some(r => r[1] === 'Tomate')).toBe(true)
   })
@@ -159,10 +159,10 @@ describe('inventario repository', () => {
   it('registrarMovimiento entrada sube stock y salida lo baja', async () => {
     const f = fakeApi({ Productos: [[], ['prod_1', 'Tomate', 'Frutas', 'kg', 10, 5, 2, 4, 'prov_1', 'Don Ramón', '', 'true', '2026-08-01']] })
     const repo = makeRepo(f)
-    await repo.registrarMovimiento({ id_producto: 'prod_1', tipo: 'entrada', cantidad: 20, motivo: 'compra', id_proveedor: 'prov_1', fecha: '2026-08-15' })
+    await repo.registrarMovimiento({ product_id: 'prod_1', tipo: 'entrada', cantidad: 20, motivo: 'compra', supplier_id: 'prov_1', fecha: '2026-08-15' })
     let stock = f.grid.get('Productos')![1][4]
     expect(stock).toBe(30)
-    await repo.registrarMovimiento({ id_producto: 'prod_1', tipo: 'salida', cantidad: 5, motivo: 'venta', id_proveedor: '', fecha: '2026-08-15' })
+    await repo.registrarMovimiento({ product_id: 'prod_1', tipo: 'salida', cantidad: 5, motivo: 'venta', supplier_id: '', fecha: '2026-08-15' })
     stock = f.grid.get('Productos')![1][4]
     expect(stock).toBe(25)
     const movs = f.grid.get('Movimientos_Stock') ?? []
@@ -172,38 +172,38 @@ describe('inventario repository', () => {
   it('salida con stock insuficiente lanza error', async () => {
     const f = fakeApi({ Productos: [[], ['prod_1', 'Tomate', '', 'kg', 2, 5, 1, 3, '', '', '', 'true', '']] })
     const repo = makeRepo(f)
-    await expect(repo.registrarMovimiento({ id_producto: 'prod_1', tipo: 'salida', cantidad: 9, motivo: '', id_proveedor: '', fecha: '2026-08-15' })).rejects.toThrow(/insuficiente/)
+    await expect(repo.registrarMovimiento({ product_id: 'prod_1', tipo: 'salida', cantidad: 9, motivo: '', supplier_id: '', fecha: '2026-08-15' })).rejects.toThrow(/insuficiente/)
   })
 
   it('ajuste fija stock exacto', async () => {
     const f = fakeApi({ Productos: [[], ['prod_1', 'Tomate', '', 'kg', 2, 5, 1, 3, '', '', '', 'true', '']] })
     const repo = makeRepo(f)
-    await repo.registrarMovimiento({ id_producto: 'prod_1', tipo: 'ajuste', cantidad: 8, motivo: 'conteo', id_proveedor: '', fecha: '2026-08-15' })
+    await repo.registrarMovimiento({ product_id: 'prod_1', tipo: 'ajuste', cantidad: 8, motivo: 'conteo', supplier_id: '', fecha: '2026-08-15' })
     expect(f.grid.get('Productos')![1][4]).toBe(8)
   })
 
-  it('listProductos enriquece nombre_proveedor', async () => {
+  it('listProductos enriquece supplier_name', async () => {
     const f = fakeApi({ Productos: [[], ['prod_1', 'Tomate', '', 'kg', 1, 5, 1, 3, 'prov_1', '', '', 'true', '']], Proveedores: [[], ['prov_1', 'Don Ramón', '', '', '', '', '']] })
     const repo = makeRepo(f)
     const list = await repo.listProductos()
-    expect(list[0].nombre_proveedor).toBe('Don Ramón')
+    expect(list[0].supplier_name).toBe('Don Ramón')
   })
 })
 
 describe('moneda en registros', () => {
-  it('createFactura guarda moneda y tipo_cambio', async () => {
+  it('createFactura guarda moneda y exchange_rate', async () => {
     const f = fakeApi({ Clientes: [[], ['c1', 'Ana', '', '', '', '', '']] })
     const repo = makeRepo(f)
-    await repo.saveConfig(cfg({ tasas_cambio: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":73.5}}' }))
-    const fac = await repo.createFactura({ id_cliente: 'c1', items: [{ descripcion: 'x', cantidad: 1, precio_unitario: 100 }], fecha_emision: '2026-08-15', fecha_vencimiento: '', notas: '', moneda: 'VES' })
+    await repo.saveConfig(cfg({ exchange_rates: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":73.5}}' }))
+    const fac = await repo.createFactura({ customer_id: 'c1', items: [{ descripcion: 'x', cantidad: 1, unit_price: 100 }], issue_date: '2026-08-15', due_date: '', notas: '', moneda: 'VES' })
     expect(fac.moneda).toBe('VES')
-    expect(fac.tipo_cambio).toBe(73.5)
+    expect(fac.exchange_rate).toBe(73.5)
   })
 
   it('registerPago guarda moneda del origen', async () => {
     const f = fakeApi({ Facturas: [[], ['f1', 'FAC-001', 'c1', 'Ana', '2026-08-15', '', 100, 0, 100, 100, '', '', 'VES', 73.5]] })
     const repo = makeRepo(f)
-    await repo.registerPago({ tipo: 'cobro', id_origen: 'f1', fecha: '2026-08-15', monto: 40, metodo_pago: 'Efectivo', notas: '' })
+    await repo.registerPago({ tipo: 'cobro', origin_id: 'f1', fecha: '2026-08-15', monto: 40, payment_method: 'Efectivo', notas: '' })
     const pagos = f.grid.get('Pagos') ?? []
     const pago = pagos.find(r => r[0]?.toString().startsWith('pag_'))
     expect(pago).toBeTruthy()
@@ -215,9 +215,9 @@ describe('moneda en registros', () => {
   it('registerPago en otra moneda descuenta saldo convertido y guarda moneda del pago', async () => {
     const f = fakeApi({ Facturas: [[], ['f1', 'FAC-001', 'c1', 'Ana', '2026-08-15', '', 100, 0, 100, 100, '', '', 'VES', 73.5]] })
     const repo = makeRepo(f)
-    await repo.saveConfig(cfg({ tasas_cambio: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":50}}' }))
+    await repo.saveConfig(cfg({ exchange_rates: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":50}}' }))
     // Paga 1 USD con tasa 1 USD = 50 VES ⇒ saldo baja de 100 a 50 VES
-    await repo.registerPago({ tipo: 'cobro', id_origen: 'f1', fecha: '2026-08-15', monto: 1, metodo_pago: 'Zelle', notas: '', moneda: 'USD' })
+    await repo.registerPago({ tipo: 'cobro', origin_id: 'f1', fecha: '2026-08-15', monto: 1, payment_method: 'Zelle', notas: '', moneda: 'USD' })
     expect(f.grid.get('Facturas')![1][9]).toBe(50)
     const pago = (f.grid.get('Pagos') ?? []).find(r => String(r[0]).startsWith('pag_'))
     expect(pago).toBeTruthy()
@@ -228,16 +228,16 @@ describe('moneda en registros', () => {
   it('registerPago en otra moneda rechaza sobre-pago convertido', async () => {
     const f = fakeApi({ Facturas: [[], ['f1', 'FAC-001', 'c1', 'Ana', '2026-08-15', '', 100, 0, 100, 100, '', '', 'VES', 73.5]] })
     const repo = makeRepo(f)
-    await repo.saveConfig(cfg({ tasas_cambio: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":50}}' }))
+    await repo.saveConfig(cfg({ exchange_rates: '{"base":"USD","fecha":"2026-08-15","rates":{"VES":50}}' }))
     // 3 USD = 150 VES > saldo 100 VES
-    await expect(repo.registerPago({ tipo: 'cobro', id_origen: 'f1', fecha: '2026-08-15', monto: 3, metodo_pago: 'Zelle', notas: '', moneda: 'USD' })).rejects.toThrow(/excede/)
+    await expect(repo.registerPago({ tipo: 'cobro', origin_id: 'f1', fecha: '2026-08-15', monto: 3, payment_method: 'Zelle', notas: '', moneda: 'USD' })).rejects.toThrow(/excede/)
   })
 
   it('kpis convierte montos de otra moneda a base', async () => {
     const { kpisForMonth } = await import('../src/calc/kpis')
     const { round2 } = await import('../src/calc/invoice')
     const k = kpisForMonth(
-      [{ id_factura: 'f1', folio: 'F', id_cliente: 'c1', nombre_cliente: 'A', fecha_emision: '2026-08-01', fecha_vencimiento: '', subtotal: 0, iva: 0, total: 735, saldo: 735, fecha_pago: '', notas: '', moneda: 'VES', tipo_cambio: 73.5 } as never],
+      [{ invoice_id: 'f1', folio: 'F', customer_id: 'c1', customer_name: 'A', issue_date: '2026-08-01', due_date: '', subtotal: 0, iva: 0, total: 735, saldo: 735, paid_at: '', notas: '', moneda: 'VES', exchange_rate: 73.5 } as never],
       [], [], [], '2026-08')
     expect(k.facturado).toBe(round2(735 / 73.5))
   })
@@ -245,8 +245,8 @@ describe('moneda en registros', () => {
 
 describe('esquema tablas inventario', () => {
   it('TABLES incluye Productos y Movimientos_Stock', () => {
-    expect(TABLES.Productos.map(c => c.key)).toEqual(['id_producto', 'nombre', 'categoria', 'unidad', 'stock', 'stock_minimo', 'precio_costo', 'precio_venta', 'id_proveedor', 'nombre_proveedor', 'imagen', 'notas', 'activo', 'fecha_registro', 'moneda'])
-    expect(TABLES.Movimientos_Stock.map(c => c.key)).toEqual(['id_movimiento', 'id_producto', 'tipo', 'cantidad', 'motivo', 'id_proveedor', 'fecha'])
+    expect(TABLES.Productos.map(c => c.key)).toEqual(['product_id', 'nombre', 'categoria', 'unidad', 'stock', 'minimum_stock', 'cost_price', 'sale_price', 'supplier_id', 'supplier_name', 'imagen', 'notas', 'activo', 'created_at', 'moneda'])
+    expect(TABLES.Movimientos_Stock.map(c => c.key)).toEqual(['movement_id', 'product_id', 'tipo', 'cantidad', 'motivo', 'supplier_id', 'fecha'])
   })
 })
 
@@ -260,14 +260,14 @@ describe('edición de factura', () => {
     const f = fakeApi(seed)
     const repo = makeRepo(f)
     const updated = await repo.updateFactura('f1', {
-      id_cliente: 'c1',
-      items: [{ descripcion: 'a', cantidad: 2, precio_unitario: 100 }],
-      fecha_emision: '2026-08-02', fecha_vencimiento: '', notas: 'editada', moneda: 'USD'
+      customer_id: 'c1',
+      items: [{ descripcion: 'a', cantidad: 2, unit_price: 100 }],
+      issue_date: '2026-08-02', due_date: '', notas: 'editada', moneda: 'USD'
     })
     expect(updated.total).toBe(232)
     expect(updated.saldo).toBe(232)
     expect(updated.editada).toBe('true')
-    expect(updated.fecha_edicion).toBeTruthy()
+    expect(updated.edited_at).toBeTruthy()
     const items = f.grid.get('Factura_Items') ?? []
     const fila = items.find(r => r[0] === 'f1')
     expect(fila?.[3]).toBe(2)
@@ -279,9 +279,9 @@ describe('edición de factura', () => {
     })
     const repo = makeRepo(f)
     const updated = await repo.updateFactura('f1', {
-      id_cliente: 'c1',
-      items: [{ descripcion: 'a', cantidad: 1, precio_unitario: 100 }],
-      fecha_emision: '2026-08-01', fecha_vencimiento: '', notas: '', moneda: 'USD'
+      customer_id: 'c1',
+      items: [{ descripcion: 'a', cantidad: 1, unit_price: 100 }],
+      issue_date: '2026-08-01', due_date: '', notas: '', moneda: 'USD'
     })
     expect(updated.total).toBe(116)
     expect(updated.saldo).toBe(60)

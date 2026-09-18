@@ -10,38 +10,38 @@ import { SISTEMA_SHEET, SISTEMA_RANGO, esClaveSistema } from './sistema'
 const ALL_TABLES = Object.keys(TABLES) as (keyof typeof TABLES)[]
 
 const DEFAULT_CONFIG: Config = {
-  empresa_nombre: 'Mi Empresa S.A.',
-  empresa_rfc: 'XAXX010101000',
-  empresa_direccion: '',
-  empresa_telefono: '',
-  empresa_email: '',
-  empresa_logo: '',
-  empresa_cp: '',
-  empresa_ciudad: '',
-  empresa_pais: '',
-  prefijo_folio: 'FAC-',
-  contador_folio: 1,
+  company_name: 'Mi Empresa S.A.',
+  company_tax_id: 'XAXX010101000',
+  company_address: '',
+  company_phone: '',
+  company_email: '',
+  company_logo: '',
+  company_zip: '',
+  company_city: '',
+  company_country: '',
+  serial_prefix: 'FAC-',
+  serial_counter: 1,
   moneda: DEFAULT_CURRENCY,
-  iva_porcentaje: 16,
-  categorias_gastos: 'Renta,Internet,Papelería,Servicios',
-  categorias_cxp: 'Materiales,Servicios,Impuestos,Otros',
-  categorias_inventario: 'Frutas,Verduras,Materiales,Limpieza',
-  monedas_activas: '',
-  monedas_custom: '',
-  tasas_cambio: '',
-  metodos_pago: 'Efectivo,Transferencia,Tarjeta',
+  vat_percent: 16,
+  expense_categories: 'Renta,Internet,Papelería,Servicios',
+  ap_categories: 'Materiales,Servicios,Impuestos,Otros',
+  inventory_categories: 'Frutas,Verduras,Materiales,Limpieza',
+  active_currencies: '',
+  custom_currencies: '',
+  exchange_rates: '',
+  payment_methods: 'Efectivo,Transferencia,Tarjeta',
   tipo_doc: 'RFC' as const,
-  tipo_doc_etiqueta: '',
+  doc_type_label: '',
   share_backend_url: '',
-  metas_mensuales: '',
-  comisiones_transaccion: '',
-  comisiones_metodos: '',
-  tasa_dia_activa: 'true',
-  google_permisos: '',
-  notif_gastos_activa: '',
-  notif_cxc_activa: '',
-  unidades_medida: 'pieza,kg,gr,litro,ml,caja,saco,docena,metro',
-  nombreBaseHoja: 'FinanceTracker'
+  monthly_goals: '',
+  transaction_fees: '',
+  method_fees: '',
+  daily_rate_active: 'true',
+  google_permissions: '',
+  notifications_expense_active: '',
+  notifications_ar_active: '',
+  measure_units: 'pieza,kg,gr,litro,ml,caja,saco,docena,metro',
+  baseSheetName: 'FinanceTracker'
 }
 
 /** Tablas que viven en cada spreadsheet EVENTOS-{año} (spec §2). */
@@ -77,7 +77,7 @@ export async function createInitialSpreadsheet(
   await api.addSheets(spreadsheetId, extra)
 
   await writeAllHeaders(api, spreadsheetId, TABLAS_BASE)
-  const configRows = (Object.entries(DEFAULT_CONFIG) as [string, unknown][]).map(([clave, valor]) => serializeRow(TABLES.Config, { clave, valor: String(valor) }))
+  const configRows = configToRows(DEFAULT_CONFIG)
   await api.batchUpdate(spreadsheetId, [{ range: `'Config'!A1:B${configRows.length}`, values: configRows }])
   // Semilla del sistema: identidad compartida BASE/años (spec F1). En re-sync
   // (F6) se conserva la instancia del BASE anterior.
@@ -314,41 +314,77 @@ export function configFromRows(rows: (string | number)[][]): Config {
   }
   return {
     ...DEFAULT_CONFIG,
-    empresa_nombre: map.get('empresa_nombre') ?? DEFAULT_CONFIG.empresa_nombre,
-    empresa_rfc: map.get('empresa_rfc') ?? '',
-    empresa_direccion: map.get('empresa_direccion') ?? '',
-    empresa_telefono: map.get('empresa_telefono') ?? '',
-    empresa_email: map.get('empresa_email') ?? '',
-    empresa_logo: map.get('empresa_logo') ?? '',
-    empresa_cp: map.get('empresa_cp') ?? '',
-    empresa_ciudad: map.get('empresa_ciudad') ?? '',
-    empresa_pais: map.get('empresa_pais') ?? '',
-    prefijo_folio: map.get('prefijo_folio') ?? DEFAULT_CONFIG.prefijo_folio,
-    contador_folio: numOr('contador_folio', DEFAULT_CONFIG.contador_folio),
+    company_name: map.get('empresa_nombre') ?? DEFAULT_CONFIG.company_name,
+    company_tax_id: map.get('empresa_rfc') ?? '',
+    company_address: map.get('empresa_direccion') ?? '',
+    company_phone: map.get('empresa_telefono') ?? '',
+    company_email: map.get('empresa_email') ?? '',
+    company_logo: map.get('empresa_logo') ?? '',
+    company_zip: map.get('empresa_cp') ?? '',
+    company_city: map.get('empresa_ciudad') ?? '',
+    company_country: map.get('empresa_pais') ?? '',
+    serial_prefix: map.get('prefijo_folio') ?? DEFAULT_CONFIG.serial_prefix,
+    serial_counter: numOr('contador_folio', DEFAULT_CONFIG.serial_counter),
     moneda: map.get('moneda') || DEFAULT_CURRENCY,
-    iva_porcentaje: numOr('iva_porcentaje', DEFAULT_CONFIG.iva_porcentaje),
-    categorias_gastos: map.get('categorias_gastos') ?? DEFAULT_CONFIG.categorias_gastos,
-    categorias_cxp: map.get('categorias_cxp') ?? DEFAULT_CONFIG.categorias_cxp,
-    categorias_inventario: map.get('categorias_inventario') ?? DEFAULT_CONFIG.categorias_inventario,
-    monedas_activas: map.get('monedas_activas') ?? '',
-    monedas_custom: map.get('monedas_custom') ?? '',
-    tasas_cambio: map.get('tasas_cambio') ?? '',
-    metodos_pago: map.get('metodos_pago') ?? DEFAULT_CONFIG.metodos_pago,
+    vat_percent: numOr('iva_porcentaje', DEFAULT_CONFIG.vat_percent),
+    expense_categories: map.get('categorias_gastos') ?? DEFAULT_CONFIG.expense_categories,
+    ap_categories: map.get('categorias_cxp') ?? DEFAULT_CONFIG.ap_categories,
+    inventory_categories: map.get('categorias_inventario') ?? DEFAULT_CONFIG.inventory_categories,
+    active_currencies: map.get('monedas_activas') ?? '',
+    custom_currencies: map.get('monedas_custom') ?? '',
+    exchange_rates: map.get('tasas_cambio') ?? '',
+    payment_methods: map.get('metodos_pago') ?? DEFAULT_CONFIG.payment_methods,
     tipo_doc: (map.get('tipo_doc') as Config['tipo_doc']) || DEFAULT_CONFIG.tipo_doc,
-    tipo_doc_etiqueta: map.get('tipo_doc_etiqueta') ?? DEFAULT_CONFIG.tipo_doc_etiqueta,
+    doc_type_label: map.get('tipo_doc_etiqueta') ?? DEFAULT_CONFIG.doc_type_label,
     share_backend_url: map.get('share_backend_url') ?? '',
-    metas_mensuales: map.get('metas_mensuales') ?? '',
-    comisiones_transaccion: map.get('comisiones_transaccion') ?? '',
-    comisiones_metodos: map.get('comisiones_metodos') ?? '',
-    tasa_dia_activa: map.get('tasa_dia_activa') ?? DEFAULT_CONFIG.tasa_dia_activa,
-    google_permisos: map.get('google_permisos') ?? '',
-    notif_gastos_activa: map.get('notif_gastos_activa') ?? '',
-    notif_cxc_activa: map.get('notif_cxc_activa') ?? '',
-    unidades_medida: map.get('unidades_medida') ?? DEFAULT_CONFIG.unidades_medida,
-    nombreBaseHoja: map.get('nombreBaseHoja') ?? DEFAULT_CONFIG.nombreBaseHoja
+    monthly_goals: map.get('metas_mensuales') ?? '',
+    transaction_fees: map.get('comisiones_transaccion') ?? '',
+    method_fees: map.get('comisiones_metodos') ?? '',
+    daily_rate_active: map.get('tasa_dia_activa') ?? DEFAULT_CONFIG.daily_rate_active,
+    google_permissions: map.get('google_permisos') ?? '',
+    notifications_expense_active: map.get('notif_gastos_activa') ?? '',
+    notifications_ar_active: map.get('notif_cxc_activa') ?? '',
+    measure_units: map.get('unidades_medida') ?? DEFAULT_CONFIG.measure_units,
+    baseSheetName: map.get('nombreBaseHoja') ?? DEFAULT_CONFIG.baseSheetName
   }
 }
 
+/** Campo de código (inglés) → clave persistida en la hoja `Config`.
+ *  Las filas conservan el nombre histórico en español para no romper hojas
+ *  existentes (la migración de Task 3 solo cubre headers de tablas). Los campos
+ *  sin entrada usan su propio nombre. */
+const CONFIG_ROW_KEYS: Record<string, string> = {
+  company_name: 'empresa_nombre',
+  company_tax_id: 'empresa_rfc',
+  company_address: 'empresa_direccion',
+  company_phone: 'empresa_telefono',
+  company_email: 'empresa_email',
+  company_logo: 'empresa_logo',
+  company_zip: 'empresa_cp',
+  company_city: 'empresa_ciudad',
+  company_country: 'empresa_pais',
+  serial_prefix: 'prefijo_folio',
+  serial_counter: 'contador_folio',
+  vat_percent: 'iva_porcentaje',
+  expense_categories: 'categorias_gastos',
+  ap_categories: 'categorias_cxp',
+  inventory_categories: 'categorias_inventario',
+  active_currencies: 'monedas_activas',
+  custom_currencies: 'monedas_custom',
+  exchange_rates: 'tasas_cambio',
+  payment_methods: 'metodos_pago',
+  doc_type_label: 'tipo_doc_etiqueta',
+  monthly_goals: 'metas_mensuales',
+  transaction_fees: 'comisiones_transaccion',
+  method_fees: 'comisiones_metodos',
+  daily_rate_active: 'tasa_dia_activa',
+  google_permissions: 'google_permisos',
+  notifications_expense_active: 'notif_gastos_activa',
+  notifications_ar_active: 'notif_cxc_activa',
+  measure_units: 'unidades_medida',
+  baseSheetName: 'nombreBaseHoja',
+}
+
 export function configToRows(config: Config): (string | number)[][] {
-  return (Object.entries(config) as [string, unknown][]).map(([clave, valor]) => serializeRow(TABLES.Config, { clave, valor: String(valor) }))
+  return (Object.entries(config) as [string, unknown][]).map(([clave, valor]) => serializeRow(TABLES.Config, { clave: CONFIG_ROW_KEYS[clave] ?? clave, valor: String(valor) }))
 }

@@ -19,7 +19,7 @@ export async function listClientesEspejo(e: Espejo): Promise<Cliente[]> {
 /** Mismo contrato que repo.listFacturas: filtro por mes y estado. */
 export async function listFacturasEspejo(e: Espejo, filtro: { estado?: string; mes?: string } = {}): Promise<Factura[]> {
   let rows = await leer<Factura>(e, 'Facturas')
-  if (filtro.mes) rows = rows.filter(f => String(f.fecha_emision).slice(0, 7) === filtro.mes)
+  if (filtro.mes) rows = rows.filter(f => String(f.issue_date).slice(0, 7) === filtro.mes)
   if (filtro.estado) {
     rows = rows.filter(f => {
       const saldo = Number(f.saldo)
@@ -33,20 +33,20 @@ export async function listFacturasEspejo(e: Espejo, filtro: { estado?: string; m
 
 export async function listPagosEspejo(e: Espejo, idOrigen?: string): Promise<Pago[]> {
   let rows = await leer<Pago>(e, 'Pagos')
-  if (idOrigen) rows = rows.filter(p => p.id_origen === idOrigen)
+  if (idOrigen) rows = rows.filter(p => p.origin_id === idOrigen)
   return rows
 }
 
 /** Mismo contrato que repo.getFactura: null si no existe. */
 export async function getFacturaEspejo(e: Espejo, id: string): Promise<{ factura: Factura; items: FacturaItem[] } | null> {
   const facturas = await leer<Factura>(e, 'Facturas')
-  const factura = facturas.find(f => f.id_factura === id)
+  const factura = facturas.find(f => f.invoice_id === id)
   if (!factura) return null
-  type ItemConOrigen = FacturaItem & { id_factura: string }
+  type ItemConOrigen = FacturaItem & { invoice_id: string }
   const items = await leer<ItemConOrigen>(e, 'Factura_Items')
-  return { factura, items: items.filter(i => i.id_factura === id).map(i => ({
-    descripcion: String(i.descripcion), cantidad: Number(i.cantidad), precio_unitario: Number(i.precio_unitario), importe: Number(i.importe),
-    ...(i.id_producto ? { id_producto: String(i.id_producto) } : {})
+  return { factura, items: items.filter(i => i.invoice_id === id).map(i => ({
+    descripcion: String(i.descripcion), cantidad: Number(i.cantidad), unit_price: Number(i.unit_price), importe: Number(i.importe),
+    ...(i.product_id ? { product_id: String(i.product_id) } : {})
   })) }
 }
 
@@ -70,9 +70,9 @@ export async function listEmpleadosEspejo(e: Espejo): Promise<Empleado[]> {
 }
 
 /** Mismo contrato que repo.listAsistencias. */
-export async function listAsistenciasEspejo(e: Espejo, filtro: { id_empleado?: string; desde?: string; hasta?: string } = {}): Promise<Asistencia[]> {
+export async function listAsistenciasEspejo(e: Espejo, filtro: { employee_id?: string; desde?: string; hasta?: string } = {}): Promise<Asistencia[]> {
   let rows = await leer<Asistencia>(e, 'Asistencias')
-  if (filtro.id_empleado) rows = rows.filter(a => a.id_empleado === filtro.id_empleado)
+  if (filtro.employee_id) rows = rows.filter(a => a.employee_id === filtro.employee_id)
   if (filtro.desde) rows = rows.filter(a => a.fecha >= filtro.desde!)
   if (filtro.hasta) rows = rows.filter(a => a.fecha <= filtro.hasta!)
   return rows.sort((a, b) => b.fecha.localeCompare(a.fecha))
@@ -94,13 +94,13 @@ export async function reportesKpisEspejo(e: Espejo, mes: string): Promise<{ kpis
   return {
     kpis: kpisForMonth(facturas, gastos, cxps, pagos, mes),
     categorias: gastosPorCategoria(gastos.filter(g => g.fecha.slice(0, 7) === mes)),
-    top: topClientes(facturas.filter(f => f.fecha_emision.slice(0, 7) === mes))
+    top: topClientes(facturas.filter(f => f.issue_date.slice(0, 7) === mes))
   }
 }
 
 export async function listMovimientosEspejo(e: Espejo, idProducto?: string): Promise<MovimientoStock[]> {
   let rows = await leer<MovimientoStock>(e, 'Movimientos_Stock')
-  if (idProducto) rows = rows.filter(m => m.id_producto === idProducto)
+  if (idProducto) rows = rows.filter(m => m.product_id === idProducto)
   return rows
 }
 
@@ -110,17 +110,17 @@ export async function reporteFinancieroEspejo(e: Espejo, rango: RangoFecha, cfg:
   const [facturas, gastos, cxps, pagos, productos, items] = await Promise.all([
     leer<Factura>(e, 'Facturas'), leer<Gasto>(e, 'Gastos'), leer<CuentaPagar>(e, 'Cuentas_Pagar'),
     leer<Pago>(e, 'Pagos'), leer<Producto>(e, 'Productos'),
-    leer<FacturaItem & { id_factura: string }>(e, 'Factura_Items')
+    leer<FacturaItem & { invoice_id: string }>(e, 'Factura_Items')
   ])
-  const costoPorProducto = productos.reduce<Record<string, number>>((m, p) => { m[p.id_producto] = Number(p.precio_costo) || 0; return m }, {})
-  const monedaPorProducto = productos.reduce<Record<string, string>>((m, p) => { m[p.id_producto] = p.moneda || ''; return m }, {})
-  const itemsPorFactura = items.reduce<Record<string, { cantidad: number; id_producto?: string; precio_unitario?: number }[]>>((m, it) => {
-    ;(m[it.id_factura] ??= []).push({ cantidad: Number(it.cantidad), id_producto: it.id_producto || undefined, precio_unitario: Number(it.precio_unitario) })
+  const costoPorProducto = productos.reduce<Record<string, number>>((m, p) => { m[p.product_id] = Number(p.cost_price) || 0; return m }, {})
+  const monedaPorProducto = productos.reduce<Record<string, string>>((m, p) => { m[p.product_id] = p.moneda || ''; return m }, {})
+  const itemsPorFactura = items.reduce<Record<string, { cantidad: number; product_id?: string; unit_price?: number }[]>>((m, it) => {
+    ;(m[it.invoice_id] ??= []).push({ cantidad: Number(it.cantidad), product_id: it.product_id || undefined, unit_price: Number(it.unit_price) })
     return m
   }, {})
   const pl: ResultadoPL = estadoResultados(facturas, gastos, cfg, costoPorProducto, monedaPorProducto, itemsPorFactura, rango)
-  const legacyPct = Object.fromEntries(Object.entries(parseComisiones(cfg.comisiones_transaccion).metodos).map(([k, pct]) => [k, { pct }]))
-  const comisionesMetodo = { ...legacyPct, ...parseComisionesMetodos(cfg.comisiones_metodos) }
+  const legacyPct = Object.fromEntries(Object.entries(parseComisiones(cfg.transaction_fees).metodos).map(([k, pct]) => [k, { pct }]))
+  const comisionesMetodo = { ...legacyPct, ...parseComisionesMetodos(cfg.method_fees) }
   const flujo: ResultadoFlujoCaja = flujoCaja(pagos, gastos, comisionesMetodo, rango)
   return {
     pl,

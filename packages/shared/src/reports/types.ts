@@ -38,8 +38,8 @@ export interface VariacionCambiaria {
   tipo: 'factura' | 'gasto' | 'cxp' | 'pago'
   moneda: string
   monto_moneda: number
-  tipo_cambio_registro: number
-  tipo_cambio_actual: number
+  exchange_rate_registro: number
+  exchange_rate_actual: number
   valor_base_registro: number
   valor_base_actual: number
   diferencia: number
@@ -60,7 +60,7 @@ export interface FlujoMoneda {
 }
 
 export interface FlujoMetodo {
-  metodo_pago: string
+  payment_method: string
   moneda: string
   entradas: number
   salidas: number
@@ -75,14 +75,14 @@ export interface ResultadoFlujoCaja {
 }
 
 export interface ProductoBajoStock {
-  id_producto: string
+  product_id: string
   nombre: string
   categoria: string
   unidad: string
   stock: number
-  stock_minimo: number
+  minimum_stock: number
   faltante: number
-  nombre_proveedor: string
+  supplier_name: string
 }
 
 export interface MovimientosMes {
@@ -92,7 +92,7 @@ export interface MovimientosMes {
 }
 
 export interface StatsProducto {
-  id_producto: string
+  product_id: string
   nombre: string
   categoria: string
   unidad: string

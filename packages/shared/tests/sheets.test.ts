@@ -18,12 +18,12 @@ describe('tables', () => {
 
 describe('rows', () => {
   it('serializa y deserializa redondo', () => {
-    const obj = { id_factura: 'fac_1', total: 100.5, fecha_emision: '2026-08-11', nombre: 'ACME' }
+    const obj = { invoice_id: 'fac_1', total: 100.5, issue_date: '2026-08-11', nombre: 'ACME' }
     const row = serializeRow(TABLES.Facturas, obj)
     const back = deserializeRow(TABLES.Facturas, row)
-    expect(back.id_factura).toBe('fac_1')
+    expect(back.invoice_id).toBe('fac_1')
     expect(back.total).toBe(100.5)
-    expect(back.fecha_emision).toBe('2026-08-11')
+    expect(back.issue_date).toBe('2026-08-11')
   })
   it('deserialize convierte numeros', () => {
     const back = deserializeRow(TABLES.Facturas, ['fac_1', 'FAC-1', 'c1', 'A', '2026-08-11', '', 100, 16, 116, 50, '', ''])
@@ -108,7 +108,7 @@ describe('ensureTables', () => {
     expect(body.requests.map(r => r.addSheet.properties.title)).toEqual(['Empleados', 'Productos', 'Codigos_Acceso', 'Dispositivos', 'Gastos_Fijos', 'Sistema'])
     const headerWrites = calls.filter(c => c.url.includes('values:batchUpdate'))
     expect(headerWrites.length).toBe(2) // headers de negocio + semilla de Sistema
-    expect(String(headerWrites[0].init?.body)).toContain('id_empleado')
+    expect(String(headerWrites[0].init?.body)).toContain('employee_id')
     vi.unstubAllGlobals()
   })
 

@@ -13,8 +13,8 @@ function codigo(overrides: Partial<CodigoAcceso> = {}): CodigoAcceso {
     rol: 'asistente',
     modulos_ver: 'facturas,clientes',
     modulos_editar: 'facturas',
-    expira_en: '2026-12-31',
-    usos_max: '5',
+    expires_at: '2026-12-31',
+    max_uses: '5',
     usos: '5',
     responsable: 'owner@ft.com',
     email: 'invitado@x.com',
@@ -67,7 +67,7 @@ describe('emitirSessionJwt / verificarSessionJwt', () => {
 })
 
 describe('intercambiarCodigo', () => {
-  it('emite token con claims del código y decrementa usos (usos_max fijo)', async () => {
+  it('emite token con claims del código y decrementa usos (max_uses fijo)', async () => {
     const saved: Partial<CodigoAcceso>[] = []
     const repo = fakeRepo([codigo()], saved)
     const { token } = await intercambiarCodigo(repo, 'FT-2026-ABCD', SECRET, HOY, OWNER)
@@ -80,9 +80,9 @@ describe('intercambiarCodigo', () => {
     expect(saved[0]).toMatchObject({ codigo: 'FT-2026-ABCD', usos: '4' })
   })
 
-  it('no decrementa usos cuando usos_max está vacío (∞)', async () => {
+  it('no decrementa usos cuando max_uses está vacío (∞)', async () => {
     const saved: Partial<CodigoAcceso>[] = []
-    const repo = fakeRepo([codigo({ usos_max: '', usos: '' })], saved)
+    const repo = fakeRepo([codigo({ max_uses: '', usos: '' })], saved)
     const { token } = await intercambiarCodigo(repo, 'FT-2026-ABCD', SECRET, HOY, OWNER)
     expect(token).toBeTruthy()
     expect(saved).toHaveLength(0)
@@ -94,7 +94,7 @@ describe('intercambiarCodigo', () => {
   })
 
   it('rechaza código expirado', async () => {
-    const repo = fakeRepo([codigo({ expira_en: '2026-01-01' })])
+    const repo = fakeRepo([codigo({ expires_at: '2026-01-01' })])
     await expect(intercambiarCodigo(repo, 'FT-2026-ABCD', SECRET, HOY, OWNER))
       .rejects.toThrow('Código expirado o inactivo')
   })

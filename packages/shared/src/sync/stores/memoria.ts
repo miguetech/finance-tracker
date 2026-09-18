@@ -4,7 +4,7 @@ import type { TableName } from '../../sheets/tables'
 /** Store de referencia para tests y fallback de último recurso. */
 export function crearStoreMemoria(): EspejoStore {
   const tablas = new Map<TableName, Row[]>()
-  let rowidCounter = 0
+  const rowidCounter = 0
   return {
     async init(_ddl: string[]) {},
     async getAllRows(t: TableName) { return tablas.get(t) ?? [] },

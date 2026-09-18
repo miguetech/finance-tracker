@@ -4,7 +4,7 @@ import { todayLocal } from '../lib/date'
 
 export interface VencimientoGastoFijo {
   gasto_fijo: GastoFijo
-  fecha_vencimiento: string
+  due_date: string
   dias_restantes: number
   estado: 'pagado' | 'por_vencer' | 'vencido'
 }
@@ -16,7 +16,7 @@ function diasEnMes(anioMes: string): number {
 
 /** Fecha de vencimiento de un gasto fijo dentro del mes dado (YYYY-MM). */
 export function fechaVencimientoEnMes(gf: GastoFijo, mes: string): string {
-  const dia = Math.min(Math.max(1, Number(gf.dia_vencimiento) || 1), diasEnMes(mes))
+  const dia = Math.min(Math.max(1, Number(gf.due_day) || 1), diasEnMes(mes))
   return `${mes}-${String(dia).padStart(2, '0')}`
 }
 
@@ -39,13 +39,13 @@ export function proyeccionGastosFijos(
       })
       out.push({
         gasto_fijo: gf,
-        fecha_vencimiento: fv,
+        due_date: fv,
         dias_restantes: Math.round((new Date(`${fv}T00:00:00`).getTime() - new Date(`${hoy}T00:00:00`).getTime()) / 86400000),
         estado: pagado ? 'pagado' : fv < hoy ? 'vencido' : 'por_vencer'
       })
     }
   }
-  return out.sort((a, b) => a.fecha_vencimiento.localeCompare(b.fecha_vencimiento))
+  return out.sort((a, b) => a.due_date.localeCompare(b.due_date))
 }
 
 /** Total mensual comprometido en gastos fijos activos. */

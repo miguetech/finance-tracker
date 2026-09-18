@@ -13,7 +13,7 @@ export function ReporteNomina({ mes }: { mes: string }) {
   const { t } = useI18n()
   const { config } = useConfig()
   const moneda = config?.moneda ?? 'USD'
-  const empresa = config?.empresa_nombre ?? ''
+  const empresa = config?.company_name ?? ''
   const { empleados } = useEmpleados()
   const { detalles } = useNominaDetalles()
   const { gastos } = useGastos({ mes })
@@ -23,19 +23,19 @@ export function ReporteNomina({ mes }: { mes: string }) {
   const filas = resumen.lineas.map(l => ({
     empleado: l.empleado.nombre,
     puesto: l.empleado.puesto,
-    sueldo_base: l.detalle?.sueldo_base ?? (Number(l.empleado.salario) || 0),
+    base_salary: l.detalle?.base_salary ?? (Number(l.empleado.salario) || 0),
     horas_extra: l.detalle?.horas_extra ?? 0,
-    monto_he: l.detalle?.monto_horas_extra ?? 0,
+    monto_he: l.detalle?.overtime_amount ?? 0,
     bonos: l.detalle?.bonos ?? 0,
     comisiones: l.detalle?.comisiones ?? 0,
     total: l.detalle?.total ?? (Number(l.empleado.salario) || 0),
-    metodo: l.gasto ? `${l.gasto.metodo_pago} (${l.gasto.moneda})` : '—'
+    metodo: l.gasto ? `${l.gasto.payment_method} (${l.gasto.moneda})` : '—'
   }))
 
   const exportCSVNom = () => exportCSV(`nomina_${mes}`, filas, [
     { key: 'empleado', header: 'Empleado' },
     { key: 'puesto', header: 'Puesto' },
-    { key: 'sueldo_base', header: 'Sueldo base' },
+    { key: 'base_salary', header: 'Sueldo base' },
     { key: 'horas_extra', header: 'Horas extra' },
     { key: 'monto_he', header: 'Monto horas extra' },
     { key: 'bonos', header: 'Bonos' },
@@ -55,7 +55,7 @@ export function ReporteNomina({ mes }: { mes: string }) {
     tablas: [{
       columnas: ['Empleado', 'Sueldo base', 'H. extra', 'Monto H.E.', 'Bonos', 'Comisiones', 'Total', 'Método / moneda'],
       numericas: [1, 3, 4, 5, 6],
-      filas: filas.map(f => [f.empleado, f.sueldo_base, f.horas_extra, f.monto_he, f.bonos, f.comisiones, f.total, f.metodo] as (string | number)[])
+      filas: filas.map(f => [f.empleado, f.base_salary, f.horas_extra, f.monto_he, f.bonos, f.comisiones, f.total, f.metodo] as (string | number)[])
     }]
   })
 
@@ -84,7 +84,7 @@ export function ReporteNomina({ mes }: { mes: string }) {
               {filas.map((f, i) => (
                 <tr key={i} className="border-t border-gray-50">
                   <td className="py-2 font-medium"><div>{f.empleado}</div>{f.puesto && <div className="text-xs text-muted-foreground">{f.puesto}</div>}</td>
-                  <td className="py-2 text-right tabular-nums">{formatMoney(f.sueldo_base, moneda)}</td>
+                  <td className="py-2 text-right tabular-nums">{formatMoney(f.base_salary, moneda)}</td>
                   <td className="py-2 text-right tabular-nums">{f.horas_extra || '—'}</td>
                   <td className="py-2 text-right tabular-nums">{f.monto_he ? formatMoney(f.monto_he, moneda) : '—'}</td>
                   <td className="py-2 text-right tabular-nums">{f.bonos ? formatMoney(f.bonos, moneda) : '—'}</td>
@@ -123,14 +123,14 @@ export function ReporteGastosFijos({ meses }: { meses: string[] }) {
   const { t } = useI18n()
   const { config } = useConfig()
   const moneda = config?.moneda ?? 'USD'
-  const empresa = config?.empresa_nombre ?? ''
+  const empresa = config?.company_name ?? ''
   const { gastosFijos } = useGastosFijos()
   const { gastos } = useGastos({})
 
   const proyeccion = useMemo(() => proyeccionGastosFijos(gastosFijos, gastos.map(g => ({ categoria: g.categoria, descripcion: g.descripcion, fecha: g.fecha, monto: Number(g.monto) })), meses), [gastosFijos, gastos, meses])
 
   const exportCSVProy = () => exportCSV(`proyeccion_gastos_fijos_${meses[0]}`, proyeccion, [
-    { key: 'fecha_vencimiento', header: 'Vencimiento' },
+    { key: 'due_date', header: 'Vencimiento' },
     { key: 'descripcion', header: 'Descripción' },
     { key: 'monto', header: 'Monto', value: (r: typeof proyeccion[number]) => r.gasto_fijo.monto },
     { key: 'moneda', header: 'Moneda', value: (r: typeof proyeccion[number]) => r.gasto_fijo.moneda },
@@ -156,15 +156,15 @@ export function ReporteGastosFijos({ meses }: { meses: string[] }) {
             </tr></thead>
             <tbody>
               {proyeccion.map((v, i) => (
-                <tr key={`${v.gasto_fijo.id_gasto_fijo}-${i}`} className="border-t border-gray-50">
-                  <td className="py-2 whitespace-nowrap">{v.fecha_vencimiento}</td>
-                  <td className="py-2"><div className="font-medium">{v.gasto_fijo.descripcion}</div>{v.gasto_fijo.categoria && <div className="text-xs text-muted-foreground">{v.gasto_fijo.categoria}{v.gasto_fijo.nombre_proveedor ? ` · ${v.gasto_fijo.nombre_proveedor}` : ''}</div>}</td>
+                <tr key={`${v.gasto_fijo.fixed_expense_id}-${i}`} className="border-t border-gray-50">
+                  <td className="py-2 whitespace-nowrap">{v.due_date}</td>
+                  <td className="py-2"><div className="font-medium">{v.gasto_fijo.descripcion}</div>{v.gasto_fijo.categoria && <div className="text-xs text-muted-foreground">{v.gasto_fijo.categoria}{v.gasto_fijo.supplier_name ? ` · ${v.gasto_fijo.supplier_name}` : ''}</div>}</td>
                   <td className="py-2 text-right tabular-nums">{formatMoney(Number(v.gasto_fijo.monto), v.gasto_fijo.moneda || moneda)}</td>
                   <td className={`py-2 text-right tabular-nums ${v.dias_restantes <= 0 && v.estado !== 'pagado' ? 'text-danger font-medium' : ''}`}>{v.estado === 'pagado' ? '—' : v.dias_restantes}</td>
                   <td className="py-2">{estadoBadge(v.estado, t)}</td>
                   <td className="py-2">
-                    {v.gasto_fijo.enlace_pago && (
-                      <a href={v.gasto_fijo.enlace_pago} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">{t('reportesFin.enlacePago')}</a>
+                    {v.gasto_fijo.payment_link && (
+                      <a href={v.gasto_fijo.payment_link} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">{t('reportesFin.enlacePago')}</a>
                     )}
                   </td>
                 </tr>
@@ -180,7 +180,7 @@ export function ReporteGastosFijos({ meses }: { meses: string[] }) {
           tablas: [{
             columnas: ['Vencimiento', 'Descripción', 'Monto', 'Moneda', 'Estado'],
             numericas: [],
-            filas: proyeccion.map(v => [v.fecha_vencimiento, v.gasto_fijo.descripcion, v.gasto_fijo.monto, v.gasto_fijo.moneda, v.estado] as (string | number)[])
+            filas: proyeccion.map(v => [v.due_date, v.gasto_fijo.descripcion, v.gasto_fijo.monto, v.gasto_fijo.moneda, v.estado] as (string | number)[])
           }]
         })}>{t('reportesFin.exportarPDF')}</Button>
         <Button size="sm" variant="outline" onClick={exportCSVProy}>{t('reportesFin.exportarCSV')}</Button>

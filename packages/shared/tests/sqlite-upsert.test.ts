@@ -27,24 +27,24 @@ describe.skipIf(!moduloDisponible)('Factura_Items UPSERT', () => {
   it('Factura_Items UPSERT updates existing line and inserts new', async () => {
     // Insert initial line
     await store.replaceTable('Factura_Items', [{
-      id_factura: 'F-001',
+      invoice_id: 'F-001',
       linea: 1,
       descripcion: 'Original',
       cantidad: 1,
-      precio_unitario: 100,
+      unit_price: 100,
       importe: 100,
-      id_producto: ''
+      product_id: ''
     }])
 
     // UPSERT same line (should update)
     await store.replaceTable('Factura_Items', [{
-      id_factura: 'F-001',
+      invoice_id: 'F-001',
       linea: 1,
       descripcion: 'Actualizado',
       cantidad: 2,
-      precio_unitario: 150,
+      unit_price: 150,
       importe: 300,
-      id_producto: 'P-1'
+      product_id: 'P-1'
     }])
 
     const rows = await store.getAllRows('Factura_Items')
@@ -55,8 +55,8 @@ describe.skipIf(!moduloDisponible)('Factura_Items UPSERT', () => {
 
     // Insert new line (should not affect line 1)
     await store.replaceTable('Factura_Items', [
-      { id_factura: 'F-001', linea: 1, descripcion: 'Actualizado', cantidad: 2, precio_unitario: 150, importe: 300, id_producto: 'P-1' },
-      { id_factura: 'F-001', linea: 2, descripcion: 'Nueva linea', cantidad: 1, precio_unitario: 50, importe: 50, id_producto: '' }
+      { invoice_id: 'F-001', linea: 1, descripcion: 'Actualizado', cantidad: 2, unit_price: 150, importe: 300, product_id: 'P-1' },
+      { invoice_id: 'F-001', linea: 2, descripcion: 'Nueva linea', cantidad: 1, unit_price: 50, importe: 50, product_id: '' }
     ])
 
     const rows2 = await store.getAllRows('Factura_Items')
@@ -67,15 +67,15 @@ describe.skipIf(!moduloDisponible)('Factura_Items UPSERT', () => {
     expect(line2!.descripcion).toBe('Nueva linea')
   })
 
-  it('composite PK constraint rejects duplicate (id_factura, linea)', async () => {
+  it('composite PK constraint rejects duplicate (invoice_id, linea)', async () => {
     await store.replaceTable('Factura_Items', [{
-      id_factura: 'F-001', linea: 1, descripcion: 'A', cantidad: 1, precio_unitario: 100, importe: 100, id_producto: ''
+      invoice_id: 'F-001', linea: 1, descripcion: 'A', cantidad: 1, unit_price: 100, importe: 100, product_id: ''
     }])
 
     const db = store.getDb() as { exec(sql: string): void } | null
     expect(db).not.toBeNull()
     expect(() => {
-      db!.exec(`INSERT INTO "Factura_Items" ("id_factura","linea","descripcion","cantidad","precio_unitario","importe","id_producto")
+      db!.exec(`INSERT INTO "Factura_Items" ("invoice_id","linea","descripcion","cantidad","unit_price","importe","product_id")
                VALUES ('F-001', 1, 'B', 1, 100, 100, '')`)
     }).toThrow(/UNIQUE constraint failed|PRIMARY KEY/)
   })

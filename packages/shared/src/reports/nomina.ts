@@ -2,24 +2,24 @@ import type { Empleado, Gasto } from '../types/entities'
 import { round2 } from '../calc/invoice'
 
 export type EsquemaPago = 'semanal' | 'quincenal' | 'mensual'
-export type PagoDividido = { metodo_pago: string; moneda: string; monto: number }
+export type PagoDividido = { payment_method: string; moneda: string; monto: number }
 
 export interface NominaDetalle {
   id_detalle: string
-  id_empleado: string
+  employee_id: string
   mes: string
-  sueldo_base: number
+  base_salary: number
   horas_extra: number
-  tarifa_hora_extra: number
-  monto_horas_extra: number
+  overtime_rate: number
+  overtime_amount: number
   bonos: number
   comisiones: number
   total: number
   moneda: string
-  metodo_pago: string
-  pagos_divididos: string
+  payment_method: string
+  split_payments: string
   fecha: string
-  id_gasto: string
+  expense_id: string
 }
 
 export interface LiquidacionEmpleado {
@@ -35,14 +35,14 @@ export function tarifaHoraExtra(salarioBase: number, horasJornadaSemanal = 40): 
 }
 
 export function totalNomina(input: {
-  sueldo_base: number
+  base_salary: number
   horas_extra?: number
-  tarifa_hora_extra?: number
+  overtime_rate?: number
   bonos?: number
   comisiones?: number
 }): number {
-  const he = (input.horas_extra ?? 0) * (input.tarifa_hora_extra ?? 0)
-  return round2(input.sueldo_base + he + (input.bonos ?? 0) + (input.comisiones ?? 0))
+  const he = (input.horas_extra ?? 0) * (input.overtime_rate ?? 0)
+  return round2(input.base_salary + he + (input.bonos ?? 0) + (input.comisiones ?? 0))
 }
 
 /** Consolidado de nómina por mes con desglose individual de liquidación. */
@@ -59,10 +59,10 @@ export function consolidadoNomina(empleados: Empleado[], detalles: NominaDetalle
   let totCom = 0
   let tot = 0
   for (const emp of empleados) {
-    const det = detalles.find(d => d.id_empleado === emp.id_empleado && d.mes === mes) ?? null
-    const gasto = det ? gastos.find(g => g.id_gasto === det.id_gasto) ?? null : null
+    const det = detalles.find(d => d.employee_id === emp.employee_id && d.mes === mes) ?? null
+    const gasto = det ? gastos.find(g => g.expense_id === det.expense_id) ?? null : null
     if (det) {
-      totHe += Number(det.monto_horas_extra) || 0
+      totHe += Number(det.overtime_amount) || 0
       totBonos += Number(det.bonos) || 0
       totCom += Number(det.comisiones) || 0
       tot += Number(det.total) || 0
@@ -103,7 +103,7 @@ export interface DesgloseEmpleado {
  */
 export function desgloseEmpleado(
   empleado: Empleado,
-  datos: { asistencias: { fecha: string; hora_entrada: string; hora_salida: string }[] }
+  datos: { asistencias: { fecha: string; clock_in: string; clock_out: string }[] }
     & { detalles?: NominaDetalle[]; gastos?: Gasto[] },
   mes: string
 ): DesgloseEmpleado {
@@ -111,9 +111,9 @@ export function desgloseEmpleado(
   let horas = 0
   for (const a of datos.asistencias.filter(a => a.fecha.slice(0, 7) === mes)) {
     dias++
-    horas += horasEntre(a.hora_entrada, a.hora_salida)
+    horas += horasEntre(a.clock_in, a.clock_out)
   }
-  const det = datos.detalles?.find(d => d.id_empleado === empleado.id_empleado && d.mes === mes) ?? null
+  const det = datos.detalles?.find(d => d.employee_id === empleado.employee_id && d.mes === mes) ?? null
   const pagados = (datos.gastos ?? [])
     .filter(g => g.categoria === 'Nómina' && String(g.proveedor) === empleado.nombre && g.fecha.slice(0, 7) === mes)
     .reduce((s, g) => s + Number(g.monto), 0)
@@ -122,7 +122,7 @@ export function desgloseEmpleado(
     diasTrabajados: dias,
     horasTrabajadas: round2(horas),
     horasExtraMes: det ? Number(det.horas_extra) || 0 : 0,
-    montoHorasExtraMes: det ? Number(det.monto_horas_extra) || 0 : 0,
+    montoHorasExtraMes: det ? Number(det.overtime_amount) || 0 : 0,
     sueldosDepositados: round2(pagados || (det ? Number(det.total) || 0 : 0))
   }
 }

@@ -17,7 +17,7 @@ export function VentaRapidaModal({ open, onClose, onSaved }: { open: boolean; on
   const metodos = useMetodosPago()
   const { config } = useConfig()
   const toast = useToast()
-  const [id_producto, setIdProducto] = useState('')
+  const [product_id, setIdProducto] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [cantidad, setCantidad] = useState('1')
   const [precio, setPrecio] = useState('')
@@ -34,18 +34,18 @@ export function VentaRapidaModal({ open, onClose, onSaved }: { open: boolean; on
   const monedaSel = moneda || config?.moneda || 'USD'
   const n = Number(cantidad) || 0
   const p = Number(precio) || 0
-  const { totals } = buildFactura([{ descripcion, cantidad: n, precio_unitario: p }].filter(i => i.descripcion), config?.iva_porcentaje ?? 16, getCurrency(monedaSel).decimals)
+  const { totals } = buildFactura([{ descripcion, cantidad: n, unit_price: p }].filter(i => i.descripcion), config?.vat_percent ?? 16, getCurrency(monedaSel).decimals)
 
   const onProducto = (id: string) => {
     setIdProducto(id)
-    const prod = productos.find(x => x.id_producto === id)
+    const prod = productos.find(x => x.product_id === id)
     if (prod) {
       setDescripcion(prod.nombre)
       // Producto cotizado en otra moneda: se convierte a la moneda de la venta.
       const monedaProd = prod.moneda || config?.moneda || monedaSel
       const precioVenta = monedaProd !== monedaSel
-        ? convert(Number(prod.precio_venta) || 0, monedaProd, monedaSel, config)
-        : Number(prod.precio_venta) || 0
+        ? convert(Number(prod.sale_price) || 0, monedaProd, monedaSel, config)
+        : Number(prod.sale_price) || 0
       setPrecio(String(precioVenta))
     }
   }
@@ -56,16 +56,16 @@ export function VentaRapidaModal({ open, onClose, onSaved }: { open: boolean; on
     if (!n || n <= 0) { setError(t('facturas.cantidadMayor')); return }
     if (p < 0) { setError(t('facturas.precioInvalido')); return }
     try {
-      await saveCliente.mutateAsync({ id_cliente: 'cli_mostrador', nombre: t('facturas.ventaMostrador'), rfc: '', email: '', telefono: '', direccion: '', fecha_registro: todayLocal() })
+      await saveCliente.mutateAsync({ customer_id: 'cli_mostrador', nombre: t('facturas.ventaMostrador'), rfc: '', email: '', telefono: '', direccion: '', created_at: todayLocal() })
       const factura = await createFactura.mutateAsync({
-        id_cliente: 'cli_mostrador',
-        items: [{ descripcion: descripcion.trim(), cantidad: n, precio_unitario: p, ...(id_producto ? { id_producto } : {}) }],
-        fecha_emision: todayLocal(),
-        fecha_vencimiento: '',
+        customer_id: 'cli_mostrador',
+        items: [{ descripcion: descripcion.trim(), cantidad: n, unit_price: p, ...(product_id ? { product_id } : {}) }],
+        issue_date: todayLocal(),
+        due_date: '',
         notas: notas || t('facturas.ventaRapida'),
         moneda: monedaSel
       })
-      await registerPago.mutateAsync({ tipo: 'cobro', id_origen: factura.id_factura, fecha: todayLocal(), monto: factura.total, metodo_pago: metodo || 'Efectivo', notas: t('facturas.pagoVentaRapida') })
+      await registerPago.mutateAsync({ tipo: 'cobro', origin_id: factura.invoice_id, fecha: todayLocal(), monto: factura.total, payment_method: metodo || 'Efectivo', notas: t('facturas.pagoVentaRapida') })
       toast(`${t('facturas.ventaRegistrada')} — ${factura.folio}`)
       onSaved()
       onClose()
@@ -81,8 +81,8 @@ export function VentaRapidaModal({ open, onClose, onSaved }: { open: boolean; on
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div>
           <label className="text-xs text-gray-500">{t('facturas.productoInventario')}</label>
-          <SearchSelect value={id_producto} onChange={onProducto}
-            options={productos.filter(p => String(p.activo) !== 'false').map(p => ({ value: p.id_producto, label: `${p.nombre} — ${p.precio_venta} (${t('facturas.stockLabel')}: ${p.stock} ${p.unidad || 'pieza'})` }))}
+          <SearchSelect value={product_id} onChange={onProducto}
+            options={productos.filter(p => String(p.activo) !== 'false').map(p => ({ value: p.product_id, label: `${p.nombre} — ${p.sale_price} (${t('facturas.stockLabel')}: ${p.stock} ${p.unidad || 'pieza'})` }))}
             placeholder={t('facturas.oEscribir')} />
         </div>
         <div><label className="text-xs text-gray-500">{t('facturas.conceptos')} *</label><Input value={descripcion} onChange={e => setDescripcion(e.target.value)} placeholder={t('facturas.ejConcepto')} /></div>
@@ -98,7 +98,7 @@ export function VentaRapidaModal({ open, onClose, onSaved }: { open: boolean; on
         </div>
         <div><label className="text-xs text-gray-500">{t('common.notas')}</label><Input value={notas} onChange={e => setNotas(e.target.value)} /></div>
         <div className="rounded-lg bg-muted/60 p-3 text-sm flex justify-between">
-          <span>{t('facturas.totalIva', { iva: config?.iva_porcentaje ?? 16 })}</span>
+          <span>{t('facturas.totalIva', { iva: config?.vat_percent ?? 16 })}</span>
           <b>{formatMoney(totals.total, monedaSel)}</b>
         </div>
         {monedaSel !== (config?.moneda || 'USD') && totals.total > 0 && (
@@ -106,7 +106,7 @@ export function VentaRapidaModal({ open, onClose, onSaved }: { open: boolean; on
             ≈ {formatMoney(convert(totals.total, monedaSel, config?.moneda || 'USD', config), config?.moneda || 'USD')} {t('facturas.equivalenciaBase')}
           </p>
         )}
-        <p className="text-xs text-muted-foreground">{t('facturas.ventaInfo')} {id_producto ? t('facturas.stockDescuenta') : ''}</p>
+        <p className="text-xs text-muted-foreground">{t('facturas.ventaInfo')} {product_id ? t('facturas.stockDescuenta') : ''}</p>
       </div>
     </Dialog>
   )

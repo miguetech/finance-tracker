@@ -59,7 +59,7 @@ function TabPlantilla() {
   const [editando, setEditando] = useState<Empleado | null>(null)
   const [nominaDe, setNominaDe] = useState<Empleado | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.tipo_doc_etiqueta ?? '')
+  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.doc_type_label ?? '')
   const moneda = config?.moneda ?? 'USD'
 
   const totalPagado = (nombre: string) =>
@@ -75,16 +75,16 @@ function TabPlantilla() {
           { key: 'nombre', header: t('common.nombre'), render: r => String(r.nombre) },
           { key: 'rfc', header: docLabel, render: r => String(r.rfc) },
           { key: 'puesto', header: t('empleados.puesto'), render: r => String(r.puesto) },
-          { key: 'salario', header: t('empleados.salario'), render: r => formatMoney(Number(r.salario), String(r.salario_moneda) || moneda) },
-          { key: 'dias', header: t('empleados.diasLaborales'), render: r => String((r as unknown as Empleado).dias_laborales || '').split(',').filter(Boolean).length ? `${String((r as unknown as Empleado).dias_laborales).split(',').filter(Boolean).length} ${t('empleados.diasSemana')}` : '—' },
-          { key: 'ingreso', header: t('empleados.ingreso'), render: r => String(r.fecha_ingreso) },
+          { key: 'salario', header: t('empleados.salario'), render: r => formatMoney(Number(r.salario), String(r.salary_currency) || moneda) },
+          { key: 'dias', header: t('empleados.diasLaborales'), render: r => String((r as unknown as Empleado).work_days || '').split(',').filter(Boolean).length ? `${String((r as unknown as Empleado).work_days).split(',').filter(Boolean).length} ${t('empleados.diasSemana')}` : '—' },
+          { key: 'ingreso', header: t('empleados.ingreso'), render: r => String(r.hire_date) },
           { key: 'activo', header: t('common.estado'), render: r => <Badge tone={String(r.activo) === 'true' ? 'green' : 'gray'}>{String(r.activo) === 'true' ? t('empleados.activo') : t('empleados.inactivo')}</Badge> },
           { key: 'total', header: t('empleados.totalPagado'), render: r => formatMoney(totalPagado(String(r.nombre)), moneda) },
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
               {isAdmin && <Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(r as unknown as Empleado); setFormOpen(true) }}>{t('common.editar')}</Button>}
               {isAdmin && <Button variant="outline" onClick={() => setNominaDe(r as unknown as Empleado)}>{t('empleados.nomina')}</Button>}
-              {isAdmin && <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_empleado))}>{t('common.eliminar')}</Button>}
+              {isAdmin && <Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.employee_id))}>{t('common.eliminar')}</Button>}
             </div>
           ) }
         ]} rows={empleados as unknown as Record<string, unknown>[]} />
@@ -96,7 +96,7 @@ function TabPlantilla() {
         <NominaModal empleado={nominaDe} onClose={() => setNominaDe(null)}
           onSave={async i => {
             try {
-              await registerNominaAvanzada.mutateAsync({ id_empleado: nominaDe.id_empleado, ...i })
+              await registerNominaAvanzada.mutateAsync({ employee_id: nominaDe.employee_id, ...i })
               toast(t('empleados.nominaRegistrada'))
             } catch (err) { toast((err as Error).message, 'error') }
           }} />
@@ -131,7 +131,7 @@ function TabAsistencia() {
     if (!idEmp) return
     setGuardando(true)
     try {
-      await saveAsistencia.mutateAsync({ id_empleado: idEmp, fecha, hora_entrada: entrada, hora_salida: salida, notas: '' })
+      await saveAsistencia.mutateAsync({ employee_id: idEmp, fecha, clock_in: entrada, clock_out: salida, notas: '' })
       toast(t('empleados.jornadaGuardada'))
     } catch (e) {
       toast((e as Error).message, 'error')
@@ -150,7 +150,7 @@ function TabAsistencia() {
               <label className="text-xs text-gray-500">{t('empleados.empleado')}</label>
               <select value={idEmp} onChange={e => setIdEmp(e.target.value)} className="w-full h-10 px-3 text-sm rounded-xl border border-gray-200 bg-surface">
                 <option value="">—</option>
-                {activos.map(e => <option key={e.id_empleado} value={e.id_empleado}>{e.nombre}</option>)}
+                {activos.map(e => <option key={e.employee_id} value={e.employee_id}>{e.nombre}</option>)}
               </select>
             </div>
             <div><label className="text-xs text-gray-500">{t('common.fecha')}</label><Input type="date" value={fecha} onChange={e => setFecha(e.target.value)} /></div>
@@ -159,8 +159,8 @@ function TabAsistencia() {
             <Button onClick={guardarJornada} disabled={guardando || !idEmp}>{guardando ? t('imagenes.subiendo') : t('common.guardar')}</Button>
           </div>
           {idEmp && (() => {
-            const emp = activos.find(e => e.id_empleado === idEmp)
-            const dias = (emp?.dias_laborales || '').split(',').filter(Boolean).map(n => Number(n))
+            const emp = activos.find(e => e.employee_id === idEmp)
+            const dias = (emp?.work_days || '').split(',').filter(Boolean).map(n => Number(n))
             return dias.length > 0 ? (
               <p className="text-xs text-muted-foreground">{t('empleados.esquemaDias')}: {dias.map(d => t(`empleados.${DIAS_SEMANA[d - 1]}`)).join(' · ')}</p>
             ) : null
@@ -170,12 +170,12 @@ function TabAsistencia() {
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table columns={[
           { key: 'fecha', header: t('common.fecha'), render: r => String(r.fecha) },
-          { key: 'emp', header: t('empleados.empleado'), render: r => String(r.nombre_empleado) },
-          { key: 'ent', header: t('nominaAv.horaEntrada'), render: r => String(r.hora_entrada) || '—' },
-          { key: 'sal', header: t('nominaAv.horaSalida'), render: r => String(r.hora_salida) || '—' },
+          { key: 'emp', header: t('empleados.empleado'), render: r => String(r.employee_name) },
+          { key: 'ent', header: t('nominaAv.horaEntrada'), render: r => String(r.clock_in) || '—' },
+          { key: 'sal', header: t('nominaAv.horaSalida'), render: r => String(r.clock_out) || '—' },
           ...(isAdmin ? [{
             key: 'acc', header: '', render: (r: Record<string, unknown>) => (
-              <Button variant="danger" size="sm" icon={<IconTrash className="w-3.5 h-3.5" />} onClick={() => deleteAsistencia.mutate(String(r.id_asistencia))}>{t('common.eliminar')}</Button>
+              <Button variant="danger" size="sm" icon={<IconTrash className="w-3.5 h-3.5" />} onClick={() => deleteAsistencia.mutate(String(r.attendance_id))}>{t('common.eliminar')}</Button>
             )
           }] : [])
         ]} rows={asistencias as unknown as Record<string, unknown>[]} />
@@ -210,12 +210,12 @@ function TabDesglose() {
     dias_trabajados: d.diasTrabajados,
     horas_trabajadas: d.horasTrabajadas,
     horas_extra: d.horasExtraMes,
-    monto_horas_extra: d.montoHorasExtraMes,
+    overtime_amount: d.montoHorasExtraMes,
     depositado: d.sueldosDepositados
   })), [
     { key: 'empleado', header: 'Empleado' }, { key: 'puesto', header: 'Puesto' },
     { key: 'dias_trabajados', header: 'Días trabajados' }, { key: 'horas_trabajadas', header: 'Horas trabajadas' },
-    { key: 'horas_extra', header: 'Horas extra' }, { key: 'monto_horas_extra', header: 'Monto horas extra' },
+    { key: 'horas_extra', header: 'Horas extra' }, { key: 'overtime_amount', header: 'Monto horas extra' },
     { key: 'depositado', header: `Depositado (${moneda})` }
   ])
 
@@ -227,9 +227,9 @@ function TabDesglose() {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {desgloses.map(d => (
-          <div key={d.empleado.id_empleado} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-card">
+          <div key={d.empleado.employee_id} className="rounded-xl border border-gray-200 bg-white p-4 space-y-2 shadow-card">
             <div className="font-semibold">{d.empleado.nombre}</div>
-            <div className="text-xs text-muted-foreground">{d.empleado.puesto || '—'} · {(d.empleado.dias_laborales || '').split(',').filter(Boolean).map(n => t(`empleados.${DIAS_SEMANA[Number(n) - 1]}`)).join(' · ')}</div>
+            <div className="text-xs text-muted-foreground">{d.empleado.puesto || '—'} · {(d.empleado.work_days || '').split(',').filter(Boolean).map(n => t(`empleados.${DIAS_SEMANA[Number(n) - 1]}`)).join(' · ')}</div>
             <dl className="text-sm space-y-1 pt-1">
               <div className="flex justify-between"><dt className="text-muted-foreground">{t('empleados.diasTrabajados')}</dt><dd className="tabular-nums font-medium">{d.diasTrabajados}</dd></div>
               <div className="flex justify-between"><dt className="text-muted-foreground">{t('empleados.horasTrabajadas')}</dt><dd className="tabular-nums font-medium">{d.horasTrabajadas}</dd></div>

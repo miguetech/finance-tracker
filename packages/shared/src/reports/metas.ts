@@ -38,8 +38,8 @@ export interface MetaVsLogro {
 export function metasVsLogros(facturas: Factura[], metas: MetasMensuales, meses: string[]): MetaVsLogro[] {
   const logrado = new Map<string, number>()
   for (const f of facturas) {
-    const mes = f.fecha_emision.slice(0, 7)
-    logrado.set(mes, round2((logrado.get(mes) ?? 0) + toBase(f.total, Number(f.tipo_cambio) || 1)))
+    const mes = f.issue_date.slice(0, 7)
+    logrado.set(mes, round2((logrado.get(mes) ?? 0) + toBase(f.total, Number(f.exchange_rate) || 1)))
   }
   return meses.map(mes => {
     const meta = metas[mes] ?? 0

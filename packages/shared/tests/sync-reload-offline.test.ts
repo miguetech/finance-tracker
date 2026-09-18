@@ -17,8 +17,8 @@ describe('recarga offline con snapshot compartido', () => {
     const s1 = crearSqliteStore('/t.db3', { persistor })
     const espejo1 = crearEspejo({ store: s1, fetchTablas: async ts => ({
       ...Object.fromEntries(ts.map(t => [t, []])),
-      Clientes: [{ id_cliente: 'c1', nombre: 'Ana' }],
-      Empleados: [{ id_empleado: 'e1', nombre: 'Beto' }]
+      Clientes: [{ customer_id: 'c1', nombre: 'Ana' }],
+      Empleados: [{ employee_id: 'e1', nombre: 'Beto' }]
     }) })
     await espejo1.pull()
     expect((await s1.getAllRows('Clientes')).length).toBe(1)
@@ -40,7 +40,7 @@ describe('recarga offline con snapshot compartido', () => {
     const s1 = crearSqliteStore('/t.db3', { persistor, clave: async () => '9999' })
     const ddl = ddlDesdeTables().flatMap(d => [d.create, ...d.indexes])
     await s1.init(ddl)
-    await s1.replaceTable('Clientes', [{ id_cliente: 'c1', nombre: 'Ana' }])
+    await s1.replaceTable('Clientes', [{ customer_id: 'c1', nombre: 'Ana' }])
     await s1.close()
 
     const s2 = crearSqliteStore('/t.db3', { persistor }) // sin clave

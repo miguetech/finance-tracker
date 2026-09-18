@@ -10,7 +10,7 @@ import type { TableName } from '../src/sheets/tables'
 afterEach(() => cleanup())
 
 const repoFalso = {
-  listClientes: async () => [{ id_cliente: 'c1', nombre: 'DesdeRepo' }],
+  listClientes: async () => [{ customer_id: 'c1', nombre: 'DesdeRepo' }],
   saveCliente: async () => {},
   deleteCliente: async () => {}
 } as unknown as Repository
@@ -39,7 +39,7 @@ describe('lecturas UI desde el espejo', () => {
     // Primer pull: espejo vacío → lista vacía leída del espejo (no del repo).
     await waitFor(() => expect(screen.getByRole('button').textContent).toBe('(vacío)'))
     // Cambio externo en Sheets + pull dirigido → onCambio invalida la query.
-    await act(async () => { fuente.filas = [{ id_cliente: 'c1', nombre: 'Ana' }] })
+    await act(async () => { fuente.filas = [{ customer_id: 'c1', nombre: 'Ana' }] })
     await act(async () => { await screen.getByRole('button').click() })
     await waitFor(() => expect(screen.getByRole('button').textContent).toBe('Ana'))
   })
@@ -56,7 +56,7 @@ describe('lecturas UI desde el espejo', () => {
   })
 
   it('useProveedores también lee del espejo (regresión offline)', async () => {
-    const fuente: { filas: Record<string, string>[] } = { filas: [{ id_proveedor: 'p1', nombre: 'Prov Espejo' }] }
+    const fuente: { filas: Record<string, string>[] } = { filas: [{ supplier_id: 'p1', nombre: 'Prov Espejo' }] }
     const fetchTablas = async (ts: TableName[]) => Object.fromEntries(ts.map(t => [t, t === 'Proveedores' ? fuente.filas : []]))
     function ProbeProv() {
       const { proveedores } = useProveedores()

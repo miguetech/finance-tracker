@@ -182,7 +182,7 @@ function permsInfo(p: Perms): PermsInfo {
 }
 
 function sanitizeConfig(cfg: Config): Record<string, unknown> {
-  const { contador_folio: _c, prefijo_folio: _p, ...rest } = cfg
+  const { serial_counter: _c, serial_prefix: _p, ...rest } = cfg
   return rest
 }
 
@@ -190,11 +190,11 @@ function denied(): never { throw new Error('No tienes permiso') }
 
 function listFacturasFiltro(filtro: { estado?: string; mes?: string }): Factura[] {
   let rows = readTable<Factura>('Facturas')
-  if (filtro.mes) rows = rows.filter(f => f.fecha_emision.slice(0, 7) === filtro.mes)
+  if (filtro.mes) rows = rows.filter(f => f.issue_date.slice(0, 7) === filtro.mes)
   if (filtro.estado) {
     const pagos = readTable('Pagos')
     rows = rows.filter(f => {
-      const tienePagos = pagos.some(p => p.id_origen === f.id_factura)
+      const tienePagos = pagos.some(p => p.origin_id === f.invoice_id)
       const est = estadoDesdeSaldo(Number(f.saldo), Number(f.total), tienePagos)
       if (filtro.estado === 'pendientes') return est === 'pendiente' || est === 'parcial'
       return est === filtro.estado
@@ -207,7 +207,7 @@ function todayISO(): string { return todayLocal() }
 
 function tipoCambioDe(cfg: Config, moneda: string): number {
   if (!moneda || moneda === cfg.moneda) return 1
-  const r = parseRates(cfg.tasas_cambio)
+  const r = parseRates(cfg.exchange_rates)
   const rate = r && r.base === cfg.moneda ? r.rates[moneda] : undefined
   return rate && rate > 0 ? rate : 1
 }
@@ -215,15 +215,15 @@ function tipoCambioDe(cfg: Config, moneda: string): number {
 function backendSaveProveedor(pr: Proveedor): Proveedor {
   if (!pr?.nombre || !String(pr.nombre).trim()) throw new Error('Nombre obligatorio')
   const parsed: Proveedor = {
-    id_proveedor: pr.id_proveedor || uid('prov_'),
+    supplier_id: pr.supplier_id || uid('prov_'),
     nombre: String(pr.nombre),
     rfc: pr.rfc || '',
     email: pr.email || '',
     telefono: pr.telefono || '',
     direccion: pr.direccion || '',
-    fecha_registro: pr.fecha_registro || todayISO()
+    created_at: pr.created_at || todayISO()
   }
-  insertOrReplace('Proveedores', 'id_proveedor', parsed)
+  insertOrReplace('Proveedores', 'supplier_id', parsed)
   return parsed
 }
 
@@ -232,135 +232,135 @@ function backendSaveEmpleado(emp: Empleado): Empleado {
   const salario = Number(emp.salario) || 0
   const extra = emp as unknown as Record<string, string | number | undefined>
   const parsed: Empleado = {
-    id_empleado: emp.id_empleado || uid('emp_'),
+    employee_id: emp.employee_id || uid('emp_'),
     nombre: String(emp.nombre),
     rfc: emp.rfc || '',
     puesto: emp.puesto || '',
     salario,
-    salario_moneda: emp.salario_moneda || '',
-    fecha_ingreso: emp.fecha_ingreso || todayISO(),
+    salary_currency: emp.salary_currency || '',
+    hire_date: emp.hire_date || todayISO(),
     activo: emp.activo === undefined ? 'true' : String(emp.activo),
-    hora_entrada: String(extra.hora_entrada ?? ''),
-    hora_salida: String(extra.hora_salida ?? ''),
-    esquema_pago: (extra.esquema_pago as Empleado['esquema_pago']) || 'mensual',
-    tarifa_hora_extra: Number(extra.tarifa_hora_extra) || 0,
-    dias_laborales: String(extra.dias_laborales ?? '')
+    clock_in: String(extra.clock_in ?? ''),
+    clock_out: String(extra.clock_out ?? ''),
+    pay_schedule: (extra.pay_schedule as Empleado['pay_schedule']) || 'mensual',
+    overtime_rate: Number(extra.overtime_rate) || 0,
+    work_days: String(extra.work_days ?? '')
   }
-  insertOrReplace('Empleados', 'id_empleado', parsed)
+  insertOrReplace('Empleados', 'employee_id', parsed)
   return parsed
 }
 
 /** Registro de asistencia: un registro por empleado y día (se reemplaza si existe). */
 function backendSaveAsistencia(input: Record<string, unknown>): Record<string, string | number> {
-  const idEmpleado = String(input?.id_empleado ?? '')
+  const idEmpleado = String(input?.employee_id ?? '')
   if (!idEmpleado) throw new Error('Empleado obligatorio')
   const fecha = String(input?.fecha ?? '')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error('Fecha con formato YYYY-MM-DD')
-  const emp = readTable<Empleado>('Empleados').find(e => e.id_empleado === idEmpleado)
+  const emp = readTable<Empleado>('Empleados').find(e => e.employee_id === idEmpleado)
   if (!emp) throw new Error('Empleado no existe')
   const saved: Record<string, string | number> = {
-    id_asistencia: String(input.id_asistencia || uid('asi_')),
-    id_empleado: idEmpleado,
-    nombre_empleado: emp.nombre,
+    attendance_id: String(input.attendance_id || uid('asi_')),
+    employee_id: idEmpleado,
+    employee_name: emp.nombre,
     fecha,
-    hora_entrada: String(input.hora_entrada ?? ''),
-    hora_salida: String(input.hora_salida ?? ''),
+    clock_in: String(input.clock_in ?? ''),
+    clock_out: String(input.clock_out ?? ''),
     notas: String(input.notas ?? '')
   }
   const all = readTable<Record<string, string | number>>('Asistencias')
-  const existente = all.find(r => r.id_empleado === idEmpleado && String(r.fecha) === fecha && r.id_asistencia !== saved.id_asistencia)
+  const existente = all.find(r => r.employee_id === idEmpleado && String(r.fecha) === fecha && r.attendance_id !== saved.attendance_id)
   if (existente) {
-    replaceTable('Asistencias', all.map(r => (r.id_asistencia === existente.id_asistencia ? saved : r)))
+    replaceTable('Asistencias', all.map(r => (r.attendance_id === existente.attendance_id ? saved : r)))
   } else {
-    insertOrReplace('Asistencias', 'id_asistencia', saved)
+    insertOrReplace('Asistencias', 'attendance_id', saved)
   }
   return saved
 }
 
-function backendRegisterNomina(input: { id_empleado: string; mes: string; monto: number; metodo_pago: string; fecha: string; notas: string; moneda?: string }): Gasto {
-  if (!input?.id_empleado) throw new Error('Empleado obligatorio')
+function backendRegisterNomina(input: { employee_id: string; mes: string; monto: number; payment_method: string; fecha: string; notas: string; moneda?: string }): Gasto {
+  if (!input?.employee_id) throw new Error('Empleado obligatorio')
   const mes = String(input.mes ?? '')
   if (!/^\d{4}-\d{2}$/.test(mes)) throw new Error('Mes con formato YYYY-MM')
   const monto = Number(input.monto)
   if (!Number.isFinite(monto) || monto <= 0) throw new Error('Monto mayor a 0')
-  const emp = readTable<Empleado>('Empleados').find(e => e.id_empleado === input.id_empleado)
+  const emp = readTable<Empleado>('Empleados').find(e => e.employee_id === input.employee_id)
   if (!emp) throw new Error('Empleado no existe')
   const cfg = readConfig()
   const moneda = input.moneda || cfg.moneda
   const fecha = input.fecha || `${mes}-01`
   const gasto: Gasto = {
-    id_gasto: uid('gas_'),
+    expense_id: uid('gas_'),
     fecha,
     categoria: 'Nómina',
     descripcion: `Nómina ${mes} — ${emp.nombre}`,
     monto: round2(monto),
-    metodo_pago: String(input.metodo_pago || 'Transferencia') as Gasto['metodo_pago'],
+    payment_method: String(input.payment_method || 'Transferencia') as Gasto['payment_method'],
     proveedor: emp.nombre,
     moneda,
-    tipo_cambio: tipoCambioDe(cfg, moneda)
+    exchange_rate: tipoCambioDe(cfg, moneda)
   }
   appendRow('Gastos', gasto)
   return gasto
 }
 
-function backendCreateCxp(input: { id_proveedor: string; folio_documento: string; categoria: string; descripcion: string; fecha_emision: string; fecha_vencimiento: string; monto_total: number; notas: string; moneda?: string }): CuentaPagar {
-  if (!input?.id_proveedor) throw new Error('Proveedor obligatorio')
-  const monto = Number(input.monto_total)
+function backendCreateCxp(input: { supplier_id: string; document_serial: string; categoria: string; descripcion: string; issue_date: string; due_date: string; total_amount: number; notas: string; moneda?: string }): CuentaPagar {
+  if (!input?.supplier_id) throw new Error('Proveedor obligatorio')
+  const monto = Number(input.total_amount)
   if (!Number.isFinite(monto) || monto <= 0) throw new Error('Monto mayor a 0')
   if (!input.descripcion || !String(input.descripcion).trim()) throw new Error('Descripción obligatoria')
-  if (!input.fecha_vencimiento) throw new Error('Fecha de vencimiento obligatoria')
-  const prov = readTable<Proveedor>('Proveedores').find(p => p.id_proveedor === input.id_proveedor)
+  if (!input.due_date) throw new Error('Fecha de vencimiento obligatoria')
+  const prov = readTable<Proveedor>('Proveedores').find(p => p.supplier_id === input.supplier_id)
   if (!prov) throw new Error('Proveedor no existe')
   const cfg = readConfig()
   const moneda = input.moneda || cfg.moneda
   const cxp: CuentaPagar = {
-    id_cxp: uid('cxp_'),
-    id_proveedor: input.id_proveedor,
-    nombre_proveedor: prov.nombre,
-    folio_documento: input.folio_documento || '',
+    ap_id: uid('cxp_'),
+    supplier_id: input.supplier_id,
+    supplier_name: prov.nombre,
+    document_serial: input.document_serial || '',
     categoria: input.categoria || '',
     descripcion: String(input.descripcion),
-    fecha_emision: input.fecha_emision || todayISO(),
-    fecha_vencimiento: String(input.fecha_vencimiento),
-    monto_total: round2(monto),
+    issue_date: input.issue_date || todayISO(),
+    due_date: String(input.due_date),
+    total_amount: round2(monto),
     saldo: round2(monto),
     estado: 'pendiente',
     notas: input.notas || '',
     moneda,
-    tipo_cambio: tipoCambioDe(cfg, moneda)
+    exchange_rate: tipoCambioDe(cfg, moneda)
   }
   appendRow('Cuentas_Pagar', cxp)
   return cxp
 }
 
-function backendRegisterPago(pago: { tipo: string; id_origen: string; fecha: string; monto: number; metodo_pago: string; notas: string }): Pago {
-  if (!pago?.id_origen) throw new Error('Origen del pago requerido')
+function backendRegisterPago(pago: { tipo: string; origin_id: string; fecha: string; monto: number; payment_method: string; notas: string }): Pago {
+  if (!pago?.origin_id) throw new Error('Origen del pago requerido')
   const tipo = pago.tipo === 'cobro' ? 'cobro' : 'abono'
   const table = tipo === 'cobro' ? 'Facturas' as TableName : 'Cuentas_Pagar' as TableName
-  const idKey = table === 'Facturas' ? 'id_factura' : 'id_cxp'
+  const idKey = table === 'Facturas' ? 'invoice_id' : 'ap_id'
   const monto = Number(pago.monto)
   if (!Number.isFinite(monto) || monto <= 0) throw new Error('Monto mayor a 0')
   return syncWithMutex(() => {
     const rows = readTable(table)
-    const target = rows.find(r => r[idKey] === pago.id_origen)
+    const target = rows.find(r => r[idKey] === pago.origin_id)
     if (!target) throw new Error('Origen del pago no existe')
     const saldoActual = Number(target.saldo)
     if (monto > saldoActual) throw new Error(`Pago excede saldo disponible (${saldoActual})`)
     const nuevoSaldo = round2(saldoActual - monto)
     const pagoRow: Pago = {
-      id_pago: uid('pag_'),
+      payment_id: uid('pag_'),
       tipo,
-      id_origen: String(pago.id_origen),
+      origin_id: String(pago.origin_id),
       fecha: pago.fecha || todayISO(),
       monto,
-      metodo_pago: String(pago.metodo_pago || 'Efectivo') as Pago['metodo_pago'],
+      payment_method: String(pago.payment_method || 'Efectivo') as Pago['payment_method'],
       notas: pago.notas || '',
       moneda: String(target.moneda ?? ''),
-      tipo_cambio: Number(target.tipo_cambio) || 1
+      exchange_rate: Number(target.exchange_rate) || 1
     }
     const updated = rows.map(r => {
-      if (r[idKey] === pago.id_origen) {
-        if (table === 'Facturas') return { ...r, saldo: nuevoSaldo, fecha_pago: nuevoSaldo <= 0 ? pago.fecha : String(r.fecha_pago ?? '') }
+      if (r[idKey] === pago.origin_id) {
+        if (table === 'Facturas') return { ...r, saldo: nuevoSaldo, paid_at: nuevoSaldo <= 0 ? pago.fecha : String(r.paid_at ?? '') }
         return { ...r, saldo: nuevoSaldo, estado: nuevoSaldo <= 0 ? 'pagada' : 'parcial' }
       }
       return r
@@ -373,25 +373,25 @@ function backendRegisterPago(pago: { tipo: string; id_origen: string; fecha: str
 
 function backendSaveProducto(pr: Producto): Producto {
   if (!pr?.nombre || !String(pr.nombre).trim()) throw new Error('Nombre obligatorio')
-  const provs = readTable<Proveedor>('Proveedores').reduce<Record<string, string>>((m, p) => { m[p.id_proveedor] = p.nombre; return m }, {})
+  const provs = readTable<Proveedor>('Proveedores').reduce<Record<string, string>>((m, p) => { m[p.supplier_id] = p.nombre; return m }, {})
   const parsed: Producto = {
-    id_producto: pr.id_producto || uid('prod_'),
+    product_id: pr.product_id || uid('prod_'),
     nombre: String(pr.nombre),
     categoria: pr.categoria || '',
     unidad: pr.unidad || 'pieza',
     stock: Number(pr.stock) || 0,
-    stock_minimo: Number(pr.stock_minimo) || 0,
-    precio_costo: Number(pr.precio_costo) || 0,
-    precio_venta: Number(pr.precio_venta) || 0,
-    id_proveedor: pr.id_proveedor || '',
-    nombre_proveedor: pr.nombre_proveedor || provs[String(pr.id_proveedor || '')] || '',
+    minimum_stock: Number(pr.minimum_stock) || 0,
+    cost_price: Number(pr.cost_price) || 0,
+    sale_price: Number(pr.sale_price) || 0,
+    supplier_id: pr.supplier_id || '',
+    supplier_name: pr.supplier_name || provs[String(pr.supplier_id || '')] || '',
     imagen: pr.imagen || '',
     notas: pr.notas || '',
     activo: pr.activo === undefined ? 'true' : String(pr.activo),
-    fecha_registro: pr.fecha_registro || todayISO(),
+    created_at: pr.created_at || todayISO(),
     moneda: (pr as unknown as Record<string, string | undefined>).moneda || readConfig().moneda
   }
-  insertOrReplace('Productos', 'id_producto', parsed)
+  insertOrReplace('Productos', 'product_id', parsed)
   return parsed
 }
 
@@ -420,14 +420,14 @@ function backendUploadImagen(input: { nombre?: string; mimeType?: string; base64
   return `https://lh3.googleusercontent.com/d/${file.getId()}`
 }
 
-function backendRegistrarMovimiento(input: { id_producto: string; tipo: TipoMovimiento; cantidad: number; motivo: string; id_proveedor: string; fecha: string }): MovimientoStock {
-  if (!input?.id_producto) throw new Error('Producto obligatorio')
+function backendRegistrarMovimiento(input: { product_id: string; tipo: TipoMovimiento; cantidad: number; motivo: string; supplier_id: string; fecha: string }): MovimientoStock {
+  if (!input?.product_id) throw new Error('Producto obligatorio')
   const tipo = ['entrada', 'salida', 'ajuste'].includes(input.tipo) ? input.tipo : 'ajuste'
   const cantidad = Number(input.cantidad)
   if (!Number.isFinite(cantidad) || cantidad <= 0) throw new Error('Cantidad mayor a 0')
   return syncWithMutex(() => {
     const productos = readTable<Producto>('Productos')
-    const prod = productos.find(p => p.id_producto === input.id_producto)
+    const prod = productos.find(p => p.product_id === input.product_id)
     if (!prod) throw new Error('Producto no existe')
     const stockActual = Number(prod.stock) || 0
     let nuevoStock = stockActual
@@ -436,17 +436,17 @@ function backendRegistrarMovimiento(input: { id_producto: string; tipo: TipoMovi
       if (cantidad > stockActual) throw new Error(`Stock insuficiente (disponible: ${stockActual})`)
       nuevoStock = stockActual - cantidad
     } else nuevoStock = cantidad
-    const idProveedor = tipo === 'entrada' ? (input.id_proveedor || prod.id_proveedor || '') : ''
+    const idProveedor = tipo === 'entrada' ? (input.supplier_id || prod.supplier_id || '') : ''
     const mov: MovimientoStock = {
-      id_movimiento: uid('mov_'),
-      id_producto: input.id_producto,
+      movement_id: uid('mov_'),
+      product_id: input.product_id,
       tipo,
       cantidad,
       motivo: input.motivo || '',
-      id_proveedor: idProveedor,
+      supplier_id: idProveedor,
       fecha: input.fecha || todayISO()
     }
-    replaceTable('Productos', productos.map(r => (r.id_producto === input.id_producto ? { ...r, stock: nuevoStock, id_proveedor: idProveedor || String(r.id_proveedor ?? '') } : r)))
+    replaceTable('Productos', productos.map(r => (r.product_id === input.product_id ? { ...r, stock: nuevoStock, supplier_id: idProveedor || String(r.supplier_id ?? '') } : r)))
     appendRow('Movimientos_Stock', mov)
     return mov
   })
@@ -459,15 +459,15 @@ function backendDeleteById(t: TableName, idKey: string, id: string): void {
 function backendSaveCliente(c: Cliente): Cliente {
   if (!c?.nombre || !String(c.nombre).trim()) throw new Error('Nombre obligatorio')
   const parsed: Cliente = {
-    id_cliente: c.id_cliente || uid('cli_'),
+    customer_id: c.customer_id || uid('cli_'),
     nombre: String(c.nombre),
     rfc: c.rfc || '',
     email: c.email || '',
     telefono: c.telefono || '',
     direccion: c.direccion || '',
-    fecha_registro: c.fecha_registro || todayISO()
+    created_at: c.created_at || todayISO()
   }
-  insertOrReplace('Clientes', 'id_cliente', parsed)
+  insertOrReplace('Clientes', 'customer_id', parsed)
   return parsed
 }
 
@@ -478,106 +478,106 @@ function backendSaveGasto(ga: Gasto): Gasto {
   const cfg = readConfig()
   const moneda = ga.moneda || cfg.moneda
   const parsed: Gasto = {
-    id_gasto: ga.id_gasto || uid('gas_'),
+    expense_id: ga.expense_id || uid('gas_'),
     fecha: ga.fecha || todayISO(),
     categoria: ga.categoria || '',
     descripcion: String(ga.descripcion),
     monto: round2(monto),
-    metodo_pago: String(ga.metodo_pago || 'Efectivo'),
+    payment_method: String(ga.payment_method || 'Efectivo'),
     proveedor: ga.proveedor || '',
     moneda,
-    tipo_cambio: ga.tipo_cambio || tipoCambioDe(cfg, moneda)
+    exchange_rate: ga.exchange_rate || tipoCambioDe(cfg, moneda)
   }
-  insertOrReplace('Gastos', 'id_gasto', parsed)
+  insertOrReplace('Gastos', 'expense_id', parsed)
   return parsed
 }
 
-function backendCreateFactura(input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }): Factura {
-  if (!input?.id_cliente) throw new Error('Cliente obligatorio')
+function backendCreateFactura(input: { customer_id: string; items: { descripcion: string; cantidad: number; unit_price: number }[]; issue_date: string; due_date: string; notas: string; moneda?: string }): Factura {
+  if (!input?.customer_id) throw new Error('Cliente obligatorio')
   const items = Array.isArray(input.items)
-    ? input.items.filter(i => i && i.descripcion && Number(i.cantidad) > 0 && Number(i.precio_unitario) >= 0)
+    ? input.items.filter(i => i && i.descripcion && Number(i.cantidad) > 0 && Number(i.unit_price) >= 0)
     : []
   if (items.length === 0) throw new Error('Mínimo 1 concepto')
   const clientes = readTable<Cliente>('Clientes')
-  const cliente = clientes.find(c => c.id_cliente === input.id_cliente)
+  const cliente = clientes.find(c => c.customer_id === input.customer_id)
   if (!cliente) throw new Error('Cliente no existe')
   const cfg = readConfig()
   const moneda = input.moneda || cfg.moneda
-  const parsed = { id_cliente: String(input.id_cliente), fecha_emision: input.fecha_emision || todayISO(), fecha_vencimiento: input.fecha_vencimiento || '', notas: input.notas || '', items }
-  const { items: builtItems, totals } = buildFactura(parsed.items, cfg.iva_porcentaje, getCurrency(moneda).decimals)
-  const id_factura = uid('fac_')
+  const parsed = { customer_id: String(input.customer_id), issue_date: input.issue_date || todayISO(), due_date: input.due_date || '', notas: input.notas || '', items }
+  const { items: builtItems, totals } = buildFactura(parsed.items, cfg.vat_percent, getCurrency(moneda).decimals)
+  const invoice_id = uid('fac_')
   const lock = LockService.getScriptLock()
   lock.waitLock(30000)
   let folio = ''
   try {
     folio = syncWithMutex(() => {
       const c = readConfig()
-      const folioN = c.contador_folio
-      writeConfig({ ...c, contador_folio: c.contador_folio + 1 })
-      return `${expandFolioTemplate(c.prefijo_folio, parsed.fecha_emision)}${String(folioN).padStart(3, '0')}`
+      const folioN = c.serial_counter
+      writeConfig({ ...c, serial_counter: c.serial_counter + 1 })
+      return `${expandFolioTemplate(c.prefijo_folio, parsed.issue_date)}${String(folioN).padStart(3, '0')}`
     })
   } finally {
     lock.releaseLock()
   }
   const factura: Factura = {
-    id_factura,
+    invoice_id,
     folio,
-    id_cliente: parsed.id_cliente,
-    nombre_cliente: String(cliente.nombre),
-    fecha_emision: parsed.fecha_emision,
-    fecha_vencimiento: parsed.fecha_vencimiento,
+    customer_id: parsed.customer_id,
+    customer_name: String(cliente.nombre),
+    issue_date: parsed.issue_date,
+    due_date: parsed.due_date,
     subtotal: totals.subtotal,
     iva: totals.iva,
     total: totals.total,
     saldo: totals.total,
-    fecha_pago: '',
+    paid_at: '',
     notas: parsed.notas,
     moneda,
-    tipo_cambio: tipoCambioDe(cfg, moneda),
+    exchange_rate: tipoCambioDe(cfg, moneda),
     editada: '',
-    fecha_edicion: ''
+    edited_at: ''
   }
   appendRow('Facturas', factura)
-  for (const it of builtItems) appendRow('Factura_Items', { id_factura, ...it })
+  for (const it of builtItems) appendRow('Factura_Items', { invoice_id, ...it })
   return factura
 }
 
-function backendUpdateFactura(id: string, input: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }): Factura {
+function backendUpdateFactura(id: string, input: { customer_id: string; items: { descripcion: string; cantidad: number; unit_price: number }[]; issue_date: string; due_date: string; notas: string; moneda?: string }): Factura {
   if (!id) throw new Error('Factura requerida')
-  if (!input?.id_cliente) throw new Error('Cliente obligatorio')
+  if (!input?.customer_id) throw new Error('Cliente obligatorio')
   const items = Array.isArray(input.items)
-    ? input.items.filter(i => i && i.descripcion && Number(i.cantidad) > 0 && Number(i.precio_unitario) >= 0)
+    ? input.items.filter(i => i && i.descripcion && Number(i.cantidad) > 0 && Number(i.unit_price) >= 0)
     : []
   if (items.length === 0) throw new Error('Mínimo 1 concepto')
   const facturas = readTable<Factura>('Facturas')
-  const actual = facturas.find(f => f.id_factura === id)
+  const actual = facturas.find(f => f.invoice_id === id)
   if (!actual) throw new Error('Factura no existe')
-  const cliente = readTable<Cliente>('Clientes').find(c => c.id_cliente === input.id_cliente)
+  const cliente = readTable<Cliente>('Clientes').find(c => c.customer_id === input.customer_id)
   if (!cliente) throw new Error('Cliente no existe')
   const cfg = readConfig()
   const moneda = input.moneda || actual.moneda || cfg.moneda
-  const { items: builtItems, totals } = buildFactura(items, cfg.iva_porcentaje, getCurrency(moneda).decimals)
+  const { items: builtItems, totals } = buildFactura(items, cfg.vat_percent, getCurrency(moneda).decimals)
   const diff = round2(totals.total - Number(actual.total))
   const nuevoSaldo = round2(Math.max(0, Number(actual.saldo) + diff))
   const updated: Factura = {
     ...actual,
-    id_cliente: input.id_cliente,
-    nombre_cliente: String(cliente.nombre),
-    fecha_emision: input.fecha_emision || actual.fecha_emision,
-    fecha_vencimiento: input.fecha_vencimiento || actual.fecha_vencimiento,
+    customer_id: input.customer_id,
+    customer_name: String(cliente.nombre),
+    issue_date: input.issue_date || actual.issue_date,
+    due_date: input.due_date || actual.due_date,
     notas: input.notas || '',
     moneda,
-    tipo_cambio: tipoCambioDe(cfg, moneda),
+    exchange_rate: tipoCambioDe(cfg, moneda),
     subtotal: totals.subtotal,
     iva: totals.iva,
     total: totals.total,
     saldo: nuevoSaldo,
     editada: 'true',
-    fecha_edicion: todayISO()
+    edited_at: todayISO()
   }
-  const oldItems = (readTable<FacturaItem & { id_factura: string }>('Factura_Items')).filter(i => i.id_factura !== id)
-  replaceTable('Facturas', facturas.map(f => (f.id_factura === id ? updated : f)))
-  replaceTable('Factura_Items', [...oldItems, ...builtItems.map(it => ({ id_factura: id, ...it }))])
+  const oldItems = (readTable<FacturaItem & { invoice_id: string }>('Factura_Items')).filter(i => i.invoice_id !== id)
+  replaceTable('Facturas', facturas.map(f => (f.invoice_id === id ? updated : f)))
+  replaceTable('Factura_Items', [...oldItems, ...builtItems.map(it => ({ invoice_id: id, ...it }))])
   return updated
 }
 
@@ -600,9 +600,9 @@ function route(action: string, payload: any, p: Perms): unknown {
     case 'getFactura': {
       if (!p.canView('facturas')) return denied()
       const facturas = readTable<Factura>('Facturas')
-      const factura = facturas.find(f => f.id_factura === payload)
+      const factura = facturas.find(f => f.invoice_id === payload)
       if (!factura) throw new Error('Factura no existe')
-      const items = readTable<FacturaItem & { id_factura: string }>('Factura_Items').filter(i => i.id_factura === payload)
+      const items = readTable<FacturaItem & { invoice_id: string }>('Factura_Items').filter(i => i.invoice_id === payload)
       return { factura, items }
     }
     case 'listGastos':
@@ -620,7 +620,7 @@ function route(action: string, payload: any, p: Perms): unknown {
     case 'listPagos': {
       if (!p.canView('cuentas') && !p.canView('facturas')) return denied()
       const all = readTable<Pago>('Pagos')
-      if (payload) return all.filter(pago => pago.id_origen === payload)
+      if (payload) return all.filter(pago => pago.origin_id === payload)
       if (p.canView('cuentas')) return all
       return all.filter(pago => pago.tipo === 'cobro')
     }
@@ -633,14 +633,14 @@ function route(action: string, payload: any, p: Perms): unknown {
       const pagos = readTable<Pago>('Pagos')
       const kpis = kpisForMonth(facturas, gastos, cxps, pagos, mes)
       const categorias = gastosPorCategoria(gastos.filter(g => g.fecha.slice(0, 7) === mes))
-      const top = topClientes(facturas.filter(f => f.fecha_emision.slice(0, 7) === mes))
+      const top = topClientes(facturas.filter(f => f.issue_date.slice(0, 7) === mes))
       return { kpis, categorias, top }
     }
     case 'getCategorias': {
       const kind = payload === 'cxp' ? 'cuentas' : 'gastos'
       if (!p.canView(kind)) return denied()
       const cfg = readConfig()
-      const raw = payload === 'cxp' ? cfg.categorias_cxp : cfg.categorias_gastos
+      const raw = payload === 'cxp' ? cfg.ap_categories : cfg.expense_categories
       return raw.split(',').map(s => s.trim()).filter(Boolean)
     }
     case 'getVentasProducto': {
@@ -656,14 +656,14 @@ function route(action: string, payload: any, p: Perms): unknown {
     case 'deleteCliente':
       if (!p.canEdit('clientes')) return denied()
       assertClienteSinFacturas(readTable('Facturas'), String(payload))
-      backendDeleteById('Clientes', 'id_cliente', String(payload))
+      backendDeleteById('Clientes', 'customer_id', String(payload))
       return { ok: true }
     case 'saveGasto':
       if (!p.canEdit('gastos')) return denied()
       return backendSaveGasto(payload)
     case 'deleteGasto':
       if (!p.canEdit('gastos')) return denied()
-      backendDeleteById('Gastos', 'id_gasto', String(payload))
+      backendDeleteById('Gastos', 'expense_id', String(payload))
       return { ok: true }
     case 'createFactura':
       if (!p.canEdit('facturas')) return denied()
@@ -673,9 +673,9 @@ function route(action: string, payload: any, p: Perms): unknown {
       return backendUpdateFactura(String(payload?.id ?? ''), payload?.data ?? {})
     case 'deleteFactura':
       if (!p.canEdit('facturas')) return denied()
-      backendDeleteById('Facturas', 'id_factura', String(payload))
-      backendDeleteById('Factura_Items', 'id_factura', String(payload))
-      backendDeleteById('Pagos', 'id_origen', String(payload))
+      backendDeleteById('Facturas', 'invoice_id', String(payload))
+      backendDeleteById('Factura_Items', 'invoice_id', String(payload))
+      backendDeleteById('Pagos', 'origin_id', String(payload))
       return { ok: true }
     case 'saveProveedor':
       if (!p.canEdit('proveedores') && !p.canEdit('cuentas') && !p.canEdit('inventario')) return denied()
@@ -683,14 +683,14 @@ function route(action: string, payload: any, p: Perms): unknown {
     case 'deleteProveedor':
       if (!p.canEdit('proveedores')) return denied()
       assertProveedorSinCxp(readTable('Cuentas_Pagar'), String(payload))
-      backendDeleteById('Proveedores', 'id_proveedor', String(payload))
+      backendDeleteById('Proveedores', 'supplier_id', String(payload))
       return { ok: true }
     case 'saveEmpleado':
       if (!p.canEdit('empleados')) return denied()
       return backendSaveEmpleado(payload)
     case 'deleteEmpleado':
       if (!p.canEdit('empleados')) return denied()
-      backendDeleteById('Empleados', 'id_empleado', String(payload))
+      backendDeleteById('Empleados', 'employee_id', String(payload))
       return { ok: true }
     case 'registerNomina':
       if (!p.canEdit('empleados')) return denied()
@@ -698,8 +698,8 @@ function route(action: string, payload: any, p: Perms): unknown {
     case 'listAsistencias': {
       if (!p.canView('empleados')) return denied()
       let rows = readTable<Record<string, string | number>>('Asistencias')
-      const f = (payload ?? {}) as { id_empleado?: string; desde?: string; hasta?: string }
-      if (f.id_empleado) rows = rows.filter(r => r.id_empleado === f.id_empleado)
+      const f = (payload ?? {}) as { employee_id?: string; desde?: string; hasta?: string }
+      if (f.employee_id) rows = rows.filter(r => r.employee_id === f.employee_id)
       if (f.desde) rows = rows.filter(r => String(r.fecha) >= f.desde!)
       if (f.hasta) rows = rows.filter(r => String(r.fecha) <= f.hasta!)
       return rows.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)))
@@ -709,22 +709,22 @@ function route(action: string, payload: any, p: Perms): unknown {
       return backendSaveAsistencia(payload)
     case 'deleteAsistencia':
       if (!p.canEdit('empleados')) return denied()
-      backendDeleteById('Asistencias', 'id_asistencia', String(payload))
+      backendDeleteById('Asistencias', 'attendance_id', String(payload))
       return { ok: true }
     case 'createCxp':
       if (!p.canEdit('cuentas')) return denied()
       return backendCreateCxp(payload)
     case 'deleteCxp':
       if (!p.canEdit('cuentas')) return denied()
-      backendDeleteById('Cuentas_Pagar', 'id_cxp', String(payload))
-      backendDeleteById('Pagos', 'id_origen', String(payload))
+      backendDeleteById('Cuentas_Pagar', 'ap_id', String(payload))
+      backendDeleteById('Pagos', 'origin_id', String(payload))
       return { ok: true }
     case 'registerPago':
       if (!p.canEdit('cuentas') && !p.canEdit('facturas')) return denied()
       return backendRegisterPago(payload)
     case 'listProductos':
       if (!p.canView('inventario')) return denied()
-      return enrichNombreProveedor(readTable('Productos'), readTable<Proveedor>('Proveedores').reduce<Record<string, string>>((m, p) => { m[p.id_proveedor] = p.nombre; return m }, {}))
+      return enrichNombreProveedor(readTable('Productos'), readTable<Proveedor>('Proveedores').reduce<Record<string, string>>((m, p) => { m[p.supplier_id] = p.nombre; return m }, {}))
     case 'saveProducto':
       if (!p.canEdit('inventario')) return denied()
       return backendSaveProducto(payload)
@@ -741,13 +741,13 @@ function route(action: string, payload: any, p: Perms): unknown {
     }
     case 'deleteProducto':
       if (!p.canEdit('inventario')) return denied()
-      backendDeleteById('Productos', 'id_producto', String(payload))
-      backendDeleteById('Movimientos_Stock', 'id_producto', String(payload))
+      backendDeleteById('Productos', 'product_id', String(payload))
+      backendDeleteById('Movimientos_Stock', 'product_id', String(payload))
       return { ok: true }
     case 'listMovimientos': {
       if (!p.canView('inventario')) return denied()
       const all = readTable<MovimientoStock>('Movimientos_Stock')
-      if (payload) return all.filter(m => m.id_producto === payload)
+      if (payload) return all.filter(m => m.product_id === payload)
       return all
     }
     case 'registrarMovimiento':
@@ -815,22 +815,22 @@ function backendVentasProducto(
   idProducto: string,
   rango: { desde?: string; hasta?: string }
 ): Array<Record<string, string | number>> {
-  const facPorId = new Map(facturas.map(f => [f.id_factura, f]))
+  const facPorId = new Map(facturas.map(f => [f.invoice_id, f]))
   const filas: Array<Record<string, string | number>> = []
   for (const it of items) {
-    if (String(it.id_producto ?? '') !== idProducto) continue
-    const fac = facPorId.get(String(it.id_factura ?? ''))
+    if (String(it.product_id ?? '') !== idProducto) continue
+    const fac = facPorId.get(String(it.invoice_id ?? ''))
     if (!fac) continue
-    const fecha = fac.fecha_emision.slice(0, 10)
+    const fecha = fac.issue_date.slice(0, 10)
     if (rango.desde && fecha < rango.desde) continue
     if (rango.hasta && fecha > rango.hasta) continue
-    const tc = Number(fac.tipo_cambio) || 1
+    const tc = Number(fac.exchange_rate) || 1
     filas.push({
-      fecha: fac.fecha_emision,
+      fecha: fac.issue_date,
       folio: fac.folio,
-      cliente: fac.nombre_cliente,
+      cliente: fac.customer_name,
       cantidad: Number(it.cantidad),
-      precio_unitario: Number(it.precio_unitario),
+      unit_price: Number(it.unit_price),
       importe_base: Math.round((tc > 0 ? Number(it.importe) / tc : Number(it.importe)) * 100) / 100
     })
   }

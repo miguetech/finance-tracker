@@ -30,7 +30,7 @@ describe('queries', () => {
   it('useConfig devuelve config default', async () => {
     const { result } = renderHook(() => useConfig(), { wrapper })
     await waitFor(() => expect(result.current.isLoading).toBe(false))
-    expect(result.current.config?.prefijo_folio).toBe('FAC-')
+    expect(result.current.config?.serial_prefix).toBe('FAC-')
   })
   it('useDispositivos devuelve lista vacía', async () => {
     const { result } = renderHook(() => useDispositivos(), { wrapper })

@@ -35,7 +35,7 @@ export function FacturaDetail({ id, onClose }: { id: string; onClose: () => void
   const monedaBase = config?.moneda ?? 'USD'
   if (isLoading || !det) return null
   const { factura, items } = det
-  const cliente = clientes.find(c => c.id_cliente === factura.id_cliente)
+  const cliente = clientes.find(c => c.customer_id === factura.customer_id)
   const moneda = factura.moneda || monedaBase
   const tienePagos = pagos.length > 0
   const estado = estadoDesdeSaldo(factura.saldo, factura.total, tienePagos)
@@ -51,20 +51,20 @@ export function FacturaDetail({ id, onClose }: { id: string; onClose: () => void
       </>}>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-2 text-sm">
-          <div>{t('facturas.cliente')}: <b>{factura.nombre_cliente}</b></div>
-          <div>{t('facturas.emision')}: {factura.fecha_emision}</div>
-          <div>{t('facturas.vence')}: {factura.fecha_vencimiento || '—'}</div>
+          <div>{t('facturas.cliente')}: <b>{factura.customer_name}</b></div>
+          <div>{t('facturas.emision')}: {factura.issue_date}</div>
+          <div>{t('facturas.vence')}: {factura.due_date || '—'}</div>
           <div>{t('common.estado')}: <b>{estadoLabel}</b> {factura.moneda && <span className="text-xs text-gray-500">· {factura.moneda}</span>}</div>
         </div>
         {String(factura.editada) === 'true' && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            {t('facturas.fueEditada')} <b>{t('common.editada')}</b> {t('facturas.fueEditadaEl')} {factura.fecha_edicion || '—'}.
+            {t('facturas.fueEditada')} <b>{t('common.editada')}</b> {t('facturas.fueEditadaEl')} {factura.edited_at || '—'}.
           </p>
         )}
         <Table columns={[
           { key: 'd', header: t('facturas.descripcion'), render: r => String(r.descripcion) },
           { key: 'c', header: t('facturas.cant'), render: r => String(r.cantidad) },
-          { key: 'p', header: t('facturas.precio'), render: r => formatMoney(Number(r.precio_unitario), moneda) },
+          { key: 'p', header: t('facturas.precio'), render: r => formatMoney(Number(r.unit_price), moneda) },
           { key: 'i', header: t('facturas.importe'), render: r => formatMoney(Number(r.importe), moneda) }
         ]} rows={items as unknown as Record<string, unknown>[]} />
         <div className="flex flex-wrap justify-end gap-x-6 gap-y-1 text-sm">
@@ -79,7 +79,7 @@ export function FacturaDetail({ id, onClose }: { id: string; onClose: () => void
         )}
         {config && <InvoicePrint factura={factura} items={items} config={config} cliente={cliente} />}
       </div>
-      {pagoOpen && <PagoModal origen={{ id: factura.id_factura, tipo: 'cobro', saldo: factura.saldo, moneda }} onClose={() => { setPagoOpen(false); onClose() }} />}
+      {pagoOpen && <PagoModal origen={{ id: factura.invoice_id, tipo: 'cobro', saldo: factura.saldo, moneda }} onClose={() => { setPagoOpen(false); onClose() }} />}
       {editando && <FacturaEditModal factura={factura} onClose={() => setEditando(false)} />}
     </Dialog>
   )

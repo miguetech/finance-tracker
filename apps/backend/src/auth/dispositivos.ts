@@ -5,5 +5,5 @@ export function generarTokenDispositivo(): string {
 }
 
 export function nuevoDispositivo(codigo: string, ipInfo: string, dispositivo?: string): Dispositivo {
-  return { codigo, dispositivo: dispositivo ?? generarTokenDispositivo(), ip_info: ipInfo, registrado_en: hoyISO() }
+  return { codigo, dispositivo: dispositivo ?? generarTokenDispositivo(), ip_info: ipInfo, registered_at: hoyISO() }
 }

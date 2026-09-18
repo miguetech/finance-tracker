@@ -207,7 +207,7 @@ function conId(args: Args, campo: string, prefijo: string): Args {
 
 const METODOS_COLA: Record<string, OpcionesMetodo> = {
   saveCliente: {
-    normalizar: a => conId(a, 'id_cliente', 'cli_'),
+    normalizar: a => conId(a, 'customer_id', 'cli_'),
     eco: a => args0<Cliente>(a)
   },
   saveUsuario: {},
@@ -216,59 +216,59 @@ const METODOS_COLA: Record<string, OpcionesMetodo> = {
   createFactura: {
     // Id local asignado ANTES de encolar: el eco y la reproducción comparten
     // el mismo id_factura y el retry tras un timeout no duplica la fila.
-    normalizar: a => conId(a, 'id_factura', 'fac_'),
+    normalizar: a => conId(a, 'invoice_id', 'fac_'),
     eco: (a, ctx) => {
-      const input = args0<{ items: { descripcion: string; cantidad: number; precio_unitario: number }[]; moneda?: string; id_cliente: string; fecha_emision: string; fecha_vencimiento: string; notas: string; id_factura?: string }>(a)
+      const input = args0<{ items: { descripcion: string; cantidad: number; unit_price: number }[]; moneda?: string; customer_id: string; issue_date: string; due_date: string; notas: string; invoice_id?: string }>(a)
       const cfg = ctx.configActual?.()
       const moneda = input.moneda || cfg?.moneda || 'USD'
-      const { totals } = buildFactura(input.items, cfg?.iva_porcentaje ?? 16, getCurrency(moneda).decimals)
+      const { totals } = buildFactura(input.items, cfg?.vat_percent ?? 16, getCurrency(moneda).decimals)
       return {
-        id_factura: input.id_factura || uid('fac_'),
+        invoice_id: input.invoice_id || uid('fac_'),
         folio: '(folio pendiente)',
-        id_cliente: input.id_cliente,
-        nombre_cliente: '',
-        fecha_emision: input.fecha_emision,
-        fecha_vencimiento: input.fecha_vencimiento,
+        customer_id: input.customer_id,
+        customer_name: '',
+        issue_date: input.issue_date,
+        due_date: input.due_date,
         subtotal: totals.subtotal,
         iva: totals.iva,
         total: totals.total,
         saldo: totals.total,
-        fecha_pago: '',
+        paid_at: '',
         notas: input.notas,
         moneda,
-        tipo_cambio: 1,
+        exchange_rate: 1,
         editada: '',
-        fecha_edicion: ''
+        edited_at: ''
       }
     }
   },
-  saveGasto: { normalizar: a => conId(a, 'id_gasto', 'gas_'), eco: a => args0(a) },
-  saveProveedor: { normalizar: a => conId(a, 'id_proveedor', 'prv_'), eco: a => args0(a) },
-  saveEmpleado: { normalizar: a => conId(a, 'id_empleado', 'emp_'), eco: a => args0(a) },
-  saveAsistencia: { normalizar: a => conId(a, 'id_asistencia', 'asi_'), eco: a => args0(a) },
-  saveProducto: { normalizar: a => conId(a, 'id_producto', 'prod_'), eco: a => args0(a) },
-  saveGastoFijo: { normalizar: a => conId(a, 'id_gastofijo', 'gfj_'), eco: a => args0(a) },
+  saveGasto: { normalizar: a => conId(a, 'expense_id', 'gas_'), eco: a => args0(a) },
+  saveProveedor: { normalizar: a => conId(a, 'supplier_id', 'prv_'), eco: a => args0(a) },
+  saveEmpleado: { normalizar: a => conId(a, 'employee_id', 'emp_'), eco: a => args0(a) },
+  saveAsistencia: { normalizar: a => conId(a, 'attendance_id', 'asi_'), eco: a => args0(a) },
+  saveProducto: { normalizar: a => conId(a, 'product_id', 'prod_'), eco: a => args0(a) },
+  saveGastoFijo: { normalizar: a => conId(a, 'expense_idfijo', 'gfj_'), eco: a => args0(a) },
   registrarMovimiento: { eco: () => undefined },
   // Eco local de CxP: sin él la cuenta registrada offline no aparecía en la
   // tabla hasta el pull online (aplicarEscrituraLocal salía temprano).
   createCxp: {
-    normalizar: a => conId(a, 'id_cxp', 'cxp_'),
+    normalizar: a => conId(a, 'ap_id', 'cxp_'),
     eco: (a, ctx) => {
-      const i = args0<{ id_proveedor: string; folio_documento: string; categoria: string; descripcion: string; fecha_emision: string; fecha_vencimiento: string; monto_total: number; notas: string; moneda?: string }>(a)
+      const i = args0<{ supplier_id: string; document_serial: string; categoria: string; descripcion: string; issue_date: string; due_date: string; total_amount: number; notas: string; moneda?: string }>(a)
       const cfg = ctx.configActual?.()
       return {
         ...i,
-        nombre_proveedor: '',
-        saldo: Number(i.monto_total) || 0,
+        supplier_name: '',
+        saldo: Number(i.total_amount) || 0,
         estado: 'pendiente',
         notas: i.notas ?? '',
         moneda: i.moneda || cfg?.moneda || 'USD',
-        tipo_cambio: 1
+        exchange_rate: 1
       }
     }
   },
   registerPago: {
-    eco: a => ({ id_pago: uid('pag_'), ...args0<object>(a) })
+    eco: a => ({ payment_id: uid('pag_'), ...args0<object>(a) })
   }
 }
 
@@ -286,30 +286,30 @@ export function ecoDe(metodo: string, args: Args, ctx: { configActual?: () => Co
 
 /** Clave id de cada tabla espejo, para insertar/reemplazar la fila del eco. */
 export const ID_POR_TABLA: Partial<Record<TableName, string>> = {
-  Clientes: 'id_cliente',
-  Proveedores: 'id_proveedor',
-  Empleados: 'id_empleado',
-  Facturas: 'id_factura',
-  Pagos: 'id_pago',
-  Gastos: 'id_gasto',
-  Productos: 'id_producto',
-  Cuentas_Pagar: 'id_cxp',
-  Gastos_Fijos: 'id_gastofijo',
-  Asistencias: 'id_asistencia'
+  Clientes: 'customer_id',
+  Proveedores: 'supplier_id',
+  Empleados: 'employee_id',
+  Facturas: 'invoice_id',
+  Pagos: 'payment_id',
+  Gastos: 'expense_id',
+  Productos: 'product_id',
+  Cuentas_Pagar: 'ap_id',
+  Gastos_Fijos: 'expense_idfijo',
+  Asistencias: 'attendance_id'
 }
 
 /** Bajas: sin eco que insertar, hay que QUITAR la fila del espejo local
  *  al momento; si no, el registro borrado "se reintegra" desde SQLite. */
 export const BAJAS_POR_METODO: Partial<Record<string, { tabla: TableName; idKey: string }>> = {
-  deleteCliente: { tabla: 'Clientes', idKey: 'id_cliente' },
-  deleteProveedor: { tabla: 'Proveedores', idKey: 'id_proveedor' },
-  deleteEmpleado: { tabla: 'Empleados', idKey: 'id_empleado' },
-  deleteGasto: { tabla: 'Gastos', idKey: 'id_gasto' },
-  deleteGastoFijo: { tabla: 'Gastos_Fijos', idKey: 'id_gastofijo' },
-  deleteProducto: { tabla: 'Productos', idKey: 'id_producto' },
-  deleteCxp: { tabla: 'Cuentas_Pagar', idKey: 'id_cxp' },
-  deleteAsistencia: { tabla: 'Asistencias', idKey: 'id_asistencia' },
-  deleteFactura: { tabla: 'Facturas', idKey: 'id_factura' }
+  deleteCliente: { tabla: 'Clientes', idKey: 'customer_id' },
+  deleteProveedor: { tabla: 'Proveedores', idKey: 'supplier_id' },
+  deleteEmpleado: { tabla: 'Empleados', idKey: 'employee_id' },
+  deleteGasto: { tabla: 'Gastos', idKey: 'expense_id' },
+  deleteGastoFijo: { tabla: 'Gastos_Fijos', idKey: 'expense_idfijo' },
+  deleteProducto: { tabla: 'Productos', idKey: 'product_id' },
+  deleteCxp: { tabla: 'Cuentas_Pagar', idKey: 'ap_id' },
+  deleteAsistencia: { tabla: 'Asistencias', idKey: 'attendance_id' },
+  deleteFactura: { tabla: 'Facturas', idKey: 'invoice_id' }
 }
 
 /** Techo para el intento directo: pasado este plazo se considera red caída

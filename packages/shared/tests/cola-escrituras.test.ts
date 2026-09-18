@@ -36,16 +36,16 @@ function repoFalso(sobre?: Partial<Record<string, (...a: unknown[]) => unknown>>
   return Object.assign(base as unknown as Repository, { llamadas })
 }
 
-const configFake = { moneda: 'USD', iva_porcentaje: 16 } as Config
+const configFake = { moneda: 'USD', vat_percent: 16 } as Config
 
 describe('cola de escrituras — vaciado', () => {
   it('reproduce en orden FIFO y deja la cola vacía', async () => {
     const s = kvFalso()
     const repo = repoFalso()
     await s.set('ft_cola_escrituras', JSON.stringify([
-      { id_op: '1', metodo: 'saveCliente', args: [{ id_cliente: 'c1' }], creado_en: 1, estado: 'pendiente' },
+      { id_op: '1', metodo: 'saveCliente', args: [{ customer_id: 'c1' }], creado_en: 1, estado: 'pendiente' },
       { id_op: '2', metodo: 'deleteGasto', args: ['g1'], creado_en: 2, estado: 'pendiente' },
-      { id_op: '3', metodo: 'createFactura', args: [{ id_cliente: 'c1' }], creado_en: 3, estado: 'pendiente' }
+      { id_op: '3', metodo: 'createFactura', args: [{ customer_id: 'c1' }], creado_en: 3, estado: 'pendiente' }
     ] satisfies OperacionEnCola[]))
     const res = await vaciarCola(s, repo)
     expect(res).toEqual({ ejecutadas: 3, fallidas: 0, restantes: 0 })
@@ -121,12 +121,12 @@ describe('conColaEscrituras — envoltorio del repositorio (offline-first)', () 
     const repo = repoFalso()
     const envuelto = conColaEscrituras(repo, { storage: s, activo: () => true, configActual: () => configFake })
     const cliente = await envuelto.saveCliente({ nombre: 'Ana' } as never)
-    expect((cliente as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
+    expect((cliente as { customer_id?: string }).customer_id).toMatch(/^cli_/)
     expect(repo.llamadas).toEqual([])
     const cola = await cargarCola(s)
     expect(cola).toHaveLength(1)
     expect(cola[0].metodo).toBe('saveCliente')
-    expect((cola[0].args[0] as { id_cliente: string }).id_cliente).toMatch(/^cli_/)
+    expect((cola[0].args[0] as { customer_id: string }).customer_id).toMatch(/^cli_/)
   })
 
   it('eco de createFactura calcula totales con la config cacheada (encadena pago offline)', async () => {
@@ -134,20 +134,20 @@ describe('conColaEscrituras — envoltorio del repositorio (offline-first)', () 
     const repo = repoFalso()
     const envuelto = conColaEscrituras(repo, { storage: s, activo: () => true, configActual: () => configFake })
     const factura = await envuelto.createFactura({
-      id_cliente: 'c1',
-      items: [{ descripcion: 'A', cantidad: 2, precio_unitario: 100 }],
-      fecha_emision: '2026-08-23',
-      fecha_vencimiento: '2026-09-23',
+      customer_id: 'c1',
+      items: [{ descripcion: 'A', cantidad: 2, unit_price: 100 }],
+      issue_date: '2026-08-23',
+      due_date: '2026-09-23',
       notas: ''
     })
     expect(factura.total).toBe(232) // 200 + IVA 16%
     expect(factura.saldo).toBe(232)
-    const pago = await envuelto.registerPago({ tipo: 'cobro', id_origen: factura.id_factura, fecha: '', monto: factura.total, metodo_pago: 'Efectivo', notas: '' })
+    const pago = await envuelto.registerPago({ tipo: 'cobro', origin_id: factura.invoice_id, fecha: '', monto: factura.total, payment_method: 'Efectivo', notas: '' })
     expect(pago.monto).toBe(232)
     // Encadenado coherente: el pago encolado referencia el mismo id de factura.
     const cola = await cargarCola(s)
     expect(cola[1].metodo).toBe('registerPago')
-    expect((cola[1].args[0] as { id_origen: string }).id_origen).toBe(factura.id_factura)
+    expect((cola[1].args[0] as { origin_id: string }).origin_id).toBe(factura.invoice_id)
   })
 
   it('siempre encola (offline-first): no delega directo al repositorio', async () => {
@@ -166,7 +166,7 @@ describe('conColaEscrituras — envoltorio del repositorio (offline-first)', () 
     })
     const envuelto = conColaEscrituras(repo, { storage: s, activo: () => false, configActual: () => configFake })
     const eco = await envuelto.saveCliente({ nombre: 'Offline' } as never)
-    expect((eco as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
+    expect((eco as { customer_id?: string }).customer_id).toMatch(/^cli_/)
     expect(repo.llamadas).toEqual([])
     expect(await resumirCola(s)).toEqual({ pendientes: 1, errores: 0 })
   })
@@ -198,7 +198,7 @@ describe('conColaEscrituras — envoltorio del repositorio (offline-first)', () 
     const envuelto = conColaEscrituras(repo, { storage: s, activo: () => false })
     // No lanza: devuelve eco y la operación queda pendiente (el fallo se detecta al flushear)
     const eco = await envuelto.saveCliente({} as never)
-    expect((eco as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
+    expect((eco as { customer_id?: string }).customer_id).toMatch(/^cli_/)
     expect(await resumirCola(s)).toEqual({ pendientes: 1, errores: 0 })
   })
 
@@ -239,7 +239,7 @@ describe('escritura encolada dispara eco local en el bus', () => {
     espejoBus.onEscrituraLocal = undefined
     expect(vistas).toHaveLength(1)
     expect(vistas[0].metodo).toBe('saveCliente')
-    expect((vistas[0].args[0] as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
+    expect((vistas[0].args[0] as { customer_id?: string }).customer_id).toMatch(/^cli_/)
   })
 
   it('offline-first: siempre encola y aplica eco al espejo local', async () => {
@@ -262,7 +262,7 @@ describe('techo del intento directo', () => {
     const repo = repoFalso({ saveCliente: nunca })
     const envuelto = conColaEscrituras(repo, { storage: s, activo: () => false, techoMs: 30 })
     const eco = await envuelto.saveCliente({ nombre: 'Tarde pero seguro' } as never)
-    expect((eco as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
+    expect((eco as { customer_id?: string }).customer_id).toMatch(/^cli_/)
     expect(await resumirCola(s)).toEqual({ pendientes: 1, errores: 0 })
     // El flush posterior sí la envía.
     const res = await vaciarCola(s, repoFalso())

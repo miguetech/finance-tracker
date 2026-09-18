@@ -11,19 +11,19 @@ import type { Empleado, MetodoPago } from '../../types/entities'
 export interface NominaAvanzadaForm {
   mes: string
   monto: number
-  metodo_pago: MetodoPago
+  payment_method: MetodoPago
   fecha: string
   notas: string
   moneda: string
-  sueldo_base: number
+  base_salary: number
   horas_extra: number
-  tarifa_hora_extra: number
+  overtime_rate: number
   bonos: number
   comisiones: number
-  pagos_divididos: { metodo_pago: string; moneda: string; monto: number }[]
+  split_payments: { payment_method: string; moneda: string; monto: number }[]
 }
 
-interface PagoDiv { metodo_pago: string; moneda: string; monto: string }
+interface PagoDiv { payment_method: string; moneda: string; monto: string }
 
 export function NominaModal({ empleado, onClose, onSave }: { empleado: Empleado; onClose: () => void; onSave: (i: NominaAvanzadaForm) => void }) {
   const { t } = useI18n()
@@ -32,30 +32,30 @@ export function NominaModal({ empleado, onClose, onSave }: { empleado: Empleado;
   const [form, setForm] = useState({
     mes: hoy.slice(0, 7),
     monto: String(empleado.salario || ''),
-    metodo_pago: metodos[0] ?? 'Transferencia',
+    payment_method: metodos[0] ?? 'Transferencia',
     fecha: hoy,
     notas: '',
-    moneda: empleado.salario_moneda || '',
+    moneda: empleado.salary_currency || '',
     horas_extra: '0',
-    tarifa_hora_extra: String(empleado.tarifa_hora_extra || tarifaHoraExtra(Number(empleado.salario) || 0)),
+    overtime_rate: String(empleado.overtime_rate || tarifaHoraExtra(Number(empleado.salario) || 0)),
     bonos: '',
     comisiones: ''
   })
   const [pagosDiv, setPagosDiv] = useState<PagoDiv[]>([])
   const [usarDividido, setUsarDividido] = useState(false)
   const [error, setError] = useState('')
-  const monedaSel = form.moneda || empleado.salario_moneda || 'USD'
+  const monedaSel = form.moneda || empleado.salary_currency || 'USD'
 
   useEffect(() => {
     setForm({
       mes: hoy.slice(0, 7),
       monto: String(empleado.salario || ''),
-      metodo_pago: metodos[0] ?? 'Transferencia',
+      payment_method: metodos[0] ?? 'Transferencia',
       fecha: hoy,
       notas: '',
-      moneda: empleado.salario_moneda || '',
+      moneda: empleado.salary_currency || '',
       horas_extra: '0',
-      tarifa_hora_extra: String(empleado.tarifa_hora_extra || tarifaHoraExtra(Number(empleado.salario) || 0)),
+      overtime_rate: String(empleado.overtime_rate || tarifaHoraExtra(Number(empleado.salario) || 0)),
       bonos: '',
       comisiones: ''
     })
@@ -69,7 +69,7 @@ export function NominaModal({ empleado, onClose, onSave }: { empleado: Empleado;
 
   const num = (v: string) => Number(v) || 0
   const sueldoBase = num(form.monto)
-  const heMonto = useMemo(() => Math.round(num(form.horas_extra) * num(form.tarifa_hora_extra) * Math.pow(10, dec)) / Math.pow(10, dec), [form.horas_extra, form.tarifa_hora_extra, dec])
+  const heMonto = useMemo(() => Math.round(num(form.horas_extra) * num(form.overtime_rate) * Math.pow(10, dec)) / Math.pow(10, dec), [form.horas_extra, form.overtime_rate, dec])
   const totalNomina = useMemo(() =>
     Math.round((sueldoBase + heMonto + num(form.bonos) + num(form.comisiones)) * Math.pow(10, dec)) / Math.pow(10, dec),
     [sueldoBase, heMonto, form.bonos, form.comisiones, dec])
@@ -86,16 +86,16 @@ export function NominaModal({ empleado, onClose, onSave }: { empleado: Empleado;
     onSave({
       mes: form.mes,
       monto: totalNomina,
-      metodo_pago: form.metodo_pago as MetodoPago,
+      payment_method: form.payment_method as MetodoPago,
       fecha: form.fecha,
       notas: form.notas,
       moneda: form.moneda,
-      sueldo_base: sueldoBase,
+      base_salary: sueldoBase,
       horas_extra: num(form.horas_extra),
-      tarifa_hora_extra: num(form.tarifa_hora_extra),
+      overtime_rate: num(form.overtime_rate),
       bonos: num(form.bonos),
       comisiones: num(form.comisiones),
-      pagos_divididos: usarDividido ? pagosDiv.map(p => ({ metodo_pago: p.metodo_pago, moneda: p.moneda, monto: Number(p.monto) })) : []
+      split_payments: usarDividido ? pagosDiv.map(p => ({ payment_method: p.payment_method, moneda: p.moneda, monto: Number(p.monto) })) : []
     })
     onClose()
   }
@@ -111,11 +111,11 @@ export function NominaModal({ empleado, onClose, onSave }: { empleado: Empleado;
           <div className="text-xs font-medium text-muted-foreground">{t('nominaAv.titulo')}</div>
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div><span className="block text-muted-foreground">{t('nominaAv.esquemaPago')}</span>
-              <b>{{ semanal: t('nominaAv.semanal'), quincenal: t('nominaAv.quincenal'), mensual: t('nominaAv.mensual'), '': t('nominaAv.mensual') }[empleado.esquema_pago ?? 'mensual']}</b></div>
+              <b>{{ semanal: t('nominaAv.semanal'), quincenal: t('nominaAv.quincenal'), mensual: t('nominaAv.mensual'), '': t('nominaAv.mensual') }[empleado.pay_schedule ?? 'mensual']}</b></div>
             <div><span className="block text-muted-foreground">{t('nominaAv.horario')}</span>
-              <b>{empleado.hora_entrada || '--:--'} → {empleado.hora_salida || '--:--'}</b></div>
+              <b>{empleado.clock_in || '--:--'} → {empleado.clock_out || '--:--'}</b></div>
             <div><span className="block text-muted-foreground">{t('nominaAv.tarifaHoraExtra')}</span>
-              <b>{formatMoney(num(form.tarifa_hora_extra), monedaSel)}</b></div>
+              <b>{formatMoney(num(form.overtime_rate), monedaSel)}</b></div>
           </div>
         </div>
 
@@ -130,14 +130,14 @@ export function NominaModal({ empleado, onClose, onSave }: { empleado: Empleado;
               <button type="button" onClick={() => {
                 // Sugerencia: 1.5× sobre jornada estándar de 40h/sem.
                 const sugerida = tarifaHoraExtra(sueldoBase)
-                setForm(f => ({ ...f, tarifa_hora_extra: String(sugerida) }))
+                setForm(f => ({ ...f, overtime_rate: String(sugerida) }))
               }} className="text-primary underline decoration-dotted underline-offset-2" title={t('nominaAv.tarifaSugerida', { tarifa: tarifaHoraExtra(sueldoBase) })}>
                 1.5×
               </button>
             </label>
             <div className="flex gap-1.5 items-center">
               <Input type="number" min={0} step="any" value={form.horas_extra} onChange={set('horas_extra')} />
-              <Input type="number" min={0} step="any" title={t('nominaAv.tarifaHoraExtra')} value={form.tarifa_hora_extra} onChange={set('tarifa_hora_extra')} />
+              <Input type="number" min={0} step="any" title={t('nominaAv.tarifaHoraExtra')} value={form.overtime_rate} onChange={set('overtime_rate')} />
             </div>
           </div>
           <div className="space-y-2">
@@ -165,7 +165,7 @@ export function NominaModal({ empleado, onClose, onSave }: { empleado: Empleado;
           <div className="space-y-2">
             {pagosDiv.map((p, i) => (
               <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                <Select className="col-span-4" value={p.metodo_pago} onChange={v => setPagosDiv(l => l.map((x, idx) => idx === i ? { ...x, metodo_pago: v } : x))}
+                <Select className="col-span-4" value={p.payment_method} onChange={v => setPagosDiv(l => l.map((x, idx) => idx === i ? { ...x, payment_method: v } : x))}
                   options={metodos.map(m => ({ value: m, label: m }))} placeholder={t('common.metodo')} />
                 <div className="col-span-3"><CurrencySelect value={p.moneda} onChange={v => setPagosDiv(l => l.map((x, idx) => idx === i ? { ...x, moneda: v } : x))} /></div>
                 <Input className="col-span-4" type="number" min={0} step="any" value={p.monto}
@@ -175,7 +175,7 @@ export function NominaModal({ empleado, onClose, onSave }: { empleado: Empleado;
               </div>
             ))}
             <div className="flex items-center justify-between">
-              <Button size="sm" variant="outline" onClick={() => setPagosDiv(l => [...l, { metodo_pago: metodos[0] ?? 'Efectivo', moneda: monedaSel, monto: '' }])}>{t('nominaAv.agregarPago')}</Button>
+              <Button size="sm" variant="outline" onClick={() => setPagosDiv(l => [...l, { payment_method: metodos[0] ?? 'Efectivo', moneda: monedaSel, monto: '' }])}>{t('nominaAv.agregarPago')}</Button>
               <Badge tone={Math.abs(sumaPagos - totalNomina) <= 0.01 ? 'green' : 'yellow'}>{t('nominaAv.sumaPagos', { suma: formatMoney(sumaPagos, monedaSel) })}</Badge>
             </div>
           </div>
@@ -184,7 +184,7 @@ export function NominaModal({ empleado, onClose, onSave }: { empleado: Empleado;
         {!usarDividido && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div><label className="text-xs text-muted-foreground">{t('common.metodo')}</label>
-              <Select value={form.metodo_pago} onChange={v => setForm(f => ({ ...f, metodo_pago: v }))} options={metodos.map(v => ({ value: v, label: v }))} />
+              <Select value={form.payment_method} onChange={v => setForm(f => ({ ...f, payment_method: v }))} options={metodos.map(v => ({ value: v, label: v }))} />
             </div>
             <CurrencySelect label={t('empleados.monedaPago')} value={form.moneda} onChange={v => setForm(f => ({ ...f, moneda: v }))} />
           </div>

@@ -21,7 +21,7 @@ export function ReporteFinanciero({ desde, hasta, data, isLoading, monedaVista }
   const { t } = useI18n()
   const { config } = useConfig()
   const moneda = config?.moneda ?? 'USD'
-  const empresa = config?.empresa_nombre ?? ''
+  const empresa = config?.company_name ?? ''
   const [tab, setTab] = useState<'pl' | 'equilibrio' | 'reconversion' | 'flujo'>('pl')
   const vista = monedaVista || moneda
 
@@ -106,7 +106,7 @@ function ExportButtonsFin({ data, desde, hasta, moneda, empresa, titulo }: { dat
         titulo: t('reportesFin.variacionPorRegistro'),
         columnas: [t('common.fecha'), t('reportesFin.diferencia')],
         numericas: [1],
-        filas: data.reconversion.variaciones.map(v => [v.fecha, v.descripcion, `${v.moneda} ${v.monto_moneda}`, v.tipo_cambio_registro, v.tipo_cambio_actual, v.valor_base_registro, v.valor_base_actual, v.diferencia] as (string | number)[]).map(f => f.slice(0, 2))
+        filas: data.reconversion.variaciones.map(v => [v.fecha, v.descripcion, `${v.moneda} ${v.monto_moneda}`, v.exchange_rate_registro, v.exchange_rate_actual, v.valor_base_registro, v.valor_base_actual, v.diferencia] as (string | number)[]).map(f => f.slice(0, 2))
       }] : []),
       {
         titulo: t('reportesFin.porMoneda'),
@@ -218,8 +218,8 @@ function TabReconversion({ data, moneda, desde, hasta, empresa }: { data: FinDat
     tipo: v.tipo,
     moneda: v.moneda,
     monto_moneda: v.monto_moneda.toLocaleString(),
-    tc_reg: v.tipo_cambio_registro,
-    tc_act: v.tipo_cambio_actual,
+    tc_reg: v.exchange_rate_registro,
+    tc_act: v.exchange_rate_actual,
     valor_base_registro: v.valor_base_registro.toLocaleString(),
     valor_base_actual: v.valor_base_actual.toLocaleString(),
     diferencia: v.diferencia
@@ -231,8 +231,8 @@ function TabReconversion({ data, moneda, desde, hasta, empresa }: { data: FinDat
     { key: 'tipo', header: 'Tipo' },
     { key: 'moneda', header: 'Moneda' },
     { key: 'monto_moneda', header: 'Monto' },
-    { key: 'tipo_cambio_registro', header: 'T.C. registro' },
-    { key: 'tipo_cambio_actual', header: 'T.C. actual' },
+    { key: 'exchange_rate_registro', header: 'T.C. registro' },
+    { key: 'exchange_rate_actual', header: 'T.C. actual' },
     { key: 'valor_base_registro', header: 'Valor al registrar' },
     { key: 'valor_base_actual', header: 'Valor actual' },
     { key: 'diferencia', header: 'Diferencia' }
@@ -249,7 +249,7 @@ function TabReconversion({ data, moneda, desde, hasta, empresa }: { data: FinDat
     tablas: [{
       columnas: cols.map(c => c.header),
       numericas: [4, 7, 8, 9],
-      filas: r.variaciones.map(v => [v.fecha, v.descripcion, v.tipo, v.moneda, v.monto_moneda, v.tipo_cambio_registro, v.tipo_cambio_actual, v.valor_base_registro, v.valor_base_actual, v.diferencia] as (string | number)[])
+      filas: r.variaciones.map(v => [v.fecha, v.descripcion, v.tipo, v.moneda, v.monto_moneda, v.exchange_rate_registro, v.exchange_rate_actual, v.valor_base_registro, v.valor_base_actual, v.diferencia] as (string | number)[])
     }]
   })
 
@@ -304,7 +304,7 @@ function TabFlujo({ data, moneda, desde, hasta, empresa }: { data: FinData; mone
   const exportCSVFlujo = () => {
     const rows = [
       ...f.porMoneda.map(m => ({ seccion: 'moneda', clave: m.moneda, entradas: m.entradas, salidas: m.salidas, comisiones: 0, balance: m.balance })),
-      ...f.porMetodo.map(m => ({ seccion: 'metodo', clave: `${m.metodo_pago} (${m.moneda})`, entradas: m.entradas, salidas: m.salidas, comisiones: m.comisiones, balance: m.entradas - m.salidas }))
+      ...f.porMetodo.map(m => ({ seccion: 'metodo', clave: `${m.payment_method} (${m.moneda})`, entradas: m.entradas, salidas: m.salidas, comisiones: m.comisiones, balance: m.entradas - m.salidas }))
     ]
     exportCSV(`flujo_caja_${desde}_${hasta}`, rows, [
       { key: 'seccion', header: 'Sección' },
@@ -340,18 +340,18 @@ function TabFlujo({ data, moneda, desde, hasta, empresa }: { data: FinData; mone
         </Card>
         <Card title={t('reportesFin.porMetodo')}>
           <HBarChart
-            data={f.porMetodo.map(m => ({ label: `${m.metodo_pago} · ${m.moneda}`, value: m.entradas - m.salidas }))}
+            data={f.porMetodo.map(m => ({ label: `${m.payment_method} · ${m.moneda}`, value: m.entradas - m.salidas }))}
             format={(n) => n.toLocaleString()} color="#6366f1" />
           {f.porMetodo.some(m => m.comisiones > 0) && (
             <ul className="mt-4 space-y-1 text-xs text-muted-foreground">
               {f.porMetodo.filter(m => m.comisiones > 0).map((m, i) => (
-                <li key={i}>Comisión {m.metodo_pago}: {m.comisiones.toLocaleString()} {m.moneda}</li>
+                <li key={i}>Comisión {m.payment_method}: {m.comisiones.toLocaleString()} {m.moneda}</li>
               ))}
             </ul>
           )}
         </Card>
       </div>
-      <div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => exportPDF(t('reportesFin.tabFlujo'), { empresa, subtitulo: `${desde} → ${hasta}`, tablas: [{ titulo: t('reportesFin.porMetodo'), columnas: ['Método', 'Moneda', t('reportesFin.entradas'), t('reportesFin.salidas'), t('reportesFin.comisionesCol')], numericas: [2, 3, 4], filas: f.porMetodo.map(m => [m.metodo_pago, m.moneda, m.entradas, m.salidas, m.comisiones] as (string | number)[]) }] })}>{t('reportesFin.exportarPDF')}</Button></div>
+      <div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => exportPDF(t('reportesFin.tabFlujo'), { empresa, subtitulo: `${desde} → ${hasta}`, tablas: [{ titulo: t('reportesFin.porMetodo'), columnas: ['Método', 'Moneda', t('reportesFin.entradas'), t('reportesFin.salidas'), t('reportesFin.comisionesCol')], numericas: [2, 3, 4], filas: f.porMetodo.map(m => [m.payment_method, m.moneda, m.entradas, m.salidas, m.comisiones] as (string | number)[]) }] })}>{t('reportesFin.exportarPDF')}</Button></div>
     </div>
   )
 }

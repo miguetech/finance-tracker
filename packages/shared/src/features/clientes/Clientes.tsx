@@ -22,7 +22,7 @@ export function Clientes() {
   const [editando, setEditando] = useState<Cliente | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const { config } = useConfig()
-  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.tipo_doc_etiqueta ?? '')
+  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.doc_type_label ?? '')
 
   const filtrados = clientes.filter(c => {
     if (!busqueda) return true
@@ -46,7 +46,7 @@ export function Clientes() {
                 for (const c of cs) {
                   const existe = clientes.some(x => x.nombre.trim().toLowerCase() === String(c.nombre).trim().toLowerCase())
                   if (existe) continue
-                  await saveCliente.mutateAsync({ ...c, id_cliente: uid('cli_'), nombre: String(c.nombre), rfc: '', fecha_registro: todayLocal() } as Cliente)
+                  await saveCliente.mutateAsync({ ...c, customer_id: uid('cli_'), nombre: String(c.nombre), rfc: '', created_at: todayLocal() } as Cliente)
                   n++
                 }
                 toast(t('contactos.importados', { n }))
@@ -66,7 +66,7 @@ export function Clientes() {
             { key: 'acciones', header: '', render: c => (
               <div className="flex gap-2">
                 {canEdit('clientes') && (<Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => { setEditando(c as unknown as Cliente); setFormOpen(true) }}>{t('common.editar')}</Button>)}
-                {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId((c as unknown as Cliente).id_cliente)}>{t('common.eliminar')}</Button>)}
+                {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId((c as unknown as Cliente).customer_id)}>{t('common.eliminar')}</Button>)}
               </div>
             ) }
           ]}

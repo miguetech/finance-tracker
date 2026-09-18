@@ -105,8 +105,8 @@ describe('baja offline aplicada al espejo', () => {
     } as unknown as Repository
     const almacenMemoria = crearStoreMemoria()
     await almacenMemoria.replaceTable('Proveedores', [
-      { id_proveedor: 'p1', nombre: 'Viejo' },
-      { id_proveedor: 'p2', nombre: 'Queda' }
+      { supplier_id: 'p1', nombre: 'Viejo' },
+      { supplier_id: 'p2', nombre: 'Queda' }
     ])
     const kvLocal = memoriaKv()
     const repo = conColaEscrituras(repoBaseFalso, { storage: kvLocal, activo: () => true })
@@ -123,6 +123,6 @@ describe('baja offline aplicada al espejo', () => {
     }
     const filas = await almacenMemoria.getAllRows('Proveedores')
     expect(filas).toHaveLength(1)
-    expect(filas[0].id_proveedor).toBe('p2')
+    expect(filas[0].supplier_id).toBe('p2')
   })
 })

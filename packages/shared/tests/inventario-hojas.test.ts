@@ -74,10 +74,10 @@ describe('inventario de hojas (spec F4 §5-§6)', () => {
     // Factura del año anterior → auto-creación plausible (F5) de EVENTOS-{año-1}.
     const cli = await repo.saveCliente({ nombre: 'ACME' } as never)
     await repo.createFactura({
-      id_cliente: cli.id_cliente,
-      items: [{ descripcion: 'x', cantidad: 1, precio_unitario: 10 }],
-      fecha_emision: `${añosAnteriores}-03-10`,
-      fecha_vencimiento: '',
+      customer_id: cli.customer_id,
+      items: [{ descripcion: 'x', cantidad: 1, unit_price: 10 }],
+      issue_date: `${añosAnteriores}-03-10`,
+      due_date: '',
       notas: ''
     })
 

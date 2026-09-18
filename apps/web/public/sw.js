@@ -1,3 +1,4 @@
+/* global self, caches, fetch, URL */
 /* Service worker del modo offline (spec espejo §9): precachea el shell y el
  * binario SQLite; assets same-origin se sirven cache-first y se refrescan en
  * segundo plano (stale-while-revalidate). Sin dependencias de build. */

@@ -86,7 +86,7 @@ export function useConfig() {
   React.useEffect(() => {
     if (q.data) {
       setConfig(q.data)
-      for (const c of parseCustomCurrencies(q.data.monedas_custom)) registerCurrency(c)
+      for (const c of parseCustomCurrencies(q.data.custom_currencies)) registerCurrency(c)
     }
   }, [q.data, setConfig])
   const qc = useQueryClient()
@@ -115,8 +115,8 @@ export function useFacturas(filtro?: { estado?: string; mes?: string }) {
   const { espejo, esperaEspejo, version } = useOrigenLectura()
   const q = useQuery({ queryKey: ['facturas', filtro, version], enabled: !esperaEspejo, queryFn: () => (espejo ? listFacturasEspejo(espejo, filtro) : repo.listFacturas(filtro)) })
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['facturas'] }); invalidarEspejo('Facturas', 'Factura_Items') }
-  const create = useMutation({ mutationFn: (i: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string }) => repo.createFactura(i), onSuccess: invalidate })
-  const update = useMutation({ mutationFn: (i: { id: string; data: { id_cliente: string; items: { descripcion: string; cantidad: number; precio_unitario: number }[]; fecha_emision: string; fecha_vencimiento: string; notas: string; moneda?: string } }) => repo.updateFactura(i.id, i.data), onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ['factura'] }) } })
+  const create = useMutation({ mutationFn: (i: { customer_id: string; items: { descripcion: string; cantidad: number; unit_price: number }[]; issue_date: string; due_date: string; notas: string; moneda?: string }) => repo.createFactura(i), onSuccess: invalidate })
+  const update = useMutation({ mutationFn: (i: { id: string; data: { customer_id: string; items: { descripcion: string; cantidad: number; unit_price: number }[]; issue_date: string; due_date: string; notas: string; moneda?: string } }) => repo.updateFactura(i.id, i.data), onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ['factura'] }) } })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteFactura(id), onSuccess: invalidate })
   return { facturas: q.data ?? [], isLoading: q.isLoading, createFactura: create, updateFactura: update, deleteFactura: del }
 }
@@ -159,7 +159,7 @@ export function useEmpleados() {
   return { empleados: q.data ?? [], isLoading: q.isLoading, saveEmpleado: save, deleteEmpleado: del }
 }
 
-export function useAsistencias(filtro: { id_empleado?: string; desde?: string; hasta?: string } = {}) {
+export function useAsistencias(filtro: { employee_id?: string; desde?: string; hasta?: string } = {}) {
   const SECCION = ['Asistencias']
   const repo = useRepo()
   const qc = useQueryClient()
@@ -168,7 +168,7 @@ export function useAsistencias(filtro: { id_empleado?: string; desde?: string; h
   const key = JSON.stringify(filtro)
   const q = useQuery({ queryKey: ['asistencias', key, version], enabled: !esperaEspejo, queryFn: () => (espejo ? listAsistenciasEspejo(espejo, filtro) : repo.listAsistencias(filtro)) })
   const invalidate = () => qc.invalidateQueries({ queryKey: ['asistencias'] })
-  const save = useMutation({ mutationFn: (a: Omit<Asistencia, 'id_asistencia' | 'nombre_empleado'> & { id_asistencia?: string; nombre_empleado?: string }) => repo.saveAsistencia(a), onSuccess: invalidate })
+  const save = useMutation({ mutationFn: (a: Omit<Asistencia, 'attendance_id' | 'employee_name'> & { attendance_id?: string; employee_name?: string }) => repo.saveAsistencia(a), onSuccess: invalidate })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteAsistencia(id), onSuccess: invalidate })
   return { asistencias: q.data ?? [], isLoading: q.isLoading, saveAsistencia: save, deleteAsistencia: del }
 }
@@ -186,7 +186,7 @@ export function useRegisterNomina() {
   const repo = useRepo()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (i: { id_empleado: string; mes: string; monto: number; metodo_pago: MetodoPago; fecha: string; notas: string; moneda?: string }) => repo.registerNomina(i),
+    mutationFn: (i: { employee_id: string; mes: string; monto: number; payment_method: MetodoPago; fecha: string; notas: string; moneda?: string }) => repo.registerNomina(i),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['gastos'] }); qc.invalidateQueries({ queryKey: ['reportes'] }) }
   })
 }
@@ -211,7 +211,7 @@ export function useCxp(filtro?: { estado?: string }) {
   useSyncSeccion(['Cuentas_Pagar'])
   const q = useQuery({ queryKey: ['cxp', filtro, version], enabled: !esperaEspejo, queryFn: () => (espejo ? listCxpEspejo(espejo, filtro) : repo.listCxp(filtro)) })
   const invalidate = () => { qc.invalidateQueries({ queryKey: ['cxp'] }); qc.invalidateQueries({ queryKey: ['pagos'] }) }
-  const create = useMutation({ mutationFn: (i: { id_proveedor: string; folio_documento: string; categoria: string; descripcion: string; fecha_emision: string; fecha_vencimiento: string; monto_total: number; notas: string; moneda?: string }) => repo.createCxp(i), onSuccess: invalidate })
+  const create = useMutation({ mutationFn: (i: { supplier_id: string; document_serial: string; categoria: string; descripcion: string; issue_date: string; due_date: string; total_amount: number; notas: string; moneda?: string }) => repo.createCxp(i), onSuccess: invalidate })
   const del = useMutation({ mutationFn: (id: string) => repo.deleteCxp(id), onSuccess: invalidate })
   return { cxps: q.data ?? [], isLoading: q.isLoading, createCxp: create, deleteCxp: del }
 }
@@ -228,7 +228,7 @@ export function useRegisterPago() {
   const repo = useRepo()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (p: { tipo: 'cobro' | 'abono'; id_origen: string; fecha: string; monto: number; metodo_pago: MetodoPago; notas: string }) => repo.registerPago(p),
+    mutationFn: (p: { tipo: 'cobro' | 'abono'; origin_id: string; fecha: string; monto: number; payment_method: MetodoPago; notas: string }) => repo.registerPago(p),
     onSuccess: (_d, v) => { qc.invalidateQueries({ queryKey: ['facturas'] }); qc.invalidateQueries({ queryKey: ['cxp'] }); qc.invalidateQueries({ queryKey: ['pagos'] }); invalidarEspejo('Pagos', v.tipo === 'cobro' ? 'Facturas' : 'Cuentas_Pagar') }
   })
 }
@@ -282,7 +282,7 @@ export function useCategorias(kind: 'gastos' | 'cxp') {
 
 export function useMetodosPago(): string[] {
   const config = useAppStore(s => s.config)
-  const raw = config?.metodos_pago ?? DEFAULT_METODOS_PAGO
+  const raw = config?.payment_methods ?? DEFAULT_METODOS_PAGO
   return raw.split(',').map(s => s.trim()).filter(Boolean)
 }
 
@@ -295,7 +295,7 @@ export function useCxpById(id: string | null) {
     queryFn: async (): Promise<CuentaPagar | null> => {
       if (!id) return null
       const all = espejo ? await listCxpEspejo(espejo) : await repo.listCxp({})
-      return all.find(c => c.id_cxp === id) ?? null
+      return all.find(c => c.ap_id === id) ?? null
     },
     enabled: !!id && !esperaEspejo
   })
@@ -326,7 +326,7 @@ export function useRegistrarMovimiento() {
   const repo = useRepo()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (m: { id_producto: string; tipo: TipoMovimiento; cantidad: number; motivo: string; id_proveedor: string; fecha: string }) => repo.registrarMovimiento(m),
+    mutationFn: (m: { product_id: string; tipo: TipoMovimiento; cantidad: number; motivo: string; supplier_id: string; fecha: string }) => repo.registrarMovimiento(m),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['productos'] }); qc.invalidateQueries({ queryKey: ['movimientos'] }) }
   })
 }
@@ -344,7 +344,7 @@ export function useTasasHistorial() {
   const repo = useRepo()
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['tasasHistorial'], queryFn: () => repo.listTasasHistorial() })
-  const registrar = useMutation({ mutationFn: (t: Omit<TasaHistorial, 'id_tasa'>) => repo.registrarTasa(t), onSuccess: () => qc.invalidateQueries({ queryKey: ['tasasHistorial'] }) })
+  const registrar = useMutation({ mutationFn: (t: Omit<TasaHistorial, 'rate_id'>) => repo.registrarTasa(t), onSuccess: () => qc.invalidateQueries({ queryKey: ['tasasHistorial'] }) })
   return { tasas: (q.data ?? []).slice().sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))), isLoading: q.isLoading, registrarTasa: registrar }
 }
 

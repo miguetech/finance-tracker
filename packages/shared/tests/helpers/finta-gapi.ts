@@ -49,7 +49,7 @@ export function fintaGapi(opts: FakeGapiOpts = {}): FakeGapi {
   for (const [id, props] of Object.entries(opts.appProps ?? {})) appProps.set(id, props)
   const owners = opts.owners ?? {}
   const readonly = new Set(opts.readonly ?? [])
-  let seq = 0
+  const seq = 0
 
   function grid(id: string): Grid {
     if (!docs.has(id)) docs.set(id, new Map())

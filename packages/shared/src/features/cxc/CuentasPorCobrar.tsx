@@ -34,44 +34,44 @@ export function CuentasPorCobrar() {
     if (estado && t(st.key) !== estado) return false
     if (busqueda.trim()) {
       const q = busqueda.trim().toLowerCase()
-      if (!String(f.folio).toLowerCase().includes(q) && !f.nombre_cliente.toLowerCase().includes(q)) return false
+      if (!String(f.folio).toLowerCase().includes(q) && !f.customer_name.toLowerCase().includes(q)) return false
     }
     return true
   })
 
-  const sumaBase = (fs: Factura[]) => fs.reduce((s, f) => s + (Number(f.saldo) || 0) / (Number(f.tipo_cambio) || 1), 0)
+  const sumaBase = (fs: Factura[]) => fs.reduce((s, f) => s + (Number(f.saldo) || 0) / (Number(f.exchange_rate) || 1), 0)
   const totalPorCobrar = sumaBase(activas)
-  const vencidas = activas.filter(f => f.fecha_vencimiento && f.fecha_vencimiento < hoy)
-  const porVencer = activas.filter(f => !f.fecha_vencimiento || f.fecha_vencimiento >= hoy)
+  const vencidas = activas.filter(f => f.due_date && f.due_date < hoy)
+  const porVencer = activas.filter(f => !f.due_date || f.due_date >= hoy)
 
   // Vencimientos próximos (≤ 3 días) para recordatorios.
   const en3Dias = new Date(`${hoy}T00:00:00`)
   en3Dias.setDate(en3Dias.getDate() + 3)
   const limite = en3Dias.toISOString().slice(0, 10)
-  const proximas = activas.filter(f => f.fecha_vencimiento && f.fecha_vencimiento >= hoy && f.fecha_vencimiento <= limite)
-    .sort((a, b) => String(a.fecha_vencimiento).localeCompare(String(b.fecha_vencimiento)))
+  const proximas = activas.filter(f => f.due_date && f.due_date >= hoy && f.due_date <= limite)
+    .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))
 
   // Alertas flotantes del navegador para vencimientos de cobro.
   const notif = useNotificaciones()
   useEffect(() => {
-    if (config?.notif_cxc_activa !== 'true' || !notif.soportadas || Notification.permission !== 'granted') return
+    if (config?.notifications_ar_active !== 'true' || !notif.soportadas || Notification.permission !== 'granted') return
     if (vencidas.length === 0 && proximas.length === 0) return
     const cuerpo = vencidas.length > 0
       ? `${vencidas.length} ${t('cxc.vencidas').toLowerCase()} — ${vencidas[0].folio}: ${formatMoneyConverted(Number(vencidas[0].saldo), vencidas[0].moneda, moneda, config)}`
-      : `${proximas[0].folio} (${proximas[0].fecha_vencimiento})`
+      : `${proximas[0].folio} (${proximas[0].due_date})`
     notif.notificar(t('cxc.recordatorioTitulo'), cuerpo)
-  }, [config?.notif_cxc_activa, vencidas.length, proximas.length])
+  }, [config?.notifications_ar_active, vencidas.length, proximas.length])
 
   const toggleNotifCxc = async () => {
     if (!config) return
-    if (config.notif_cxc_activa === 'true') {
-      await saveConfig.mutateAsync({ ...config, notif_cxc_activa: 'false' })
+    if (config.notifications_ar_active === 'true') {
+      await saveConfig.mutateAsync({ ...config, notifications_ar_active: 'false' })
       toast(t('common.guardado'))
       return
     }
     await notif.activar()
     if (Notification.permission === 'granted') {
-      await saveConfig.mutateAsync({ ...config, notif_cxc_activa: 'true' })
+      await saveConfig.mutateAsync({ ...config, notifications_ar_active: 'true' })
       toast(t('cxc.notifActivada'))
     } else {
       toast(t('cxc.notifPermisoDenegado'), 'error')
@@ -79,7 +79,7 @@ export function CuentasPorCobrar() {
   }
 
   const copiarTel = (idCliente: string) => {
-    const c = clientes.find(x => x.id_cliente === idCliente)
+    const c = clientes.find(x => x.customer_id === idCliente)
     const tel = (c?.telefono ?? '').replace(/\s+/g, '')
     if (!tel) { toast(t('cxc.clienteSinTelefono'), 'error'); return }
     if (navigator.clipboard) navigator.clipboard.writeText(tel)
@@ -88,12 +88,12 @@ export function CuentasPorCobrar() {
 
   /** Mensaje de cobro automático redirigido a WhatsApp Web/Móvil. */
   const cobroWhatsApp = (f: Factura) => {
-    const c = clientes.find(x => x.id_cliente === String(f.id_cliente))
+    const c = clientes.find(x => x.customer_id === String(f.customer_id))
     const tel = (c?.telefono ?? '').replace(/\s+/g, '')
     if (!tel) { toast(t('whatsapp.sinTelefono'), 'error'); return }
     const mensaje = t('whatsapp.mensajeDefault', {
-      nombre: f.nombre_cliente,
-      empresa: config?.empresa_nombre ?? '',
+      nombre: f.customer_name,
+      empresa: config?.company_name ?? '',
       folio: f.folio,
       monto: formatMoneyConverted(f.saldo, f.moneda, moneda, config)
     })
@@ -108,9 +108,9 @@ export function CuentasPorCobrar() {
           <p className="text-sm text-muted-foreground">{t('cxc.subtitulo')}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant={config?.notif_cxc_activa === 'true' ? 'primary' : 'outline'} icon={<IconBell className="w-4 h-4" />}
+          <Button variant={config?.notifications_ar_active === 'true' ? 'primary' : 'outline'} icon={<IconBell className="w-4 h-4" />}
             onClick={toggleNotifCxc} title={t('cxc.recordatorioTitulo')}>
-            {config?.notif_cxc_activa === 'true' ? t('cxc.notifOn') : t('cxc.notifOff')}
+            {config?.notifications_ar_active === 'true' ? t('cxc.notifOn') : t('cxc.notifOff')}
           </Button>
           <Select value={estado} onChange={setEstado} options={[{ value: t('states.pendiente'), label: t('states.pendiente') }, { value: t('states.parcial'), label: t('states.parcial') }, { value: t('states.vencida'), label: t('states.vencida') }]} placeholder={t('common.estado')} />
         </div>
@@ -132,27 +132,27 @@ export function CuentasPorCobrar() {
           { key: 'folio', header: t('facturas.folio'), render: r => String(r.folio) },
           { key: 'cliente', header: t('facturas.cliente'), render: r => (
             <div className="flex items-center gap-2">
-              <span>{String(r.nombre_cliente)}</span>
-              {clientes.find(c => c.id_cliente === String(r.id_cliente))?.telefono && (
-                <button onClick={() => copiarTel(String(r.id_cliente))} title={t('cxc.copiarTelefono')} aria-label={t('cxc.copiarTelefono')}
+              <span>{String(r.customer_name)}</span>
+              {clientes.find(c => c.customer_id === String(r.customer_id))?.telefono && (
+                <button onClick={() => copiarTel(String(r.customer_id))} title={t('cxc.copiarTelefono')} aria-label={t('cxc.copiarTelefono')}
                   className="p-1.5 rounded-lg text-primary hover:bg-primary-soft">
                   <IconPhone className="w-4 h-4" />
                 </button>
               )}
             </div>
           ) },
-          { key: 'emision', header: t('facturas.emision'), render: r => String(r.fecha_emision) },
-          { key: 'venc', header: t('cuentas.vence'), render: r => <span className={String(r.fecha_vencimiento) < hoy && Number(r.saldo) > 0 ? 'text-red-600 font-medium' : ''}>{String(r.fecha_vencimiento) || '—'}</span> },
+          { key: 'emision', header: t('facturas.emision'), render: r => String(r.issue_date) },
+          { key: 'venc', header: t('cuentas.vence'), render: r => <span className={String(r.due_date) < hoy && Number(r.saldo) > 0 ? 'text-red-600 font-medium' : ''}>{String(r.due_date) || '—'}</span> },
           { key: 'total', header: t('facturas.total'), render: r => formatMoneyConverted(Number(r.total), String(r.moneda), moneda, config) },
           { key: 'saldo', header: t('facturas.saldo'), render: r => formatMoneyConverted(Number(r.saldo), String(r.moneda), moneda, config) },
           { key: 'estado', header: t('common.estado'), render: r => { const e = estadoCxc(r as unknown as Factura, hoy); return <Badge tone={e.tone}>{t(e.key)}</Badge> } },
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-1">
               {isAdmin && <Button variant="success" size="sm" icon={<IconCoins className="w-4 h-4" />} onClick={() => setCobroDe(r as unknown as Factura)}>{t('cxc.cobrar')}</Button>}
-              {clientes.find(c => c.id_cliente === String(r.id_cliente))?.telefono && (
+              {clientes.find(c => c.customer_id === String(r.customer_id))?.telefono && (
                 <Button variant="outline" size="sm" onClick={() => cobroWhatsApp(r as unknown as Factura)} title={t('whatsapp.cobroTitulo')}>{t('whatsapp.abrirWhatsApp')}</Button>
               )}
-              <Button variant="ghost" size="sm" onClick={() => setDetalleId(String(r.id_factura))}>{t('facturas.ver')}</Button>
+              <Button variant="ghost" size="sm" onClick={() => setDetalleId(String(r.invoice_id))}>{t('facturas.ver')}</Button>
             </div>
           ) }
         ]} rows={filtradas as unknown as Record<string, unknown>[]} />
@@ -161,7 +161,7 @@ export function CuentasPorCobrar() {
 
       {detalleId && <FacturaDetail id={detalleId} onClose={() => setDetalleId(null)} />}
       {cobroDe && (
-        <PagoModal origen={{ id: cobroDe.id_factura, tipo: 'cobro', saldo: cobroDe.saldo, moneda: cobroDe.moneda }}
+        <PagoModal origen={{ id: cobroDe.invoice_id, tipo: 'cobro', saldo: cobroDe.saldo, moneda: cobroDe.moneda }}
           onClose={() => setCobroDe(null)} />
       )}
       {!canEdit('facturas') && <p className="text-xs text-muted-foreground">{t('cxc.soloLectura')}</p>}

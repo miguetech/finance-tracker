@@ -15,8 +15,8 @@ function codigo(overrides: Partial<CodigoAcceso> = {}): CodigoAcceso {
     rol: 'asistente',
     modulos_ver: 'facturas,clientes',
     modulos_editar: 'facturas',
-    expira_en: '2026-12-31',
-    usos_max: '5',
+    expires_at: '2026-12-31',
+    max_uses: '5',
     usos: '5',
     responsable: 'owner@ft.com',
     email: 'resp@x.com',
@@ -66,7 +66,7 @@ async function postJson(app: ReturnType<typeof createApp>, path: string, body: u
 
 describe('flujo de login por código con dispositivos y 2FA', () => {
   it('código ∞ sin dispositivo → necesitaVerificacion; verificar → token + dispositivo registrado', async () => {
-    const { app, dispositivos, enviar } = makeHarness([codigo({ usos_max: '', usos: '' })])
+    const { app, dispositivos, enviar } = makeHarness([codigo({ max_uses: '', usos: '' })])
     const r1 = await postJson(app, '/api/auth/codigo', { codigo: 'ANA-2026-ABCD' })
     expect(r1.ok).toBe(true)
     expect(r1.data.necesitaVerificacion).toBe(true)
@@ -93,7 +93,7 @@ describe('flujo de login por código con dispositivos y 2FA', () => {
   })
 
   it('dispositivo ya registrado → token directo, sin 2FA ni duplicado', async () => {
-    const { app, dispositivos } = makeHarness([codigo()], [{ codigo: 'ANA-2026-ABCD', dispositivo: 'dev_x', ip_info: '1.2.3.4', registrado_en: HOY }])
+    const { app, dispositivos } = makeHarness([codigo()], [{ codigo: 'ANA-2026-ABCD', dispositivo: 'dev_x', ip_info: '1.2.3.4', registered_at: HOY }])
     const r = await postJson(app, '/api/auth/codigo', { codigo: 'ANA-2026-ABCD', dispositivo: 'dev_x' })
     expect(r.ok).toBe(true)
     expect(r.data.token).toBeTruthy()
@@ -101,7 +101,7 @@ describe('flujo de login por código con dispositivos y 2FA', () => {
   })
 
   it('código ∞ + dispositivo ya registrado → token directo sin 2FA', async () => {
-    const { app } = makeHarness([codigo({ usos_max: '', usos: '' })], [{ codigo: 'ANA-2026-ABCD', dispositivo: 'dev_x', ip_info: '1.2.3.4', registrado_en: HOY }])
+    const { app } = makeHarness([codigo({ max_uses: '', usos: '' })], [{ codigo: 'ANA-2026-ABCD', dispositivo: 'dev_x', ip_info: '1.2.3.4', registered_at: HOY }])
     const r = await postJson(app, '/api/auth/codigo', { codigo: 'ANA-2026-ABCD', dispositivo: 'dev_x' })
     expect(r.ok).toBe(true)
     expect(r.data.token).toBeTruthy()
@@ -109,7 +109,7 @@ describe('flujo de login por código con dispositivos y 2FA', () => {
   })
 
   it('código de verificación equivocado → error', async () => {
-    const { app, enviar } = makeHarness([codigo({ usos_max: '', usos: '' })])
+    const { app, enviar } = makeHarness([codigo({ max_uses: '', usos: '' })])
     const r1 = await postJson(app, '/api/auth/codigo', { codigo: 'ANA-2026-ABCD' })
     const r2 = await postJson(app, '/api/auth/verificar', { intentoId: r1.data.intentoId, codigo: '000000' })
     expect(r2.ok).toBe(false)
@@ -119,7 +119,7 @@ describe('flujo de login por código con dispositivos y 2FA', () => {
   it('fallos repetidos de 2FA cuentan contra el rate limit (misma clave IP|codigo|2fa)', async () => {
     vi.useFakeTimers()
     try {
-      const { app, enviar } = makeHarness([codigo({ usos_max: '', usos: '' })])
+      const { app, enviar } = makeHarness([codigo({ max_uses: '', usos: '' })])
       const r1 = await postJson(app, '/api/auth/codigo', { codigo: 'ANA-2026-ABCD' })
       const id = r1.data.intentoId
       const backoffs = [1, 2, 4, 8] // s
@@ -143,7 +143,7 @@ describe('flujo de login por código con dispositivos y 2FA', () => {
   it('creación de intentos 2FA (código ∞) también está rate-limiteada', async () => {
     vi.useFakeTimers()
     try {
-      const { app, enviar } = makeHarness([codigo({ usos_max: '', usos: '' })])
+      const { app, enviar } = makeHarness([codigo({ max_uses: '', usos: '' })])
       const backoffs = [1, 2, 4, 8]
       for (let i = 0; i < 4; i++) {
         const r = await postJson(app, '/api/auth/codigo', { codigo: 'ANA-2026-ABCD' })
@@ -206,7 +206,7 @@ describe('flujo de login por código con dispositivos y 2FA', () => {
     expect(data.ok).toBe(false)
     expect(data.error).toBe('Sesión revocada')
     // con el dev presente funciona
-    dispositivos.push({ codigo: 'ANA-2026-ABCD', dispositivo: dev, ip_info: '1.2.3.4', registrado_en: HOY })
+    dispositivos.push({ codigo: 'ANA-2026-ABCD', dispositivo: dev, ip_info: '1.2.3.4', registered_at: HOY })
     const res2 = await app.request(`/?action=getPerms&token=${encodeURIComponent(token)}`)
     const data2 = await res2.json() as { ok: boolean; error?: string }
     expect(data2.ok).toBe(true)

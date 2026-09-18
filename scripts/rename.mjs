@@ -1,3 +1,4 @@
+/* global process, console, URL */
 // scripts/rename.mjs  —  uso: node scripts/rename.mjs <mapfile.json> [-n]
 // mapfile: { idents: {ES:EN}, strings: {ES:EN}, files: [{from,to}], dirs: [{from,to}] }
 //  - idents    : renombra solo en POSICIÓN DE IDENTIFICADOR (skipeando strings/comentarios)

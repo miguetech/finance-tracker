@@ -38,9 +38,9 @@ export function ImportarClientes({ onImportados }: { onImportados: (clientes: Pa
           telefono: formatearTelefono(r.telefono || r.phone || '', codigoPais),
           email: (r.email || '').trim(),
           direccion: (r.direccion || '').trim(),
-          direccion_pais: (r.pais || '').trim(),
-          direccion_estado: (r.estado || '').trim(),
-          direccion_cp: (r.cp || '').trim()
+          address_country: (r.pais || '').trim(),
+          address_state: (r.estado || '').trim(),
+          address_zip: (r.cp || '').trim()
         }))
         .filter(c => c.nombre || c.telefono || c.email)
       if (clientes.length === 0) { toast(t('contactos.errorFormato'), 'error'); return }

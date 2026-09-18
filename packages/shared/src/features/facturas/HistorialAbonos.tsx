@@ -39,9 +39,9 @@ export function HistorialAbonos({ pagos, totalDoc, monedaDoc }: {
             const convertido = convert(Number(p.monto) || 0, monedaPago, monedaDoc, config)
             restante = Math.round((restante - convertido) * 100) / 100
             return (
-              <tr key={p.id_pago} className="border-b border-gray-50">
+              <tr key={p.payment_id} className="border-b border-gray-50">
                 <td className="py-1 whitespace-nowrap">{String(p.fecha)}</td>
-                <td className="py-1">{p.metodo_pago}</td>
+                <td className="py-1">{p.payment_method}</td>
                 <td className="py-1 text-right tabular-nums">
                   {formatMoney(Number(p.monto), monedaPago)}
                   {monedaPago !== monedaDoc && <span className="text-xs text-gray-400"> ({monedaPago})</span>}

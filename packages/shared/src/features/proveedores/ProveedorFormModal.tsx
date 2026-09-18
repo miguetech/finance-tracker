@@ -15,7 +15,7 @@ export function ProveedorFormModal({ open, onClose, initial, onSave }: { open: b
   }, [open, initial])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
   const { config } = useConfig()
-  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.tipo_doc_etiqueta ?? '')
+  const docLabel = getDocLabel(config?.tipo_doc ?? 'RFC', config?.doc_type_label ?? '')
   const submit = () => guardar(async () => {
     if (!form.nombre.trim()) return
     try {

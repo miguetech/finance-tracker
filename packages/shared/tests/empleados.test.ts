@@ -8,7 +8,7 @@ import type { StorageAdapter } from '../src/data/storage'
 describe('empleados schema', () => {
   it('TABLES incluye la hoja Empleados con 12 columnas', () => {
     const spec = TABLES.Empleados
-    expect(spec.map(c => c.key)).toEqual(['id_empleado', 'nombre', 'rfc', 'puesto', 'salario', 'salario_moneda', 'fecha_ingreso', 'activo', 'hora_entrada', 'hora_salida', 'esquema_pago', 'tarifa_hora_extra'])
+    expect(spec.map(c => c.key)).toEqual(['employee_id', 'nombre', 'rfc', 'puesto', 'salario', 'salary_currency', 'hire_date', 'activo', 'clock_in', 'clock_out', 'pay_schedule', 'overtime_rate'])
   })
   it('EmpleadoSchema requiere nombre y default salario 0', () => {
     const e = EmpleadoSchema.parse({ nombre: 'Ana' })
@@ -17,8 +17,8 @@ describe('empleados schema', () => {
     expect(() => EmpleadoSchema.parse({ nombre: '' })).toThrow()
   })
   it('NominaInputSchema valida mes YYYY-MM', () => {
-    expect(() => NominaInputSchema.parse({ id_empleado: 'emp_1', mes: '2026-08', monto: 100 })).not.toThrow()
-    expect(() => NominaInputSchema.parse({ id_empleado: 'emp_1', mes: 'ago', monto: 100 })).toThrow()
+    expect(() => NominaInputSchema.parse({ employee_id: 'emp_1', mes: '2026-08', monto: 100 })).not.toThrow()
+    expect(() => NominaInputSchema.parse({ employee_id: 'emp_1', mes: 'ago', monto: 100 })).toThrow()
   })
 })
 
@@ -110,8 +110,8 @@ describe('empleados repository', () => {
     const api = new SheetsApi(async () => 'T')
     const storage = memoryStorage()
     const repo = createRepository({ api, storage, getSpreadsheetId: async () => 'S' })
-    const saved = await repo.saveEmpleado({ nombre: 'Ana', rfc: '', puesto: '', salario: 5000, fecha_ingreso: '2026-01-01', activo: 'true' } as never)
-    expect(saved.id_empleado).toMatch(/^emp_/)
+    const saved = await repo.saveEmpleado({ nombre: 'Ana', rfc: '', puesto: '', salario: 5000, hire_date: '2026-01-01', activo: 'true' } as never)
+    expect(saved.employee_id).toMatch(/^emp_/)
     const rows = (f.grid.get('Empleados') ?? []).filter(r => r.some(v => v !== undefined && v !== ''))
     expect(rows).toHaveLength(1)
   })
@@ -121,7 +121,7 @@ describe('empleados repository', () => {
     const api = new SheetsApi(async () => 'T')
     const storage = memoryStorage()
     const repo = createRepository({ api, storage, getSpreadsheetId: async () => 'S' })
-    const g = await repo.registerNomina({ id_empleado: 'emp_1', mes: '2026-08', monto: 5000, metodo_pago: 'Transferencia', fecha: '2026-08-05', notas: '' })
+    const g = await repo.registerNomina({ employee_id: 'emp_1', mes: '2026-08', monto: 5000, payment_method: 'Transferencia', fecha: '2026-08-05', notas: '' })
     expect(g.categoria).toBe('Nómina')
     expect(g.descripcion).toContain('Nómina 2026-08')
     expect(g.proveedor).toBe('Ana')
@@ -135,7 +135,7 @@ describe('empleados repository', () => {
     const api = new SheetsApi(async () => 'T')
     const storage = memoryStorage()
     const repo = createRepository({ api, storage, getSpreadsheetId: async () => 'S' })
-    await expect(repo.registerNomina({ id_empleado: 'emp_9', mes: '2026-08', monto: 5000, metodo_pago: 'Transferencia', fecha: '2026-08-05', notas: '' })).rejects.toThrow('Empleado no existe')
+    await expect(repo.registerNomina({ employee_id: 'emp_9', mes: '2026-08', monto: 5000, payment_method: 'Transferencia', fecha: '2026-08-05', notas: '' })).rejects.toThrow('Empleado no existe')
   })
 
   it('deleteEmpleado bloquea si hay gasto Nómina del mismo proveedor', async () => {

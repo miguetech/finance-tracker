@@ -5,24 +5,24 @@ import { TABLES } from '../src/sheets/tables'
 import type { Config, Factura } from '../src/types/entities'
 
 const cfg: Config = {
-  empresa_nombre: 'Test', empresa_rfc: '', empresa_direccion: '', empresa_telefono: '',
-  empresa_email: '', empresa_logo: '', empresa_cp: '', empresa_ciudad: '', empresa_pais: '',
-  prefijo_folio: 'F-', contador_folio: 1,
+  company_name: 'Test', company_tax_id: '', company_address: '', company_phone: '',
+  company_email: '', company_logo: '', company_zip: '', company_city: '', company_country: '',
+  serial_prefix: 'F-', serial_counter: 1,
   moneda: 'USD',
-  iva_porcentaje: 16,
-  categorias_gastos: '', categorias_cxp: '', categorias_inventario: '',
-  monedas_activas: 'USD,VES,EUR', monedas_custom: '',
-  tasas_cambio: JSON.stringify({ base: 'USD', fecha: '2026-01-01', rates: { VES: 100, EUR: 0.9 } }),
-  metodos_pago: '', tipo_doc: 'factura', tipo_doc_etiqueta: 'Factura',
-  share_backend_url: '', metas_mensuales: '', comisiones_transaccion: '', comisiones_metodos: '',
-  tasa_dia_activa: 'false', google_permisos: '', notif_gastos_activa: '', notif_cxc_activa: '', unidades_medida: ''
+  vat_percent: 16,
+  expense_categories: '', ap_categories: '', inventory_categories: '',
+  active_currencies: 'USD,VES,EUR', custom_currencies: '',
+  exchange_rates: JSON.stringify({ base: 'USD', fecha: '2026-01-01', rates: { VES: 100, EUR: 0.9 } }),
+  payment_methods: '', tipo_doc: 'factura', doc_type_label: 'Factura',
+  share_backend_url: '', monthly_goals: '', transaction_fees: '', method_fees: '',
+  daily_rate_active: 'false', google_permissions: '', notifications_expense_active: '', notifications_ar_active: '', measure_units: ''
 } as unknown as Config
 
 const fac = (over: Partial<Factura>): Factura => ({
-  id_factura: 'fac_1', folio: 'F-001', id_cliente: 'c1', nombre_cliente: 'Cliente',
-  fecha_emision: '2026-01-15', fecha_vencimiento: '2026-02-15',
-  subtotal: 1000, iva: 0, total: 1000, saldo: 1000, fecha_pago: '', notas: '',
-  moneda: 'USD', tipo_cambio: 1, editada: '', fecha_edicion: '',
+  invoice_id: 'fac_1', folio: 'F-001', customer_id: 'c1', customer_name: 'Cliente',
+  issue_date: '2026-01-15', due_date: '2026-02-15',
+  subtotal: 1000, iva: 0, total: 1000, saldo: 1000, paid_at: '', notas: '',
+  moneda: 'USD', exchange_rate: 1, editada: '', edited_at: '',
   ...over
 })
 
@@ -36,21 +36,21 @@ describe('conversión multimoneda en P&L (Ventas y Pérdidas)', () => {
     const facturas = [fac({})]
     const productosCosto = { p1: 50000 }
     const productosMoneda = { p1: 'VES' }
-    const itemsPorFactura = { fac_1: [{ cantidad: 1, id_producto: 'p1' }] }
+    const itemsPorFactura = { fac_1: [{ cantidad: 1, product_id: 'p1' }] }
     const pl = estadoResultados(facturas, [], cfg, productosCosto, productosMoneda, itemsPorFactura, { desde: '2026-01-01', hasta: '2026-12-31' })
     expect(pl.costo_mercancia).toBe(500)
     expect(pl.utilidad_neta).toBe(500)
   })
 
   it('producto sin moneda se trata como moneda base (retrocompatible)', () => {
-    const pl = estadoResultados([fac({})], [], cfg, { p1: 200 }, { p1: '' }, { fac_1: [{ cantidad: 1, id_producto: 'p1' }] }, { desde: '', hasta: '' })
+    const pl = estadoResultados([fac({})], [], cfg, { p1: 200 }, { p1: '' }, { fac_1: [{ cantidad: 1, product_id: 'p1' }] }, { desde: '', hasta: '' })
     expect(pl.costo_mercancia).toBe(200)
     expect(pl.utilidad_neta).toBe(800)
   })
 
-  it('factura en VES usa su tipo_cambio guardado para convertir a base', () => {
+  it('factura en VES usa su exchange_rate guardado para convertir a base', () => {
     const pl = estadoResultados(
-      [fac({ moneda: 'VES', total: 72000, subtotal: 72000, tipo_cambio: 100 })],
+      [fac({ moneda: 'VES', total: 72000, subtotal: 72000, exchange_rate: 100 })],
       [], cfg, {}, {}, {},
       { desde: '2026-01-01', hasta: '2026-12-31' }
     )
@@ -60,9 +60,9 @@ describe('conversión multimoneda en P&L (Ventas y Pérdidas)', () => {
 
 describe('reconversionMonetaria con tasas en otra base', () => {
   it('tasa actual para factura VES no cae a 1 cuando rates.base != cfg.moneda', () => {
-    const cfgOtraBase = { ...cfg, tasas_cambio: JSON.stringify({ base: 'EUR', fecha: '2026-01-01', rates: { VES: 111, USD: 1.1 } }) } as Config
+    const cfgOtraBase = { ...cfg, exchange_rates: JSON.stringify({ base: 'EUR', fecha: '2026-01-01', rates: { VES: 111, USD: 1.1 } }) } as Config
     const r = reconversionMonetaria(cfgOtraBase, {
-      facturas: [fac({ moneda: 'VES', total: 72000, subtotal: 72000, tipo_cambio: 100 })]
+      facturas: [fac({ moneda: 'VES', total: 72000, subtotal: 72000, exchange_rate: 100 })]
     }, { desde: '2026-01-01', hasta: '2026-12-31' })
     expect(r.variaciones).toHaveLength(1)
     // 72000 VES a tasa actual: 1 EUR = 111 VES ⇒ 1 VES = 1/111 EUR; 1 USD = 1.1 EUR ⇒ 72000/111*1.1 ≈ 713.51 USD
@@ -83,7 +83,7 @@ describe('migración columna moneda en Productos', () => {
     const row = ['prod_1', 'Tomate', '', 'kg', 1, 5, 1, 3, 'prov_1', '', '', 'true', '2026-08-01']
     const obj = deserializeRow(TABLES.Productos, row)
     expect(obj.moneda).toBe('')
-    expect(obj.precio_costo).toBe(1)
+    expect(obj.cost_price).toBe(1)
   })
 })
 
@@ -93,8 +93,8 @@ describe('convertirFinData (moneda de visualización de reportes)', () => {
     const data = {
       pl: { ingresos_totales: 1000, costo_mercancia: 500, gastos_fijos: 100, gastos_variables: 50, utilidad_neta: 350, margen_neto_pct: 35, lineas_ingresos: [{ concepto: 'USD', monto: 1000 }], lineas_costos: [{ concepto: 'Renta', monto: 100 }] },
       equilibrio: { costos_fijos: 100, costos_variables: 550, ingresos: 1000, margen_contribucion_pct: 45, punto_equilibrio: 222.22, cobertura_pct: 450, rentable: true },
-      reconversion: { variaciones: [{ fecha: '2026-01-01', descripcion: 'x', tipo: 'factura' as const, moneda: 'VES', monto_moneda: 72000, tipo_cambio_registro: 72, tipo_cambio_actual: 100, valor_base_registro: 1000, valor_base_actual: 720, diferencia: -280 }], perdida_total: -280, ganancia_total: 0, neto: -280 },
-      flujo: { porMoneda: [{ moneda: 'VES', entradas: 72000, salidas: 0, balance: 72000 }], porMetodo: [{ metodo_pago: 'Efectivo', moneda: 'VES', entradas: 72000, salidas: 0, comisiones: 0 }], totalEntradasBase: 1000, totalSalidasBase: 200 }
+      reconversion: { variaciones: [{ fecha: '2026-01-01', descripcion: 'x', tipo: 'factura' as const, moneda: 'VES', monto_moneda: 72000, exchange_rate_registro: 72, exchange_rate_actual: 100, valor_base_registro: 1000, valor_base_actual: 720, diferencia: -280 }], perdida_total: -280, ganancia_total: 0, neto: -280 },
+      flujo: { porMoneda: [{ moneda: 'VES', entradas: 72000, salidas: 0, balance: 72000 }], porMetodo: [{ payment_method: 'Efectivo', moneda: 'VES', entradas: 72000, salidas: 0, comisiones: 0 }], totalEntradasBase: 1000, totalSalidasBase: 200 }
     }
     const out = convertirFinData(data, 'USD', 'VES', cfg)
     expect(out.pl.ingresos_totales).toBe(100000)

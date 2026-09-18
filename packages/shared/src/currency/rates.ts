@@ -24,7 +24,7 @@ export function ratesToRow(r: Rates): string {
   return JSON.stringify(r)
 }
 
-const FALLBACK_CFG = { moneda: 'USD', tasas_cambio: '' } as unknown as Config
+const FALLBACK_CFG = { moneda: 'USD', exchange_rates: '' } as unknown as Config
 
 /**
  * Tasa: cuántas unidades de `to` equivalen a 1 unidad de `from`.
@@ -33,7 +33,7 @@ const FALLBACK_CFG = { moneda: 'USD', tasas_cambio: '' } as unknown as Config
 export function rateFor(cfg: Config | null | undefined, from: string, to: string): number {
   const c = cfg ?? FALLBACK_CFG
   if (!from || !to || from === to) return 1
-  const r = parseRates(c.tasas_cambio)
+  const r = parseRates(c.exchange_rates)
   if (!r) return 1
   const base = r.base || c.moneda
   const fromToBase = from === base ? 1 : r.rates[from] ? 1 / r.rates[from] : 1
@@ -92,9 +92,9 @@ export function parseCustomCurrencies(raw?: string): Currency[] {
 }
 
 /** Monedas activas para el usuario (catálogo + personalizadas, filtradas por config). */
-export function activeCurrencies(config?: Pick<Config, 'monedas_activas' | 'monedas_custom'> | null): Currency[] {
-  const all = [...CURRENCIES, ...parseCustomCurrencies(config?.monedas_custom)]
-  const active = (config?.monedas_activas ?? '').split(',').map(s => s.trim()).filter(Boolean)
+export function activeCurrencies(config?: Pick<Config, 'active_currencies' | 'custom_currencies'> | null): Currency[] {
+  const all = [...CURRENCIES, ...parseCustomCurrencies(config?.custom_currencies)]
+  const active = (config?.active_currencies ?? '').split(',').map(s => s.trim()).filter(Boolean)
   if (active.length === 0) return all
   return all.filter(c => active.includes(c.code))
 }
