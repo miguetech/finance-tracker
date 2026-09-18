@@ -1,0 +1,20 @@
+{
+  "idents": {},
+  "strings": {},
+  "files": [],
+  "dirs": [],
+  "idents.example": {
+    "Cliente": "Customer",
+    "Factura": "Invoice",
+    "Gasto": "Expense",
+    "cliente": "customer",
+    "factura": "invoice",
+    "id_cliente": "customer_id",
+    "listClientes": "listCustomers"
+  },
+  "strings.example": {
+    "listClientes": "listCustomers",
+    "n\u00f3mina": "payroll",
+    "modulos_ver": "permissions_view"
+  }
+}
