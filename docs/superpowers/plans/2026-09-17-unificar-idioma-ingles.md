@@ -30,7 +30,7 @@
 - Create: `scripts/rename-map.json`
 
 **Interfaces:**
-- Produces: `rename.mjs` — Node script que aplica un mapa de dos tipos de clave a todos los `.ts/.tsx/.json` del repo (salvo ignore): `idents` (renombra tokens SOLO en posición de identificador, respeta strings y comentarios → protege copy de UI) y `strings` (reemplaza valores exactos SOLO dentro de literales de string → acciones wire, keys de storage, claims, headers de Sheets). Mueve archivos/dirs vía `git mv`. Orden: longest-first.
+- Produces: `rename.mjs` — Node script que aplica un mapa de dos tipos de clave a todos los `.ts/.tsx/.json` del repo (salvo ignore): `idents` (renombra tokens SOLO en posición de identificador, respeta strings y comentarios → protege copy de UI) y `strings` (reemplaza valores exactos SOLO dentro de literales de string → acciones wire, keys de storage, claims, headers de Sheets). Mueve archivos/dirs vía `git mv`. Longest-first CON guard anti-solapamiento (un match cubierto por un token más largo se descarta → nunca corrompe).
 - Produces: `rename-map.json` — las tablas del glosario en forma ejecutable (`{"cliente":"customer","Cliente":"Customer",...}`).
 - Produces: `docs/INGLES_GLOSARIO.md` — fuente de verdad human-readable con todas las tablas (palabras, entidades, campos, acciones, tablas/hojas, módulos, estados, storage, claims JWT).
 
@@ -271,14 +271,17 @@ const IGNORE = /(node_modules|\.output|dist|\.wxt|\.vercel|pnpm-lock|tsbuildinfo
 const DRY = process.argv.includes('-n')
 
 function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
+// Boundary de separación camel/Pascal/snake. SIN after-bound a propósito: la
+// composición de palabras queda permitida (Cliente dentro de listClientes,
+// fecha dentro de fecha_registro) y el GUARD anti-solapamiento de apply() hace
+// que siempre gane el token más largo (Clientes > Cliente, fecha_registro > fecha).
 function identRe(token) {
   const up = /^[A-Z]/.test(token)
   const before = up ? '(?:(?<![A-Z0-9_$])|(?<=[a-z]))' : '(?<![A-Za-z0-9])'
-  const after = '(?![a-z])' // no toca plurales/extensores; longest-first y tokens compuestos explícitos
-  return new RegExp(`${before}${esc(token)}${after}`, 'g')
+  return new RegExp(`${before}${esc(token)}`, 'g')
 }
 
-// Separa el archivo en segmentos: { text, kind: 'code' | 'str', line } — salta /* */, //, '...', "...", `...`
+// Separa el archivo en segmentos: { code:boolean, start, end } — salta /* */, //, '...', "...", `...`
 function segment(text) {
   const segs = [] // {code:boolean, start:number, end:number}
   let i = 0
@@ -305,22 +308,24 @@ function segment(text) {
   return segs
 }
 
+// Longest-first con GUARD anti-solapamiento: un match cubierto por un token más
+// largo se descarta. Elimina la corrupción (p.ej. hoja + hojaActual coexistían
+// → "sheetentSheet"). En strings usa substring exacto (misma longevidad).
 function apply(text, map) {
-  const idents = Object.keys(map.idents ?? {}).sort((a, b) => b.length - a.length)
-  const strings = Object.keys(map.strings ?? {}).sort((a, b) => b.length - a.length)
   const edits = []
   for (const seg of segment(text)) {
     const slice = text.slice(seg.start, seg.end)
-    if (seg.code) {
-      for (const from of idents) {
-        let m
-        const re = identRe(from)
-        while ((m = re.exec(slice))) edits.push([seg.start + m.index, seg.start + m.index + from.length, map.idents[from]])
-      }
-    } else {
-      for (const from of strings) {
-        let idx = slice.indexOf(from)
-        while (idx !== -1) { edits.push([seg.start + idx, seg.start + idx + from.length, map.strings[from]]); idx = slice.indexOf(from, idx + from.length) }
+    const isCode = seg.code
+    const lookup = isCode ? (map.idents ?? {}) : (map.strings ?? {})
+    const keys = Object.keys(lookup).sort((a, b) => b.length - a.length)
+    const reFor = isCode ? identRe : (t => new RegExp(esc(t), 'g'))
+    const taken = [] // rangos ya tomados por tokens más largos
+    for (const from of keys) {
+      const re = reFor(from); let m
+      while ((m = re.exec(slice))) {
+        const s = seg.start + m.index, e = s + from.length
+        if (taken.some(([a, b]) => s < b && a < e)) continue
+        taken.push([s, e]); edits.push([s, e, lookup[from]])
       }
     }
   }
@@ -343,7 +348,7 @@ for (const f of globSync('**/*.{ts,tsx,json}', { cwd: ROOT }).filter(x => !IGNOR
 console.log(`\nTouched ${changed} files. ${DRY ? 'DRY RUN — sin escribir.' : 'Ahora: pnpm build para cazar referencias no actualizadas y colisiones.'}`)
 ```
 
-Regla de seguridad del mapa: cualquier identificador compuesto (**`listFacturasItems`**, `registerNominaAvanzada`, `listGastosFijos`, `getReportesInventario`, `getVentasProducto`, `getMetasVsLogros`, `getReporteFinanciero`, `listTasasHistorial`, `listNominaDetalles`, `id_gasto_fijo`, `tarifa_hora_extra`, `monto_horas_extra`, `nombre_proveedor`…) va como token explícito en el mapa, nunca por composición de palabras — el orden longest-first del script garantiza que gane el nombre completo.
+Regla de seguridad del mapa: los compuestos cuyo orden NO es compositivo en inglés (**`listGastosFijos`** → `listFixedExpenses`, `registerNominaAvanzada` → `registerAdvancedPayroll`, `id_gasto_fijo` → `fixed_expense_id`, `tarifa_hora_extra`, `monto_horas_extra`…) van como token explícito en el mapa. Las palabras cortas SI pueden componer (guard anti-solapamiento: siempre gana el token más largo; p.ej. `Cliente` dentro de `listClientes`, `Cliente`+`Clientes` coexisten sin corrupción). Tras cada pase, el paso de verificación de cada task corre `rg` sobre los tokens españoles pendientes para cazar silenciosos.
 
 - [ ] **Step 3: Crear `scripts/rename-map.json`** con la forma del nuevo diseño. Semilla inicial (vacía de aplicación): `{ "idents": {}, "strings": {}, "files": [], "dirs": [] }` y un `idents.example`/`strings.example` comentado con los primeros tokens (entidades `Customer`/`Invoice`/…, campos `id_cliente → customer_id`, acciones `listClientes → listCustomers`) para que las tasks posteriores los vayan poblando por fase. Nunca se degrada (las keys ya aplicadas no se borran).
 
