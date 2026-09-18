@@ -29,6 +29,30 @@ function ss() { return SpreadsheetApp.getActiveSpreadsheet() }
 
 function sheet(t: TableName) { return ss().getSheetByName(sheetName(t)) }
 
+/** Pestaña Sistema (spec F1): metadatos del sistema fuera de Config. La crea
+ *  bajo demanda y, si existía, hereda las claves de sistema que vivían en
+ *  Config (estado legacy) para no romper el registro de años entre apps. */
+function claveSistemaLocal(clave: string): boolean {
+  return /^eventos_\d{4}$/.test(clave) || ['ft_vers', 'ft_instancia', 'ft_id', 'ft_estado', 'ft_historial', 'ft_dueño_email', 'ft_transferencia', 'ft_lock_largo', 'mutex', 'reset_historial', 'anio_activo'].includes(clave)
+}
+
+function sistemaSheet() {
+  let s = ss().getSheetByName('Sistema')
+  if (!s) {
+    s = ss().insertSheet('Sistema')
+    const cfg = ss().getSheetByName('Config')
+    if (cfg) {
+      const rows = cfg.getDataRange().getValues() as (string | number)[][]
+      const sistema: (string | number)[][] = []
+      for (const [k, v] of rows) {
+        if (claveSistemaLocal(String(k))) sistema.push([k, v == null ? '' : v])
+      }
+      if (sistema.length) s.getRange(1, 1, sistema.length, 2).setValues(sistema)
+    }
+  }
+  return s
+}
+
 function readRaw(t: TableName): (string | number)[][] {
   const s = sheet(t)
   if (!s) return []
@@ -75,7 +99,7 @@ function insertOrReplace<T extends object>(t: TableName, idKey: string, obj: T):
 function readConfig(): Config {
   const s = sheet('Config')
   if (!s) return { share_backend_url: '' } as unknown as Config
-  const values = (s.getDataRange().getValues() as (string | number)[][]).filter(r => String(r[0]) !== 'mutex')
+  const values = s.getDataRange().getValues() as (string | number)[][]
   return configFromRows(values)
 }
 
@@ -85,7 +109,7 @@ function writeConfig(cfg: Config): void {
 }
 
 function mutexReadRow(clave: string): string | null {
-  const s = sheet('Config')
+  const s = sistemaSheet()
   if (!s) return null
   const data = s.getDataRange().getValues() as (string | number)[][]
   for (const [k, v] of data) if (String(k) === clave) return String(v ?? '')
@@ -93,11 +117,11 @@ function mutexReadRow(clave: string): string | null {
 }
 
 function mutexWriteRow(clave: string, valor: string): void {
-  const s = sheet('Config')!
+  const s = sistemaSheet()!
   const data = s.getDataRange().getValues() as (string | number)[][]
   let row = -1
   for (let i = 0; i < data.length; i++) if (String(data[i][0]) === clave) { row = i + 1; break }
-  if (row === -1) row = Math.max(data.length + 1, 27)
+  if (row === -1) row = Math.max(data.length + 1, 1)
   s.getRange(`A${row}:B${row}`).setValues([[clave, valor]])
 }
 
@@ -371,15 +395,29 @@ function backendSaveProducto(pr: Producto): Producto {
   return parsed
 }
 
-function backendUploadImagen(input: { nombre?: string; mimeType?: string; base64?: string }): string {
+function getOrCreateFolder(parent: any, nombre: string): any {
+  const folders = parent.getFoldersByName(nombre)
+  if (folders.hasNext()) return folders.next()
+  return parent.createFolder(nombre)
+}
+
+function getAppFolder(modulo: string): any {
+  const root = getOrCreateFolder(DriveApp.getRootFolder(), 'Finance Tracker')
+  const subNombre = modulo === 'configuracion' ? 'Logos' : modulo.charAt(0).toUpperCase() + modulo.slice(1)
+  return getOrCreateFolder(root, subNombre)
+}
+
+function backendUploadImagen(input: { nombre?: string; mimeType?: string; base64?: string; modulo?: string }): string {
   if (!input?.base64) throw new Error('Imagen requerida')
   const nombre = String(input.nombre || `imagen_${Date.now()}.png`)
   const mimeType = String(input.mimeType || 'image/png')
+  const modulo = String(input.modulo || 'otros')
   const bytes = Utilities.base64Decode(String(input.base64))
   const blob = Utilities.newBlob(bytes, mimeType, nombre)
-  const file = DriveApp.createFile(blob)
+  const folder = getAppFolder(modulo)
+  const file = folder.createFile(blob)
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW)
-  return file.getUrl()
+  return `https://lh3.googleusercontent.com/d/${file.getId()}`
 }
 
 function backendRegistrarMovimiento(input: { id_producto: string; tipo: TipoMovimiento; cantidad: number; motivo: string; id_proveedor: string; fecha: string }): MovimientoStock {

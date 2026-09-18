@@ -108,8 +108,8 @@ describe('regresión: facturas con varios conceptos', () => {
     const s = crearSqliteStore('/t.db3', { persistor })
     await s.init(DDL)
     await s.replaceTable('Factura_Items', [
-      { id_factura: 'f1', descripcion: 'Concepto A', cantidad: 1, precio_unitario: 10, importe: 10 },
-      { id_factura: 'f1', descripcion: 'Concepto B', cantidad: 2, precio_unitario: 5, importe: 10 }
+      { id_factura: 'f1', linea: 1, descripcion: 'Concepto A', cantidad: 1, precio_unitario: 10, importe: 10 },
+      { id_factura: 'f1', linea: 2, descripcion: 'Concepto B', cantidad: 2, precio_unitario: 5, importe: 10 }
     ])
     expect(await s.getAllRows('Factura_Items')).toHaveLength(2)
     await s.close()
@@ -117,9 +117,9 @@ describe('regresión: facturas con varios conceptos', () => {
     const s2 = crearSqliteStore('/t.db3', { persistor })
     await s2.init(DDL)
     await s2.replaceTable('Factura_Items', [
-      { id_factura: 'f1', descripcion: 'A', cantidad: 1, precio_unitario: 10, importe: 10 },
-      { id_factura: 'f1', descripcion: 'B', cantidad: 1, precio_unitario: 5, importe: 5 },
-      { id_factura: 'f1', descripcion: 'C', cantidad: 1, precio_unitario: 5, importe: 5 }
+      { id_factura: 'f1', linea: 1, descripcion: 'A', cantidad: 1, precio_unitario: 10, importe: 10 },
+      { id_factura: 'f1', linea: 2, descripcion: 'B', cantidad: 1, precio_unitario: 5, importe: 5 },
+      { id_factura: 'f1', linea: 3, descripcion: 'C', cantidad: 1, precio_unitario: 5, importe: 5 }
     ])
     expect(await s2.getAllRows('Factura_Items')).toHaveLength(3)
     await s2.close()
@@ -127,19 +127,18 @@ describe('regresión: facturas con varios conceptos', () => {
 
   it('migración: snapshot viejo con PK errónea se recrea al iniciar', async () => {
     const persistor = persistorMemoria()
-    // Simula volcado viejo: crea la tabla con la definición incorrecta.
-    const viejo = ddlDesdeTables().find(t => t.tabla === 'Factura_Items')!
-    const createViejo = viejo.create.replace('"id_factura" TEXT,', '"id_factura" TEXT PRIMARY KEY,')
+    // Simula volcado viejo: crea la tabla con la definición incorrecta (PK solo en id_factura, sin linea en PK).
+    const createViejo = 'CREATE TABLE IF NOT EXISTS "Factura_Items" ("id_factura" TEXT PRIMARY KEY, "linea" REAL, "descripcion" TEXT, "cantidad" REAL, "precio_unitario" REAL, "importe" REAL, "id_producto" TEXT)'
     const s1 = crearSqliteStore('/t.db3', { persistor })
     await s1.init([createViejo])
-    await s1.replaceTable('Factura_Items', [{ id_factura: 'f1', descripcion: 'x', cantidad: 1, precio_unitario: 1, importe: 1 }])
+    await s1.replaceTable('Factura_Items', [{ id_factura: 'f1', linea: 1, descripcion: 'x', cantidad: 1, precio_unitario: 1, importe: 1 }])
     await s1.close()
     // Nueva sesión con el DDL correcto: detecta esquema viejo y lo tira.
     const s2 = crearSqliteStore('/t.db3', { persistor })
     await s2.init(DDL)
     await s2.replaceTable('Factura_Items', [
-      { id_factura: 'f1', descripcion: 'a', cantidad: 1, precio_unitario: 1, importe: 1 },
-      { id_factura: 'f1', descripcion: 'b', cantidad: 1, precio_unitario: 1, importe: 1 }
+      { id_factura: 'f1', linea: 1, descripcion: 'a', cantidad: 1, precio_unitario: 1, importe: 1 },
+      { id_factura: 'f1', linea: 2, descripcion: 'b', cantidad: 1, precio_unitario: 1, importe: 1 }
     ])
     expect(await s2.getAllRows('Factura_Items')).toHaveLength(2)
     await s2.close()

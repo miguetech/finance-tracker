@@ -127,7 +127,18 @@ const ca: Partial<Dict> = {
     proveedorConCuentas: 'El proveïdor té comptes a pagar associades',
     empleadoConNomina: 'L\'empleat té nòmina registrada',
     fechaVencimientoObligatoria: 'Data de venciment obligatòria', mesFormato: 'Mes amb format AAAA-MM',
-    folioBloqueado: 'Fulla ocupada, torna-ho a provar'
+folioBloqueado: 'Fulla ocupada, torna-ho a provar'
+  },
+cola: {
+    pendientes: '{n} canvis pendents de sincronitzar',
+    conError: '{n} operacions amb error',
+    reintentar: 'Tornar a provar',
+    descartar: 'Descartar'
+  },
+  sync: {
+    sinConexion: 'Sense connexió',
+    pendientes: '{n} pendents',
+    sincronizado: 'Sincronitzat'
   }
 }
 

@@ -1,8 +1,8 @@
 import React from 'react'
-import { describe, expect, it, afterEach } from 'vitest'
+import { describe, expect, it, afterEach, vi } from 'vitest'
 import { render, screen, act, cleanup } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { EspejoProvider, useEspejo, TABLAS_CALIENTES_TTL_MS } from '../src/store/espejoContext'
+import { EspejoProvider, useEspejo, TABLAS_CALIENTES_TTL_MS, TTL_SECCION_MS } from '../src/store/espejoContext'
 import { AppProvider } from '../src/store/queries'
 import type { Repository } from '../src/data/repository'
 import type { StorageAdapter } from '../src/data/storage'
@@ -49,8 +49,25 @@ describe('EspejoProvider', () => {
     expect(btn.textContent).toMatch(/^on:true$/)
   })
 
-  it('TTL exportado = 60000 ms', () => {
-    expect(TABLAS_CALIENTES_TTL_MS).toBe(60_000)
+  it('TTL exportado = 300000 ms (5 min)', () => {
+    expect(TABLAS_CALIENTES_TTL_MS).toBe(300_000)
+    expect(TTL_SECCION_MS).toBe(300_000)
+  })
+
+  it('NO hay polling automático: setInterval removido, solo visibilitychange/focus', async () => {
+    const fetchTablas = vi.fn(async () => ({}))
+    const store = crearStoreMemoria()
+    renderConCliente(
+      <EspejoProvider flag="on" store={store} fetchTablas={fetchTablas}>
+        <Probe />
+      </EspejoProvider>
+    )
+    await act(async () => { screen.getByRole('button').click() }) // pull inicial
+    expect(fetchTablas).toHaveBeenCalledTimes(1)
+    // Esperar más que el TTL anterior (60s) - si hubiera setInterval, se dispararía
+    await act(async () => { await new Promise(r => setTimeout(r, 100)) })
+    // Sin setInterval, no debe haber llamadas extra
+    expect(fetchTablas).toHaveBeenCalledTimes(1)
   })
 
   it('escritura encolada offline aplica el eco al espejo local', async () => {

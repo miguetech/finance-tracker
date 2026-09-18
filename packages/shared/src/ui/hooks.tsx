@@ -17,6 +17,34 @@ export function useOnline(): boolean {
 }
 
 /**
+ * Versión con debounce: solo reporta online tras N ms de conexión sostenida.
+ * Evita flapping en redes intermitentes.
+ */
+export function useOnlineDebounced(debounceMs: number): boolean {
+  const onlineBruto = useOnline()
+  const [onlineEstable, setOnlineEstable] = useState(onlineBruto)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (onlineBruto) {
+      // Online bruto: inicia timer de debounce
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => {
+        setOnlineEstable(true)
+        timerRef.current = null
+      }, debounceMs)
+    } else {
+      // Offline bruto: cancela timer y reporta offline inmediato
+      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null }
+      setOnlineEstable(false)
+    }
+    return () => { if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null } }
+  }, [onlineBruto, debounceMs])
+
+  return onlineEstable
+}
+
+/**
  * Guard para modales: expone `guardando` (bloquea el botón al primer submit),
  * `guardar()` idempotente y validación anti-duplicados por clave.
  */

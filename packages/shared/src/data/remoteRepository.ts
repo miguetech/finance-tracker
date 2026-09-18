@@ -49,9 +49,23 @@ export function createRemoteRepository(ctx: RemoteRepositoryCtx): Repository & {
     // Buscador/vinculación: solo el dueño administra almacenamiento.
     listarHojasDisponibles: async () => [],
     conectarHojaPorId: async () => {},
+    conectarAñoPorId: async () => {},
     eliminarAño: async () => {},
     renombrarHoja: async () => {},
     crearBaseVacia: async () => ({ spreadsheetId: '' }),
+    resetCompleto: async () => { throw new Error('No disponible para invitados') },
+    resetNuclear: async () => { throw new Error('No disponible para invitados') },
+    // El visitante responde por remote; el gate de ownership es del servidor.
+    verificarOwnership: async () => ({ estado: 'no_verificable' as const, motivo: 'visitante' }),
+    esLegacyBase: async () => false,
+    adoptarLegacyBase: async () => { throw new Error('No disponible para invitados') },
+    adoptarAñoLegacy: async () => { throw new Error('No disponible para invitados') },
+    // El inventario es del dueño; el visitante no ve identidades de Drive.
+    infoHoja: async () => { throw new Error('No disponible para invitados') },
+    inventarioHojas: async () => ({ base: null as never, años: [], candidatas: [] }),
+    // La transferencia de propiedad es del dueño (con unción GCP/paneles).
+    preflightTransferencia: async () => { throw new Error('No disponible para invitados') },
+    transferirSistema: async () => { throw new Error('No disponible para invitados') },
     saveConfig: c => call('saveConfig', c),
     listClientes: () => call('listClientes'),
     saveCliente: c => call('saveCliente', c),

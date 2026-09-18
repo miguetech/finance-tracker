@@ -33,7 +33,10 @@ const defaultConfig: Config = {
   tasa_dia_activa: '',
   google_permisos: '',
   notif_gastos_activa: '',
-  unidades_medida: 'pieza,kg'
+  notif_cxc_activa: '',
+  comisiones_metodos: '',
+  unidades_medida: 'pieza,kg',
+  nombreBaseHoja: ''
 }
 
 function fakeRepo(overrides: Partial<Repository> = {}): Repository {

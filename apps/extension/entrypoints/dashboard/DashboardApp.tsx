@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useSyncExternalStore } from 'react'
 import { ensureSheet, getChromeToken } from '../../src/onboarding'
-import { ensureTables, hayDesbloqueoSesion, desbloqueoPermitido, limpiarDesbloqueoSesion, ModalConexionPerdida, useOnline } from '@ft/shared'
+import { ensureTables, desbloqueoPermitido, limpiarDesbloqueoSesion, ModalConexionPerdida, useOnline, hayFalloRed, suscribirRed, espejoBus } from '@ft/shared'
 import { createRepository, chromeStorageAdapter, KEYS, SheetsApi, AppProvider, Layout, Dashboard, Facturas, Clientes, Empleados, Gastos, Proveedores, CuentasPagar, CuentasPorCobrar, Inventario, Reportes, Configuracion, Toaster, useConfig, PermsProvider, adminPerms, cargarRegistroSesion, guardarRegistroSesion, borrarRegistroSesion, conColaEscrituras, SincronizadorCola, useAppStore, crearStoreEspejo, SesionOffline, PantallaPinCifrado, chromeIdentityAuth } from '@ft/shared'
 import type { NavKey, RegistroSesion, EspejoStore } from '@ft/shared'
 import { monthLocal } from '@ft/shared'
@@ -22,6 +22,10 @@ function Boot() {
   const [loading, setLoading] = useState(true)
   const [nav, setNav] = useState<NavKey>('dashboard')
   const [mes, setMes] = useState(monthLocal())
+  // Hooks SIEMPRE antes de cualquier return temprano (Rules of Hooks).
+  const online = useOnline()
+  const falloRed = useSyncExternalStore(suscribirRed, hayFalloRed)
+  const sinRed = !online || falloRed
 
   useEffect(() => {
     if (!claveEspejo || storeCifrado) return
@@ -57,7 +61,8 @@ function Boot() {
           if (reg) {
             setSesionLocal(reg)
             setFalloArranque(true)
-            if (!reg.cifrado && hayDesbloqueoSesion() && desbloqueoPermitido(reg)) setModoOffline(true)
+            // Sesión plana con pull <24h: continuar directo sin recargar.
+            if (!reg.cifrado && desbloqueoPermitido(reg)) setModoOffline(true)
           }
         }
       } catch (e) { setErr((e as Error).message) }
@@ -91,16 +96,35 @@ function Boot() {
     }
   }, [modoOffline])
 
+  // Red de vuelta: salir del modo offline (la cola flushea al evento online).
+  useEffect(() => {
+    if (sinRed || !modoOffline) return
+    setModoOffline(false)
+  }, [sinRed, modoOffline])
+
+  // Cada pull exitoso refresca ultimo_pull: mantiene viva la ventana de 24h
+  // del desbloqueo offline aunque se use la app a diario.
+  const sesionLocalRef = React.useRef(sesionLocal)
+  useEffect(() => { sesionLocalRef.current = sesionLocal }, [sesionLocal])
+  useEffect(() => {
+    espejoBus.onPullCompletado = () => {
+      const reg = sesionLocalRef.current
+      if (reg) void guardarRegistroSesion(chromeStorageAdapter, { cuenta: reg.cuenta })
+    }
+    return () => { espejoBus.onPullCompletado = undefined }
+  }, [])
+
   if (loading) return <div className="p-8">Conectando a Google Sheets…</div>
   if (!idHoja && !sesionLocal) return <div className="p-8 text-red-600">{err || 'Error de configuración'}</div>
   // Arranque sin red con sesión previa: gate "Continuar como" (spec §9).
-  const online = useOnline()
 
-  if (!online && !modoOffline && sesionLocal) {
+  if (sinRed && !modoOffline && sesionLocal) {
+    const yaDesbloqueado = !sesionLocal.cifrado || !!claveEspejo
     return (
       <ModalConexionPerdida
         almacen={chromeStorageAdapter}
         registro={sesionLocal}
+        yaDesbloqueado={yaDesbloqueado}
         onEntrar={pinEntrado => {
           setModoOffline(true)
           if (sesionLocal.cifrado && pinEntrado) setClaveEspejo(() => async () => pinEntrado)
@@ -138,8 +162,9 @@ function Boot() {
   // En modo offline las escrituras se encolan localmente y se reproducen al volver la red.
   const repo = conColaEscrituras(repoBase, {
     storage: chromeStorageAdapter,
-    activo: () => modoOffline || (typeof navigator !== 'undefined' && navigator.onLine === false),
-    configActual: () => useAppStore.getState().config ?? null
+    activo: () => modoOffline || hayFalloRed() || (typeof navigator !== 'undefined' && navigator.onLine === false),
+    configActual: () => useAppStore.getState().config ?? null,
+    techoMs: 3_000
   })
 
   return (

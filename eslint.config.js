@@ -5,7 +5,7 @@ import reactHooks from 'eslint-plugin-react-hooks'
 
 export default defineConfig(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/.output/**', '**/.wxt/**', '**/*.tsbuildinfo', '**/wxt.config.ts', 'apps/script/dist/**']
+    ignores: ['**/node_modules/**', '**/dist/**', '**/.output/**', '**/.wxt/**', '**/*.tsbuildinfo', '**/wxt.config.ts', 'apps/script/dist/**', 'apps/web/.vercel/**']
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

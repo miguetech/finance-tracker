@@ -72,7 +72,7 @@ describe.skipIf(!moduloDisponible)('Factura_Items UPSERT', () => {
       id_factura: 'F-001', linea: 1, descripcion: 'A', cantidad: 1, precio_unitario: 100, importe: 100, id_producto: ''
     }])
 
-    const db = store.getDb()
+    const db = store.getDb() as { exec(sql: string): void } | null
     expect(db).not.toBeNull()
     expect(() => {
       db!.exec(`INSERT INTO "Factura_Items" ("id_factura","linea","descripcion","cantidad","precio_unitario","importe","id_producto")

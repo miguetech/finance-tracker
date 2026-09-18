@@ -88,11 +88,12 @@ describe('createInitialSpreadsheet', () => {
 })
 
 describe('ensureTables', () => {
-  it('crea las hojas faltantes (Empleados, Productos, Movimientos_Stock, Codigos_Acceso, Dispositivos) con headers y sin añadir columnas extra', async () => {
+  it('crea las hojas faltantes (Empleados, Productos, Movimientos_Stock, Codigos_Acceso, Dispositivos) + Sistema y sin añadir columnas extra', async () => {
     const calls: { url: string; init?: RequestInit }[] = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url: String(url), init: init ?? ({} as RequestInit) })
       const u = String(url)
+      if (u.includes('values:batchGet')) return { ok: true, json: async () => ({ valueRanges: [] }) } as Response
       if (u.includes('values:batchUpdate')) return { ok: true, json: async () => ({ responses: [] }) } as Response
       if (u.includes(':batchUpdate')) return { ok: true, json: async () => ({ replies: [] }) } as Response
       const existing = ['Config', 'Clientes', 'Facturas', 'Factura_Items', 'Gastos', 'Proveedores', 'Cuentas_Pagar', 'Pagos', 'Usuarios']
@@ -104,9 +105,9 @@ describe('ensureTables', () => {
     const addSheets = calls.filter(c => c.url.includes(':batchUpdate') && !c.url.includes('values:batchUpdate'))
     expect(addSheets.length).toBe(1)
     const body = JSON.parse(String(addSheets[0].init?.body)) as { requests: { addSheet: { properties: { title: string } } }[] }
-    expect(body.requests.map(r => r.addSheet.properties.title)).toEqual(['Empleados', 'Productos', 'Movimientos_Stock', 'Codigos_Acceso', 'Dispositivos', 'Gastos_Fijos', 'Tasas_Historial', 'Nomina_Detalles', 'Asistencias'])
+    expect(body.requests.map(r => r.addSheet.properties.title)).toEqual(['Empleados', 'Productos', 'Codigos_Acceso', 'Dispositivos', 'Gastos_Fijos', 'Sistema'])
     const headerWrites = calls.filter(c => c.url.includes('values:batchUpdate'))
-    expect(headerWrites.length).toBe(1)
+    expect(headerWrites.length).toBe(2) // headers de negocio + semilla de Sistema
     expect(String(headerWrites[0].init?.body)).toContain('id_empleado')
     vi.unstubAllGlobals()
   })
@@ -116,6 +117,7 @@ describe('ensureTables', () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url: String(url), init: init ?? ({} as RequestInit) })
       const u = String(url)
+      if (u.includes('values:batchGet')) return { ok: true, json: async () => ({ valueRanges: [] }) } as Response
       if (u.includes('values:batchUpdate')) return { ok: true, json: async () => ({ responses: [] }) } as Response
       if (u.includes(':batchUpdate')) return { ok: true, json: async () => ({ replies: [] }) } as Response
       return { ok: true, json: async () => ({ sheets: Object.keys(TABLES).map((title, i) => ({ properties: { title, sheetId: i, gridProperties: { columnCount: 7 } } })) }) } as Response
@@ -123,20 +125,28 @@ describe('ensureTables', () => {
     vi.stubGlobal('fetch', fetchMock)
     const api = new SheetsApi(async () => 'T')
     await ensureTables(api, 'SID')
-    const grid = calls.find(c => c.url.includes(':batchUpdate') && !c.url.includes('values:batchUpdate'))
+    const grids = calls.filter(c => c.url.includes(':batchUpdate') && !c.url.includes('values:batchUpdate'))
+    const grid = grids.map(c => ({ url: c.url, body: JSON.parse(String(c.init?.body)) as { requests: { addDimension?: { range: { sheetId: number; startIndex: number; endIndex: number } } }[] } }))
+      .find(c => c.body.requests.some(r => r.addDimension))
     expect(grid).toBeTruthy()
-    const body = JSON.parse(String(grid?.init?.body)) as { requests: { addDimension: { range: { sheetId: number; startIndex: number; endIndex: number } } }[] }
-    expect(body.requests.length).toBeGreaterThan(0)
-    expect(body.requests[0].addDimension.range.endIndex).toBeGreaterThan(7)
+    const body = grid!.body as { requests: { addDimension: { range: { sheetId: number; startIndex: number; endIndex: number } } }[] }
+    const adds = body.requests.filter(r => r.addDimension).map(r => r.addDimension.range)
+    expect(adds[0].endIndex).toBeGreaterThan(7)
     vi.unstubAllGlobals()
   })
 
-  it('no hace nada si todas las hojas existen', async () => {
+  it('no hace nada si todas las hojas existen y Sistema ya tiene identidad', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const u = String(url)
+      if (u.includes('values:batchGet')) {
+        const ranges = new URL(u).searchParams.getAll('ranges')
+        return { ok: true, json: async () => ({ valueRanges: ranges.map(r => ({ range: r, values: r.includes('Sistema')
+          ? [['ft_vers', '1'], ['ft_instancia', 'ftinst_x'], ['ft_id', 'SID'], ['ft_estado', 'activo']]
+          : [['empresa_nombre', 'X']] })) }) } as Response
+      }
       if (u.includes('values:batchUpdate')) return { ok: true, json: async () => ({ responses: [] }) } as Response
       if (u.includes(':batchUpdate')) return { ok: true, json: async () => ({ replies: [] }) } as Response
-      return { ok: true, json: async () => ({ sheets: Object.keys(TABLES).map((title, i) => ({ properties: { title, sheetId: i, gridProperties: { columnCount: TABLES[title as keyof typeof TABLES]?.length ?? 2 } } })) }) } as Response
+      return { ok: true, json: async () => ({ sheets: [...Object.keys(TABLES).map((title, i) => ({ properties: { title, sheetId: i, gridProperties: { columnCount: TABLES[title as keyof typeof TABLES]?.length ?? 2 } } })), { properties: { title: 'Sistema', sheetId: 99, gridProperties: { columnCount: 2 } } }] }) } as Response
     })
     vi.stubGlobal('fetch', fetchMock)
     const api = new SheetsApi(async () => 'T')

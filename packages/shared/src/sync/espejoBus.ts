@@ -8,4 +8,6 @@ export const espejoBus: {
   onEscrituraLocal?: (metodo: string, args: unknown[]) => void
   /** La cola acaba de flushear a Sheets: pull forzado (ignora cooldown). */
   onFlushCompletado?: (tablas: TableName[]) => void
+  /** Pull exitoso: el host actualiza ultimo_pull de la sesión offline. */
+  onPullCompletado?: () => void
 } = {}

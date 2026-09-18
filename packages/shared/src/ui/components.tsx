@@ -124,9 +124,9 @@ export function Select({ value, onChange, options, placeholder, error, className
   )
 }
 
-export function Card({ title, children, footer }: { title?: ReactNode; children: ReactNode; footer?: ReactNode }) {
+export function Card({ title, children, footer, className }: { title?: ReactNode; children: ReactNode; footer?: ReactNode; className?: string }) {
   return (
-    <div className="bg-surface border border-gray-100 rounded-2xl shadow-card">
+    <div className={cx('bg-surface border border-gray-100 rounded-2xl shadow-card', className)}>
       {title && <div className="px-5 py-4 border-b border-gray-100 font-semibold">{title}</div>}
       <div className="p-5">{children}</div>
       {footer && <div className="px-5 py-4 border-t border-gray-100">{footer}</div>}

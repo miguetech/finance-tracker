@@ -10,17 +10,38 @@ import { createRateLimiter, type RateLimiter } from './ratelimit'
 import { createVerificador, type Verificador } from './auth/verificacion'
 import { nuevoDispositivo, generarTokenDispositivo } from './auth/dispositivos'
 
-function makeRepo(env: Env) {
+/** Fábrica del repository tras cada petición. Re-apuntado (spec F6 §11.8):
+ *  el BACKEND no depende ciegamente del `SPREADSHEET_ID` de env: resuelve el
+ *  BASE vigente leyendo `Sistema.ft_id` del archivo atado, así un cambio de
+ *  BASE del dueño no deja a los empleados viendo datos viejos (fail-open a env). */
+export function makeRepo(env: Env) {
   const api = createSheetsApi(env)
   const storage: StorageAdapter = {
     get: async () => null,
     set: async () => {},
     remove: async () => {}
   }
+  let baseResuelta: string | null = null
+  const SISTEMA_COMUN = `'Sistema'!A1:B500`
+  const getSpreadsheetId = async (): Promise<string> => {
+    if (baseResuelta) return baseResuelta
+    const envId = env.SPREADSHEET_ID
+    let id = envId
+    try {
+      const res = await api.batchGet(envId, [SISTEMA_COMUN])
+      const rows = res[Object.keys(res)[0]] ?? []
+      const filas = Object.fromEntries(rows.filter(Array.isArray).map(r => [String(r[0] ?? ''), String(r[1] ?? '')]))
+      // ft_id escrito en Sistema manda sobre env (el dueño pudo re-sincronizar).
+      if (filas.ft_id) id = filas.ft_id
+    } catch { /* fail-open: envId */ }
+    baseResuelta = id
+    return id
+  }
   return createRepository({
     api,
     storage,
-    getSpreadsheetId: async () => env.SPREADSHEET_ID
+    getSpreadsheetId,
+    modo: 'backend'
   })
 }
 

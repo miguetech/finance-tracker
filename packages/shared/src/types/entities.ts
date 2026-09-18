@@ -221,6 +221,8 @@ export interface Config {
   notif_cxc_activa: string
   /** Unidades de medida del inventario separadas por coma */
   unidades_medida: string
+  /** Nombre base para spreadsheets de años (estable, no cambia con empresa_nombre) */
+  nombreBaseHoja: string
 }
 
 export interface InvoiceTotals {

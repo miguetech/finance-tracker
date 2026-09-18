@@ -7,6 +7,7 @@ import { OfflineBanner } from '../hooks'
 import { BarraSync } from '../BarraSync'
 import { RateBubble } from '../RateBubble'
 import { ColaBubble } from '../colaSync'
+import { SyncStatusBar } from '../SyncStatusBar'
 import { EspejoProvider } from '../../store/espejoContext'
 import { crearStoreEspejo } from '../../sync/stores/sqlite'
 import type { EspejoStore } from '../../sync/espejo'
@@ -72,6 +73,7 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
     <div className="min-h-screen bg-muted md:flex">
       <OfflineBanner />
       <BarraSync />
+      <SyncStatusBar />
       <aside className="hidden md:flex md:flex-col md:w-60 md:min-h-screen bg-surface border-r border-gray-100">{nav}</aside>
       {mobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden bg-black/40" onClick={() => setMobileOpen(false)}>

@@ -1,5 +1,5 @@
 import { SheetsApi } from '@ft/shared'
-import { connectOrCreateSpreadsheet, ensureTables } from '@ft/shared'
+import { vincularOCrearBase, ensureTables } from '@ft/shared'
 import { chromeStorageAdapter, KEYS } from '@ft/shared'
 
 export function getChromeToken(interactive: boolean): Promise<string> {
@@ -34,8 +34,8 @@ export async function ensureSheet(): Promise<{ spreadsheetId: string; url: strin
   }
   const token = await getChromeToken(true)
   const api = new SheetsApi(async () => token)
-  // Conecta a la hoja principal existente; solo crea una si no hay ninguna.
-  const connected = await connectOrCreateSpreadsheet(api)
+  // Conecta al BASE por huella (nunca por nombre); solo crea si no hay ninguno.
+  const connected = await vincularOCrearBase(api)
   await chromeStorageAdapter.set(KEYS.spreadsheetId, connected.spreadsheetId)
   return { spreadsheetId: connected.spreadsheetId, url: connected.url }
 }

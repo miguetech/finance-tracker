@@ -24,7 +24,7 @@ import type { Config, Factura, FacturaItem } from '../../types/entities'
 
 export function Configuracion() {
   const { t, locale, setLocale } = useI18n()
-  const { config, saveConfig } = useConfig()
+  const { config, saveConfig, isLoading: configLoading } = useConfig()
   const repo = useRepo()
   const qc = useQueryClient()
   const [regPin, setRegPin] = useState<RegistroSesion | null>(null)
@@ -59,6 +59,8 @@ export function Configuracion() {
   const [form, setForm] = useState<Config | null>(null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [migrandoImgs, setMigrandoImgs] = useState(false)
+  const [dangerOpen, setDangerOpen] = useState(false)
+  const [dangerAction, setDangerAction] = useState<'completo' | 'nuclear' | null>(null)
   const migrarImgs = async () => {
     setMigrandoImgs(true)
     try {
@@ -73,8 +75,7 @@ export function Configuracion() {
   const [subiendo, setSubiendo] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [ayudaFolio, setAyudaFolio] = useState(false)
-  useEffect(() => { if (config && !form) setForm(config) }, [config, form])
-  if (!config || !form) return <div className="p-8 text-muted-foreground">{t('common.cargando')}</div>
+  useEffect(() => { if (config) setForm(config) }, [config])
   const tarjetaSeguridad = (
     <section className="mb-6 rounded-xl border border-gray-200 bg-surface p-5">
       <h2 className="font-semibold mb-1">{t('seguridad.titulo')}</h2>
@@ -111,6 +112,22 @@ export function Configuracion() {
       <AlmacenamientoCard />
     </section>
   )
+  if (!config || !form) {
+    // La config no cargó (p. ej. hoja vinculada incorrecta): nunca bloquear el acceso
+    // al panel de almacenamiento para que el usuario pueda corregir el vínculo.
+    return (
+      <div className="space-y-6">
+        <h1 className="text-xl font-bold">{t('configuracion.title')}</h1>
+        {configLoading ? (
+          <div className="p-4 text-muted-foreground">{t('common.cargando')}</div>
+        ) : (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{t('configuracion.sinConfigAlerta')}</div>
+        )}
+        {tarjetaHoja}
+        {tarjetaSeguridad}
+      </div>
+    )
+  }
   const docLabel = getDocLabel(form.tipo_doc, form.tipo_doc_etiqueta)
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => f && ({ ...f, [k]: e.target.value }))
   const hoy = todayLocal()
@@ -205,7 +222,14 @@ export function Configuracion() {
             <div><label className="text-xs text-muted-foreground">{t('configuracion.ciudad')}</label><Input value={form.empresa_ciudad} onChange={set('empresa_ciudad')} /></div>
             <div><label className="text-xs text-muted-foreground">{t('configuracion.pais')}</label><Input value={form.empresa_pais} onChange={set('empresa_pais')} /></div>
           </div>
-          
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <label className="text-xs text-muted-foreground">{t('configuracion.nombreBaseHoja')}</label>
+            <div className="mt-1 flex items-center gap-2">
+              <Input value={form.nombreBaseHoja} onChange={set('nombreBaseHoja')} placeholder="FinanceTracker" className="max-w-md" />
+              <span className="text-xs text-gray-400">→ FinanceTracker 2026, FinanceTracker 2027…</span>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">{t('configuracion.nombreBaseHojaAyuda')}</p>
+          </div>
         </div>
       </Card>
       <Card title={t('configuracion.facturacion')}>
@@ -287,6 +311,19 @@ export function Configuracion() {
           <CategoriasEditor title={t('configuracion.metodosPago')} value={form.metodos_pago} onChange={v => setForm(f => f && ({ ...f, metodos_pago: v }))} />
         </div>
       </Card>
+      <Card title={t('configuracion.zonaPeligrosa')} className="border-red-200 bg-red-50">
+        <div className="space-y-3">
+          <p className="text-xs text-red-700">{t('configuracion.zonaPeligrosaInfo')}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="danger" icon={<IconAlert className="w-4 h-4" />} onClick={() => { setDangerAction('completo'); setDangerOpen(true) }}>
+              {t('configuracion.resetCompleto')}
+            </Button>
+            <Button variant="danger" icon={<IconAlert className="w-4 h-4" />} className="bg-red-700 hover:bg-red-800" onClick={() => { setDangerAction('nuclear'); setDangerOpen(true) }}>
+              {t('configuracion.resetNuclear')}
+            </Button>
+          </div>
+        </div>
+      </Card>
       <Button onClick={submit} disabled={subiendo}>{subiendo ? t('imagenes.subiendo') : t('configuracion.guardarConfig')}</Button>
       {previewOpen && (
         <Dialog open onClose={() => setPreviewOpen(false)} title={t('configuracion.vistaPrevia')}
@@ -295,6 +332,37 @@ export function Configuracion() {
             <Button onClick={() => printInvoice(`${t('facturas.factura')} ${folioPreview}`)}>{t('configuracion.imprimirDescargar')}</Button>
           </>}>
           <InvoicePrint factura={sampleFactura().factura} items={sampleFactura().items} config={form} />
+        </Dialog>
+      )}
+      {dangerOpen && dangerAction && (
+        <Dialog open onClose={() => { setDangerOpen(false); setDangerAction(null) }} title={
+          dangerAction === 'completo' ? t('configuracion.resetCompleto') : t('configuracion.resetNuclear')
+        }
+          footer={<>
+            <Button variant="outline" onClick={() => { setDangerOpen(false); setDangerAction(null) }}>{t('common.cancelar')}</Button>
+            <Button variant="danger" onClick={async () => {
+              try {
+                if (dangerAction === 'completo') {
+                  await (repo as Repository).resetCompleto()
+                  toast(t('configuracion.resetCompletoOk'))
+                } else {
+                  const r = await (repo as Repository).resetNuclear()
+                  toast(t('configuracion.resetNuclearOk', { id: r.newSpreadsheetId }))
+                }
+                qc.invalidateQueries({ queryKey: ['config'] })
+                qc.invalidateQueries({ queryKey: ['almacenamiento'] })
+              } catch (e) { toast((e as Error).message, 'error') }
+              finally { setDangerOpen(false); setDangerAction(null) }
+            }}>{t('common.confirmar')}</Button>
+          </>}>
+          <div className="space-y-2 text-sm">
+            <p className="text-red-600 font-medium">
+              {dangerAction === 'completo' ? t('configuracion.resetCompletoConfirm') : t('configuracion.resetNuclearConfirm')}
+            </p>
+            <p className="text-muted-foreground">
+              {dangerAction === 'completo' ? t('configuracion.resetCompletoDesc') : t('configuracion.resetNuclearDesc')}
+            </p>
+          </div>
         </Dialog>
       )}
     </div>
@@ -596,7 +664,8 @@ function PermisosGoogleCard({ config, setForm }: { config: Config; setForm: (fn:
   const filas = [
     { key: 'sheets', label: t('configuracion.permisoSheets') },
     { key: 'drive', label: t('configuracion.permisoDrive') },
-    { key: 'profile', label: t('configuracion.permisoPerfil') }
+    { key: 'profile', label: t('configuracion.permisoPerfil') },
+    { key: 'appdata', label: t('configuracion.permisoAppData') }
   ]
   return (
     <div className="space-y-3">

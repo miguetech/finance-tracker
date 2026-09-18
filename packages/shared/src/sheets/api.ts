@@ -1,5 +1,7 @@
 const BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
 
+import { marcarFalloRed, marcarRedOk } from '../sync/redStore'
+
 export interface ValueRange {
   range: string
   values: (string | number)[][]
@@ -16,9 +18,9 @@ export class SheetsApi {
     const maxAttempts = 4
     for (let attempt = 0; ; attempt++) {
       const token = await this.tokenGetter()
-      // Sin timeout una red que traga paquetes cuelga el modal indefinidamente.
+      // Timeout reducido a 3s para que el fallback a cola offline sea rápido.
       const ctrl = new AbortController()
-      const temporizador = setTimeout(() => ctrl.abort(), 8_000)
+      const temporizador = setTimeout(() => ctrl.abort(), 3_000)
       let res: Response
       try {
         res = await fetch(url, {
@@ -30,6 +32,12 @@ export class SheetsApi {
           },
           signal: init.signal ?? ctrl.signal
         })
+      } catch (e) {
+        // fetch abortado por timeout o sin red: señal REAL de desconexión
+        // (navigator.onLine puede seguir diciendo online). La UI muestra el
+        // modal de paso a modo offline sin esperar a recargar.
+        marcarFalloRed()
+        throw e
       } finally {
         clearTimeout(temporizador)
       }
@@ -42,6 +50,7 @@ export class SheetsApi {
         const text = await res.text()
         throw new Error(`Sheets API ${res.status}: ${text.slice(0, 300)}`)
       }
+      marcarRedOk()
       return res.json() as Promise<T>
     }
   }

@@ -6,6 +6,7 @@ import { getCurrency } from '../currency'
 import type { Config, Cliente, CodigoAcceso } from '../types/entities'
 import type { TableName } from '../sheets/tables'
 import { espejoBus } from './espejoBus'
+import { marcarFalloRed, marcarRedOk } from './redStore'
 
 /** Cola local de escrituras para modo offline (spec espejo §9.5).
  *  Las mutaciones se guardan en orden y se reproducen contra Sheets al
@@ -313,7 +314,7 @@ export const BAJAS_POR_METODO: Partial<Record<string, { tabla: TableName; idKey:
 
 /** Techo para el intento directo: pasado este plazo se considera red caída
  *  y la escritura cae a la cola. Garantiza que el modal SIEMPRE resuelva. */
-const TECHO_INTENTO_DIRECTO_MS = 8_000
+const TECHO_INTENTO_DIRECTO_MS = 3_000
 
 function conTecho<T>(p: Promise<T>, ms = TECHO_INTENTO_DIRECTO_MS): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -323,7 +324,7 @@ function conTecho<T>(p: Promise<T>, ms = TECHO_INTENTO_DIRECTO_MS): Promise<T> {
 }
 
 export interface OpcionesColaRepo {
-  /** Devuelve true mientras la app esté en modo offline (o sin red). */
+  /** @deprecated Ya no se usa: la cola siempre está activa (offline-first). */
   activo?: () => boolean
   /** Techo del intento directo en ms (tests usan valores cortos). */
   techoMs?: number
@@ -333,30 +334,17 @@ export interface OpcionesColaRepo {
 }
 
 /**
- * Envuelve el repositorio: en modo offline las escrituras no tocan la red,
- * se encolan y devuelven un eco local. Fuera de modo offline delega tal cual.
+ * Envuelve el repositorio: las escrituras SIEMPRE se encolan (offline-first).
+ * SincronizadorCola se encarga de flushear cuando hay red.
  */
 export function conColaEscrituras(repo: Repository, opciones: OpcionesColaRepo): Repository {
-  const activo = opciones.activo ?? (() => (typeof navigator === 'undefined' ? false : navigator.onLine === false))
   const envuelto: Repository = { ...repo }
   for (const [metodo, conf] of Object.entries(TABLAS_POR_METODO)) {
     const original = (repo as unknown as Record<string, (...a: never[]) => unknown>)[metodo]
     if (typeof original !== 'function') continue
     ;(envuelto as unknown as Record<string, (...a: never[]) => unknown>)[metodo] = async (...args: Args): Promise<unknown> => {
       const normales = conf && METODOS_COLA[metodo]?.normalizar ? METODOS_COLA[metodo].normalizar!(args) : args
-      if (!activo()) {
-        try {
-          const resultado = await conTecho(original.apply(repo, args as never[]) as Promise<unknown>, opciones.techoMs)
-          // Éxito online: aplica el eco/baja al espejo YA (la UI no espera al pull).
-          try { espejoBus.onEscrituraLocal?.(metodo, normales) } catch { /* sin provider */ }
-          return resultado
-        } catch (e) {
-          // navigator.onLine puede mentir (DevTools, wifi a medio morir): si el
-          // fallo es de transporte, la escritura cae a la cola en vez de romper
-          // el modal. Los errores de negocio siguen propagando.
-          if (!esErrorRed(e)) throw e
-        }
-      }
+      // Siempre encolar (offline-first). El flusheo lo hace SincronizadorCola.
       await encolarOp(opciones.storage, metodo, normales)
       refrescarEstadoCola(opciones.storage)
       // El provider aplica el eco al espejo local para que la fila se vea ya guardada.

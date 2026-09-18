@@ -208,8 +208,9 @@ export const ConfigSchema = z.object({
   google_permisos: z.string().default(''),
   notif_gastos_activa: z.string().default(''),
   notif_cxc_activa: z.string().default(''),
-  unidades_medida: z.string().default('pieza,kg,gr,litro,ml,caja,saco,docena,metro')
-})
+  unidades_medida: z.string().default('pieza,kg,gr,litro,ml,caja,saco,docena,metro'),
+  nombreBaseHoja: z.string().default('FinanceTracker')
+}).passthrough()
 
 export type MetodoPagoValue = z.infer<typeof MetodoPagoSchema>
 

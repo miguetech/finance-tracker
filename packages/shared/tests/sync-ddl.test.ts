@@ -29,9 +29,10 @@ describe('DDL del espejo', () => {
 })
 
 describe('DDL de tablas hijas (N filas por clave padre)', () => {
-  it('Factura_Items NO lleva PRIMARY KEY en id_factura', () => {
+  it('Factura_Items tiene composite PK (id_factura, linea)', () => {
     const items = ddlDesdeTables().find(t => t.tabla === 'Factura_Items')!
-    expect(items.create).not.toMatch(/PRIMARY KEY/)
+    expect(items.create).toContain('PRIMARY KEY ("id_factura", "linea")')
+    expect(items.create).not.toContain('"id_factura" TEXT PRIMARY KEY')
     expect(items.indexes.some(i => i.includes('idx_Factura_Items_id_factura'))).toBe(true)
   })
 })

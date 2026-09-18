@@ -169,7 +169,7 @@ const en: Partial<Dict> = {
     top5Clientes: 'Top 5 customers'
   },
   configuracion: {
-    title: 'Settings', datosEmpresa: 'Business details', empresaNombre: 'Name',
+    title: 'Settings', sinConfigAlerta: 'Could not read the settings from the linked sheet. The link may point to the wrong file: fix the sheet in the Storage panel, then reload the page.', datosEmpresa: 'Business details', empresaNombre: 'Name',
     empresaRfc: 'Tax ID', prefijoFolio: 'Folio prefix', contadorFolio: 'Folio counter',
     iva: 'VAT (%)', moneda: 'Currency', categorias: 'Categories', metodosPago: 'Payment methods',
     idioma: 'Language', guardada: 'Settings saved', facturacion: 'Invoicing',
@@ -347,6 +347,7 @@ const en: Partial<Dict> = {
     titulo: 'Saved session',
     continuarComo: 'Continue as',
     entrarSinConexion: 'Enter offline',
+    activarModoOffline: 'Activate offline mode',
     pedirPin: 'Enter your PIN to continue offline',
     pin: 'PIN (4–6 digits)',
     pinInvalido: 'Incorrect PIN',
@@ -356,12 +357,16 @@ const en: Partial<Dict> = {
     pinGuardado: 'PIN saved',
     ultimaSync: 'Last sync',
     conexionPerdida: 'Internet connection lost',
+    modoOfflineInfo: 'Offline mode lets you keep saving invoices, expenses and clients locally. Changes sync automatically when the connection returns.',
     cifrarDatos: 'Encrypt local data with this PIN (recommended on shared computers)',
     pedirPinCifrado: 'Enter your PIN to unlock the encrypted local data'
   },
   sync: {
     enviando: 'Reconnected — sending changes {i}/{n}…',
-    actualizando: 'Refreshing data…'
+    actualizando: 'Refreshing data…',
+    sinConexion: 'Offline',
+    pendientes: '{n} pending',
+    sincronizado: 'Synced'
   },
   almacen: {
     titulo: 'Storage',
@@ -385,15 +390,45 @@ const en: Partial<Dict> = {
     añoCreado: 'Year sheet created and registered.',
     renombrar: 'Rename',
     renombrada: 'Name updated.',
-    nuevaBaseHint: 'Or create a BRAND-NEW main file (starts with only Config; catalogs fill in automatically):',
+    nuevaBaseHint: 'Or create a NEW main file copying settings and catalogs from the current one; the previous is marked as replaced (other devices follow the new one):',
     nuevaBasePlaceholder: 'FinanceTracker — New company',
     nuevaBaseBoton: 'Create & link',
     basePorDefecto: 'FinanceTracker — My Company',
     añoError: 'Could not create the year sheet',
+    vincularAño: 'Link existing year sheet…',
+    año: 'Year',
+    añoVinculado: 'Year {año} sheet linked.',
     eliminar: 'Delete',
     confirmarEliminar: 'Delete from Drive? Click again',
     añoEliminado: 'Year file moved to trash.',
-    añoActivoNoEliminable: 'The active year cannot be deleted.'
+    añoActivoNoEliminable: 'The active year cannot be deleted.',
+    verificar: 'Verify',
+    tipoBase: 'Base',
+    tipoEventos: 'Year sheet',
+    tipoLegacy: 'Legacy',
+    reemplazado: 'replaced',
+    borrado: 'deleted',
+    rol: {
+      es_dueño: 'Yours',
+      no_es_dueño: 'Not yours',
+      sinVerificar: 'Unverified',
+      compartido: 'shared',
+      solo_lectura: 'read-only',
+      no_verificable: 'unverifiable',
+      backend: 'server'
+    },
+    transferirTitulo: 'Transfer to another email',
+    transferirDescripcion: 'Moves ownership of all these files to another email (sold the business?). Year files transfer first, the main file last.',
+    transferEmailPlaceholder: 'new owner email…',
+    transferPreparar: 'Prepare',
+    transferIniciar: 'Transfer ownership',
+    transferPreparando: 'Preparing…',
+    transferProgreso: 'Transferring…',
+    transferOk: 'Ownership transferred to {email}. On the new email: open the app; it will adopt the files.',
+    transferRechazado: '{n} file(s) could not be transferred. If Google rejects them, share each as editor and have the new person copy them (plan B).',
+    transferRetomables: 'Pending from a previous transfer: {ids}',
+    transferNoPosible: 'Not all files are yours: fix that first (or use plan B by sharing as editor).',
+    transferEmailInvalido: 'Invalid destination email.'
   },
   cola: {
     pendientes: '{n} pending changes to sync',

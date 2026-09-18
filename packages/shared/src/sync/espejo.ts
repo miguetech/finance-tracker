@@ -12,6 +12,8 @@ export interface EspejoStore {
   replaceTable(t: TableName, filas: Row[]): Promise<void>
   clearTable(t: TableName): Promise<void>
   close(): Promise<void>
+  /** Escotilla del store sqlite (tests): NULL en el store de memoria. */
+  getDb?(): unknown
 }
 
 /** Tablas de lectura frecuente: se refrescan en TTL/foco. */

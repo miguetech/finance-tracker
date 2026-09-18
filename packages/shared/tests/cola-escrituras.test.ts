@@ -8,6 +8,7 @@ import {
   resumirCola,
   esErrorRed
 } from '../src/sync/colaEscrituras'
+import { marcarFalloRed, marcarRedOk, hayFalloRed } from '../src/sync/redStore'
 import type { OperacionEnCola } from '../src/sync/colaEscrituras'
 import type { Repository } from '../src/data/repository'
 import type { StorageAdapter } from '../src/data/storage'
@@ -114,8 +115,8 @@ describe('cola de escrituras — vaciado', () => {
   })
 })
 
-describe('conColaEscrituras — envoltorio del repositorio', () => {
-  it('activo: no toca el repositorio, encola y devuelve eco con id local', async () => {
+describe('conColaEscrituras — envoltorio del repositorio (offline-first)', () => {
+  it('siempre encola y devuelve eco con id local', async () => {
     const s = kvFalso()
     const repo = repoFalso()
     const envuelto = conColaEscrituras(repo, { storage: s, activo: () => true, configActual: () => configFake })
@@ -149,36 +150,56 @@ describe('conColaEscrituras — envoltorio del repositorio', () => {
     expect((cola[1].args[0] as { id_origen: string }).id_origen).toBe(factura.id_factura)
   })
 
-  it('inactivo: delega directo al repositorio sin encolar', async () => {
+  it('siempre encola (offline-first): no delega directo al repositorio', async () => {
     const s = kvFalso()
     const repo = repoFalso()
     const envuelto = conColaEscrituras(repo, { storage: s, activo: () => false })
     await envuelto.deleteGasto('g1')
-    expect(repo.llamadas).toEqual(['deleteGasto'])
-    expect(await resumirCola(s)).toEqual({ pendientes: 0, errores: 0 })
+    expect(repo.llamadas).toEqual([])
+    expect(await resumirCola(s)).toEqual({ pendientes: 1, errores: 0 })
   })
 
-  it('inactivo con red muerta a mitad: fallo de transporte encola en vez de romper', async () => {
+  it('fallo de transporte encola y devuelve eco (no rompe)', async () => {
     const s = kvFalso()
     const repo = repoFalso({
       saveCliente: async () => { throw new Error('Failed to fetch') }
     })
     const envuelto = conColaEscrituras(repo, { storage: s, activo: () => false, configActual: () => configFake })
-    // No lanza: devuelve eco y la operación queda pendiente para vaciar.
     const eco = await envuelto.saveCliente({ nombre: 'Offline' } as never)
     expect((eco as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
     expect(repo.llamadas).toEqual([])
     expect(await resumirCola(s)).toEqual({ pendientes: 1, errores: 0 })
   })
 
-  it('inactivo: error de negocio sigue propagando sin encolar', async () => {
+  it('fallo de transporte NO marca hayFalloRed (la cola absorbe el fallo)', async () => {
+    const s = kvFalso()
+    marcarRedOk()
+    const repo = repoFalso({ saveCliente: async () => { throw new Error('Failed to fetch') } })
+    const envuelto = conColaEscrituras(repo, { storage: s, activo: () => false, configActual: () => configFake })
+    await envuelto.saveCliente({ nombre: 'Offline' } as never)
+    // Con offline-first, el fallo no marca hayFalloRed porque la operación se encola silenciosamente
+    expect(hayFalloRed()).toBe(false)
+  })
+
+  it('éxito online no aplica (la cola absorbe todo)', async () => {
+    const s = kvFalso()
+    marcarFalloRed()
+    const envuelto = conColaEscrituras(repoFalso(), { storage: s, activo: () => false })
+    await envuelto.deleteGasto('g1')
+    // La cola no toca la red, así que no limpia hayFalloRed
+    expect(hayFalloRed()).toBe(true)
+  })
+
+  it('error de negocio NO se propaga, se encola (offline-first)', async () => {
     const s = kvFalso()
     const repo = repoFalso({
       saveCliente: async () => { throw new Error('Cliente no existe') }
     })
     const envuelto = conColaEscrituras(repo, { storage: s, activo: () => false })
-    await expect(envuelto.saveCliente({} as never)).rejects.toThrow('Cliente no existe')
-    expect(await resumirCola(s)).toEqual({ pendientes: 0, errores: 0 })
+    // No lanza: devuelve eco y la operación queda pendiente (el fallo se detecta al flushear)
+    const eco = await envuelto.saveCliente({} as never)
+    expect((eco as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
+    expect(await resumirCola(s)).toEqual({ pendientes: 1, errores: 0 })
   })
 
   it('abort (timeout de red) cuenta como error de transporte', () => {
@@ -221,7 +242,7 @@ describe('escritura encolada dispara eco local en el bus', () => {
     expect((vistas[0].args[0] as { id_cliente?: string }).id_cliente).toMatch(/^cli_/)
   })
 
-  it('fuera de modo offline: éxito online también aplica eco al espejo', async () => {
+  it('offline-first: siempre encola y aplica eco al espejo local', async () => {
     const { espejoBus } = await import('../src/sync/espejoBus')
     let llamadas = 0
     espejoBus.onEscrituraLocal = () => { llamadas++ }
@@ -229,8 +250,8 @@ describe('escritura encolada dispara eco local en el bus', () => {
     const envuelto = conColaEscrituras(repoFalso(), { storage: s, activo: () => false })
     await envuelto.deleteGasto('g1')
     espejoBus.onEscrituraLocal = undefined
-    expect(llamadas).toBe(1) // baja aplicada al espejo al instante, sin esperar pull
-    expect(await resumirCola(s)).toEqual({ pendientes: 0, errores: 0 })
+    expect(llamadas).toBe(1) // eco aplicado al espejo local al instante
+    expect(await resumirCola(s)).toEqual({ pendientes: 1, errores: 0 }) // encolada para flush posterior
   })
 })
 

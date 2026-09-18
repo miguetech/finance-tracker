@@ -127,7 +127,18 @@ const gl: Partial<Dict> = {
     proveedorConCuentas: 'O provedor ten contas a pagar asociadas',
     empleadoConNomina: 'O empregado ten nómina rexistrada',
     fechaVencimientoObligatoria: 'Data de vencemento obrigatoria', mesFormato: 'Mes con formato AAAA-MM',
-    folioBloqueado: 'Folla ocupada, téntao de novo'
+folioBloqueado: 'Folla ocupada, téntao de novo'
+  },
+cola: {
+    pendientes: '{n} cambios pendentes de sincronizar',
+    conError: '{n} operacións con erro',
+    reintentar: 'Reintentar',
+    descartar: 'Descartar'
+  },
+  sync: {
+    sinConexion: 'Sen conexión',
+    pendientes: '{n} pendentes',
+    sincronizado: 'Sincronizado'
   }
 }
 

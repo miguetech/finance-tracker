@@ -270,7 +270,7 @@ describe('edición de factura', () => {
     expect(updated.fecha_edicion).toBeTruthy()
     const items = f.grid.get('Factura_Items') ?? []
     const fila = items.find(r => r[0] === 'f1')
-    expect(fila?.[2]).toBe(2)
+    expect(fila?.[3]).toBe(2)
   })
   it('updateFactura sobre saldo parcial mantiene pagos y ajusta diferencia', async () => {
     const f = fakeApi({

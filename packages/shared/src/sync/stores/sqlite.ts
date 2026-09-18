@@ -273,7 +273,7 @@ export function crearSqliteStore(ruta = '/finance-tracker-espejo.db3', opciones:
         const updateCols = cols.slice(2).map(c => `"${c.key}"=excluded."${c.key}"`).join(', ')
         const sql = `INSERT INTO "Factura_Items" (${colSql}) VALUES (${placeholders})
                      ON CONFLICT("id_factura","linea") DO UPDATE SET ${updateCols}`
-        let stmt: ReturnType<SqliteDb['prepare']>
+        let stmt: ReturnType<SqliteDb['prepare']> | null = null
         dbActivo.exec('BEGIN')
         try {
           stmt = dbActivo.prepare(sql)

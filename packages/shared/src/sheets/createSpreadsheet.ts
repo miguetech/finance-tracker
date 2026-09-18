@@ -4,6 +4,8 @@ import { TABLES, sheetName, HEADER_ROWS } from './tables'
 import { serializeRow } from './rows'
 import type { Config } from '../types/entities'
 import { DEFAULT_CURRENCY } from '../currency'
+import { uid } from '../lib/uid'
+import { SISTEMA_SHEET, SISTEMA_RANGO, esClaveSistema } from './sistema'
 
 const ALL_TABLES = Object.keys(TABLES) as (keyof typeof TABLES)[]
 
@@ -38,18 +40,8 @@ const DEFAULT_CONFIG: Config = {
   google_permisos: '',
   notif_gastos_activa: '',
   notif_cxc_activa: '',
-  unidades_medida: 'pieza,kg,gr,litro,ml,caja,saco,docena,metro'
-}
-
-export async function createInitialSpreadsheet(api: SheetsApi, titulo = 'FinanceTracker'): Promise<{ spreadsheetId: string; url: string }> {
-  const { spreadsheetId, url } = await api.createSpreadsheet(titulo)
-  const extra = ALL_TABLES.filter(t => t !== 'Config')
-  await api.addSheets(spreadsheetId, extra.map(sheetName))
-
-  await writeAllHeaders(api, spreadsheetId, ALL_TABLES)
-  const configRows = (Object.entries(DEFAULT_CONFIG) as [string, unknown][]).map(([clave, valor]) => serializeRow(TABLES.Config, { clave, valor: String(valor) }))
-  await api.batchUpdate(spreadsheetId, [{ range: `'Config'!A1:B${configRows.length}`, values: configRows }])
-  return { spreadsheetId, url }
+  unidades_medida: 'pieza,kg,gr,litro,ml,caja,saco,docena,metro',
+  nombreBaseHoja: 'FinanceTracker'
 }
 
 /** Tablas que viven en cada spreadsheet EVENTOS-{año} (spec §2). */
@@ -59,14 +51,61 @@ export const TABLAS_EVENTO_AÑO: (keyof typeof TABLES)[] = [
   'Movimientos_Stock', 'Asistencias', 'Tasas_Historial', 'Nomina_Detalles'
 ]
 
+/** Tablas del BASE: catálogos + configuración + accesos. NUNCA las de evento. */
+export const TABLAS_BASE: (keyof typeof TABLES)[] = ALL_TABLES.filter(t => !TABLAS_EVENTO_AÑO.includes(t))
+
+/** Estampa la huella de identidad (spec F2 §3) en appProperties del archivo.
+ *  Solo si hay DriveApi (el propio namespace drive.file). */
+export async function estamparHuella(drive: DriveApi | undefined, id: string, tipo: 'base' | 'eventos', instancia: string): Promise<void> {
+  if (!drive) return
+  await drive.setAppProperties(id, {
+    ft_vers: '1',
+    ft_tipo: tipo,
+    ft_instancia: instancia,
+    ft_id: id,
+    ft_estado: 'activo'
+  })
+}
+
+export async function createInitialSpreadsheet(
+  api: SheetsApi,
+  titulo = 'FinanceTracker',
+  opts: { drive?: DriveApi; instancia?: string } = {}
+): Promise<{ spreadsheetId: string; url: string }> {
+  const { spreadsheetId, url } = await api.createSpreadsheet(titulo)
+  const extra = [...TABLAS_BASE.filter(t => t !== 'Config').map(sheetName), SISTEMA_SHEET]
+  await api.addSheets(spreadsheetId, extra)
+
+  await writeAllHeaders(api, spreadsheetId, TABLAS_BASE)
+  const configRows = (Object.entries(DEFAULT_CONFIG) as [string, unknown][]).map(([clave, valor]) => serializeRow(TABLES.Config, { clave, valor: String(valor) }))
+  await api.batchUpdate(spreadsheetId, [{ range: `'Config'!A1:B${configRows.length}`, values: configRows }])
+  // Semilla del sistema: identidad compartida BASE/años (spec F1). En re-sync
+  // (F6) se conserva la instancia del BASE anterior.
+  const instancia = opts.instancia ?? uid('ftinst_')
+  const sistemaRows = [
+    ['ft_vers', '1'],
+    ['ft_instancia', instancia],
+    ['ft_id', spreadsheetId],
+    ['ft_estado', 'activo']
+  ]
+  await api.batchUpdate(spreadsheetId, [{ range: `'${SISTEMA_SHEET}'!A1:B${sistemaRows.length}`, values: sistemaRows }])
+  await estamparHuella(opts.drive, spreadsheetId, 'base', instancia)
+  return { spreadsheetId, url }
+}
+
 /** Spreadsheet de año: SOLO pestañas de evento, sin Config ni catálogos.
  *  Los ajustes y catálogos viven en el BASE. */
-export async function crearSpreadsheetEventos(api: SheetsApi, titulo: string): Promise<{ spreadsheetId: string; url: string }> {
+export async function crearSpreadsheetEventos(
+  api: SheetsApi,
+  titulo: string,
+  opts: { drive?: DriveApi; instancia?: string } = {}
+): Promise<{ spreadsheetId: string; url: string }> {
   const pestañas = TABLAS_EVENTO_AÑO.map(t => ({
     properties: { title: sheetName(t), gridProperties: { rowCount: 1000, columnCount: TABLES[t].length + 2 } }
   }))
   const { spreadsheetId, url } = await api.createSpreadsheet(titulo, pestañas)
   await writeAllHeaders(api, spreadsheetId, TABLAS_EVENTO_AÑO)
+  if (opts.instancia) await estamparHuella(opts.drive, spreadsheetId, 'eventos', opts.instancia)
   return { spreadsheetId, url }
 }
 
@@ -81,8 +120,75 @@ export async function connectOrCreateSpreadsheet(api: SheetsApi): Promise<{ spre
     await ensureTables(api, existente.id)
     return { spreadsheetId: existente.id, url: existente.url ?? `https://docs.google.com/spreadsheets/d/${existente.id}`, creada: false }
   }
-  const created = await createInitialSpreadsheet(api)
+  const created = await createInitialSpreadsheet(api, undefined, { drive })
   return { ...created, creada: true }
+}
+
+/** Lista las bases con huella activa para que el picker del arranque (spec F4
+ *  §5: "varios → elegir") decida — nunca por nombre. Cada candidata trae su
+ *  estado de ownership; solo `es_dueño`/`no_verificable` son vinculables. */
+export interface CandidataBase {
+  id: string
+  titulo: string
+  url: string
+  dueño?: string
+  rol: 'es_dueño' | 'no_es_dueño' | 'no_verificable'
+  editable?: boolean
+}
+
+export async function listarCandidatasBase(api: SheetsApi): Promise<CandidataBase[]> {
+  const drive = new DriveApi(() => api.getToken())
+  const bases = await drive.findBases().catch(() => [])
+  const out: CandidataBase[] = []
+  for (const b of bases) {
+    const info = await drive.getFileInfo(b.id).catch(() => null)
+    const owners = info?.owners ?? []
+    const rol: CandidataBase['rol'] =
+      info?.capabilities?.canEdit === false ? 'no_es_dueño' :
+      owners.length > 0 && !owners.some(o => o.me === true) ? 'no_es_dueño' :
+      owners.some(o => o.me === true) ? 'es_dueño' :
+      'no_verificable'
+    out.push({
+      id: b.id,
+      titulo: b.name ?? b.id,
+      url: b.webViewLink ?? `https://docs.google.com/spreadsheets/d/${b.id}`,
+      dueño: owners.find(o => o.emailAddress)?.emailAddress,
+      rol,
+      editable: info?.capabilities?.canEdit ?? undefined
+    })
+  }
+  return out
+}
+
+/** Boot por huella (spec F2 §5): NUNCA decidir identidad por nombre.
+ *  - 1 BASE con `ft_tipo=base` → probe → adoptar.
+ *  - varios → la WEB muestra el picker (`listarCandidatasBase`) antes de llamar;
+ *    la extensión adopta el más reciente que pase el probe.
+ *  - cero → crear BASE nuevo estampado (appProperties + Sistema). */
+export async function vincularOCrearBase(api: SheetsApi): Promise<{ spreadsheetId: string; url: string; creada: boolean; huella: boolean }> {
+  const drive = new DriveApi(() => api.getToken())
+  const bases = await drive.findBases().catch(() => [])
+  if (bases.length > 0) {
+    const orden = [...bases].sort((a, b) => String(b.modifiedTime ?? '').localeCompare(String(a.modifiedTime ?? '')))
+    for (const cand of orden) {
+      // Gate de ownership (§7): hoja ajena compartida jamás; sin metadata
+      // alcanzable (offline/fuera de namespace) → prueba de edición real.
+      try {
+        const info = await drive.getFileInfo(cand.id)
+        if (info?.owners && info.owners.length > 0 && !info.owners.some(o => o.me === true)) continue
+      } catch {
+        // offline: no bloquee el boot de un dueño ya operando (fail-open)
+      }
+      try {
+        await ensureTables(api, cand.id)
+        return { spreadsheetId: cand.id, url: cand.webViewLink ?? `https://docs.google.com/spreadsheets/d/${cand.id}`, creada: false, huella: true }
+      } catch {
+        // Sin permisos de edición o BASE inválido: seguir con el siguiente.
+      }
+    }
+  }
+  const creada = await createInitialSpreadsheet(api, undefined, { drive })
+  return { ...creada, creada: true, huella: false }
 }
 
 function writeAllHeaders(api: SheetsApi, spreadsheetId: string, tables: (keyof typeof TABLES)[]): Promise<void> {
@@ -99,16 +205,77 @@ function writeAllHeaders(api: SheetsApi, spreadsheetId: string, tables: (keyof t
   return api.batchUpdate(spreadsheetId, valueRanges).then(() => undefined)
 }
 
-export async function ensureTables(api: SheetsApi, spreadsheetId: string, tablas: (keyof typeof TABLES)[] = ALL_TABLES): Promise<void> {
+function detectarTipoSpreadsheet(existing: Map<string, { columnCount: number; sheetId: number }>): 'base' | 'evento' {
+  const tieneConfig = existing.has(sheetName('Config'))
+  const tieneEvento = TABLAS_EVENTO_AÑO.some(t => existing.has(sheetName(t)))
+  if (tieneConfig && !tieneEvento) return 'base'
+  if (tieneEvento && !tieneConfig) return 'evento'
+  return 'base' // por defecto
+}
+
+export async function ensureTables(api: SheetsApi, spreadsheetId: string, tablas?: (keyof typeof TABLES)[]): Promise<void> {
   const res = await api.getSpreadsheet(spreadsheetId)
   const existing = new Map(res.sheets.map(s => [s.properties.title, { columnCount: s.properties.gridProperties?.columnCount ?? 0, sheetId: s.properties.sheetId }]))
-  const missing = tablas.filter(t => !existing.has(sheetName(t)))
+  const esBase = existing.has(sheetName('Config'))
+
+  const tablasObjetivo = tablas ?? (detectarTipoSpreadsheet(existing) === 'evento' ? TABLAS_EVENTO_AÑO : TABLAS_BASE)
+
+  const missing = tablasObjetivo.filter(t => !existing.has(sheetName(t)))
+  // El BASE siempre lleva pestaña Sistema (F1); un BASE legacy la recibe aquí.
+  if (esBase && !existing.has(SISTEMA_SHEET)) missing.push(SISTEMA_SHEET as keyof typeof TABLES)
   if (missing.length > 0) {
     await api.addSheets(spreadsheetId, missing.map(sheetName))
-    await writeAllHeaders(api, spreadsheetId, missing)
+    await writeAllHeaders(api, spreadsheetId, missing.filter(t => t !== (SISTEMA_SHEET as keyof typeof TABLES)))
   }
   const skip = new Set(missing.map(sheetName))
-  await ensureColumns(api, spreadsheetId, existing, skip, tablas)
+  await ensureColumns(api, spreadsheetId, existing, skip, tablasObjetivo)
+  if (esBase) await migrarSistema(api, spreadsheetId)
+}
+
+/** F1: migración única sobre el BASE — crea/rellena Sistema y saca las claves
+ *  de sistema que sobrevivieron en Config (eventos_{año}, anio_activo, mutex).
+ *  Idempotente: si Sistema ya tiene identidad (ft_*) y Config no lleva claves
+ *  de sistema, no toca nada. Estado medio-migrado NUNCA se acepta: se completa. */
+async function migrarSistema(api: SheetsApi, spreadsheetId: string): Promise<void> {
+  const lectura = await api.batchGet(spreadsheetId, [`'Config'!A1:B500`, SISTEMA_RANGO])
+  const config = filasClaveValor(lectura[`'Config'!A1:B500`])
+  const sistema = filasClaveValor(lectura[SISTEMA_RANGO])
+
+  const systemConfig = config.filter(r => esClaveSistema(r[0]))
+  const negocio = config.filter(r => !esClaveSistema(r[0]))
+  const marcas = new Set(sistema.map(r => r[0]))
+  const identidad = ['ft_vers', 'ft_instancia', 'ft_id', 'ft_estado']
+  const yaMigrado = systemConfig.length === 0 && identidad.every(k => marcas.has(k))
+  if (yaMigrado) return
+
+  const merged = new Map<string, string>()
+  for (const [k, v] of sistema) merged.set(k, v)
+  for (const [k, v] of systemConfig) if (!merged.has(k)) merged.set(k, v)
+  if (!merged.has('ft_vers')) merged.set('ft_vers', '1')
+  if (!merged.has('ft_instancia')) merged.set('ft_instancia', uid('ftinst_'))
+  if (!merged.has('ft_id')) merged.set('ft_id', spreadsheetId)
+  if (!merged.has('ft_estado')) merged.set('ft_estado', 'activo')
+  if (merged.size > 0) {
+    const rows = [...merged.entries()].map(([k, v]) => [k, v])
+    await api.batchUpdate(spreadsheetId, [{ range: SISTEMA_RANGO.replace('B500', `B${rows.length}`), values: rows }])
+  }
+  // Config queda SOLO con claves de negocio: limpiar rango y reescribir.
+  await api.clearRange(spreadsheetId, `'Config'!A1:B500`)
+  if (negocio.length > 0) {
+    await api.batchUpdate(spreadsheetId, [{ range: `'Config'!A1:B${negocio.length}`, values: negocio }])
+  }
+}
+
+/** Normaliza filas clave/valor (ignora celdas no-array de fakes/meta malformada). */
+function filasClaveValor(raw: (string | number)[][] | undefined): [string, string][] {
+  const out: [string, string][] = []
+  for (const r of raw ?? []) {
+    if (!Array.isArray(r)) continue
+    const clave = String(r[0] ?? '')
+    if (!clave) continue
+    out.push([clave, String(r[1] ?? '')])
+  }
+  return out
 }
 
 /** Garantiza SOLO las pestañas de evento en un spreadsheet de año. */
@@ -177,7 +344,8 @@ export function configFromRows(rows: (string | number)[][]): Config {
     google_permisos: map.get('google_permisos') ?? '',
     notif_gastos_activa: map.get('notif_gastos_activa') ?? '',
     notif_cxc_activa: map.get('notif_cxc_activa') ?? '',
-    unidades_medida: map.get('unidades_medida') ?? DEFAULT_CONFIG.unidades_medida
+    unidades_medida: map.get('unidades_medida') ?? DEFAULT_CONFIG.unidades_medida,
+    nombreBaseHoja: map.get('nombreBaseHoja') ?? DEFAULT_CONFIG.nombreBaseHoja
   }
 }
 

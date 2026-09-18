@@ -4,6 +4,7 @@ import { crearEspejo, TABLAS_CALIENTES, type EspejoStore } from '../sync/espejo'
 import { ddlDesdeTables } from '../sync/ddl'
 import { espejoBus } from '../sync/espejoBus'
 import { TABLAS_POR_METODO, ecoDe, ID_POR_TABLA, BAJAS_POR_METODO, esErrorRed } from '../sync/colaEscrituras'
+import { marcarFalloRed, marcarRedOk } from '../sync/redStore'
 import type { TableName } from '../sheets/tables'
 import { useRepo, _repoCtx as RepoCtx } from './queries'
 import { EspejoCtx, type EspejoCtxValue } from './espejoReact'
@@ -11,10 +12,10 @@ import { useAppStore } from './appStore'
 import { useContext } from 'react'
 
 /** TTL de refresco de tablas calientes. */
-export const TABLAS_CALIENTES_TTL_MS = 60_000
+export const TABLAS_CALIENTES_TTL_MS = 300_000
 
 /** TTL por sección: al abrir una pantalla, sus tablas se piden si están vencidas. */
-export const TTL_SECCION_MS = 60_000
+export const TTL_SECCION_MS = 300_000
 
 /** Query keys de react-query que se invalidan cuando el pull detecta
  *  cambios en cada tabla del espejo. */
@@ -147,6 +148,8 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
     const promesa = (async () => {
       try {
         await espejo.pull(tablas ?? (ultimoRef.current === 0 ? undefined : TABLAS_CALIENTES))
+        marcarRedOk()
+        try { espejoBus.onPullCompletado?.() } catch { /* sin host */ }
         cooldownRef.current = 0
         reintentosArranqueRef.current = 0
         ultimoRef.current = espejo.estado().ultimoPull
@@ -155,6 +158,7 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
         // Cuota agotada: pausa larga. Otros fallos transitorios: pausa corta,
         // para que los automáticos no queden silenciados medio minuto.
         if (esErrorRed(e)) {
+          marcarFalloRed()
           const cuota = /429|RESOURCE_EXHAUSTED/i.test(e instanceof Error ? e.message : String(e))
           cooldownRef.current = Date.now() + (cuota ? 90_000 : 15_000)
           console.debug('[espejo] pull en pausa por red/cuota hasta', new Date(cooldownRef.current).toLocaleTimeString())
@@ -242,13 +246,12 @@ export function EspejoProvider({ flag, store = null, fetchTablas: fetchTablasOve
     espejoBus.onFlushCompletado = (tablas) => { void sincronizarAhora(tablas, { forzar: true }) }
     espejoBus.onEscrituraLocal = (metodo, args) => { void aplicarEscrituraLocal(metodo, args) }
     document.addEventListener('visibilitychange', alFoco)
-    const timer = setInterval(alFoco, TABLAS_CALIENTES_TTL_MS)
+    // setInterval removido: solo visibilitychange/focus disparan sync automático
     return () => {
       espejoBus.onEscritura = undefined
       espejoBus.onFlushCompletado = undefined
       espejoBus.onEscrituraLocal = undefined
       document.removeEventListener('visibilitychange', alFoco)
-      clearInterval(timer)
     }
   }, [activo, espejo])
 

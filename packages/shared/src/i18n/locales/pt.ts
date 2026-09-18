@@ -129,6 +129,17 @@ const pt: Partial<Dict> = {
     empleadoConNomina: 'Funcionário tem folha registrada',
     fechaVencimientoObligatoria: 'Data de vencimento obrigatória', mesFormato: 'Mês no formato AAAA-MM',
     folioBloqueado: 'Planilha ocupada, tente novamente'
+  },
+cola: {
+    pendientes: '{n} alterações pendentes de sincronizar',
+    conError: '{n} operações com erro',
+    reintentar: 'Tentar novamente',
+    descartar: 'Descartar'
+  },
+  sync: {
+    sinConexion: 'Offline',
+    pendientes: '{n} pendentes',
+    sincronizado: 'Sincronizado'
   }
 }
 

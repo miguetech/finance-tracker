@@ -4,16 +4,20 @@ import type { RegistroSesion, StorageAdapter } from '@ft/shared'
 
 /** Se perdió la conexión y hay sesión local: ofrecer entrar al modo offline
  *  sin recargar. Con PIN configurado o espejo cifrado lo pide; sin PIN solo
- *  dentro de la ventana de 24 h. */
-export function ModalConexionPerdida({ almacen, registro, onEntrar }: {
+ *  dentro de la ventana de 24 h.
+ *  @param yaDesbloqueado — true si la sesión ya está desbloqueada (PIN ya verificado
+ *  esta pestaña o sin PIN/cifrado). En ese caso no pide PIN y muestra el texto informativo. */
+export function ModalConexionPerdida({ almacen, registro, onEntrar, yaDesbloqueado = false }: {
   almacen: StorageAdapter
   registro: RegistroSesion
   onEntrar: (pin?: string) => void
+  yaDesbloqueado?: boolean
 }) {
   const { t } = useI18n()
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
-  const pidePin = !!registro.pin || !!registro.cifrado
+  // Si ya está desbloqueado (PIN verificado o sin PIN/cifrado), no pide PIN.
+  const pidePin = yaDesbloqueado ? false : (!!registro.pin || !!registro.cifrado)
 
   const entrar = async () => {
     if (pidePin) {
@@ -40,13 +44,15 @@ export function ModalConexionPerdida({ almacen, registro, onEntrar }: {
         <p className="text-sm text-center text-gray-600">
           {t('authOffline.continuarComo')} <span className="font-medium">{registro.cuenta}</span>
         </p>
+        {/* Texto informativo: explica qué hace el modo offline. */}
+        <p className="text-xs text-gray-500 text-center">{t('authOffline.modoOfflineInfo')}</p>
         {pidePin ? (
           <form className="space-y-2" onSubmit={e => { e.preventDefault(); void entrar() }}>
             <Input value={pin} onChange={e => setPin(e.target.value)} placeholder={t('authOffline.pin')} inputMode="numeric" autoComplete="off" type="password" />
             <Button type="submit" className="w-full" disabled={!pin}>{t('authOffline.entrarSinConexion')}</Button>
           </form>
         ) : (
-          <Button className="w-full" onClick={() => void entrar()}>{t('authOffline.entrarSinConexion')}</Button>
+          <Button className="w-full" onClick={() => void entrar()}>{t('authOffline.activarModoOffline')}</Button>
         )}
         {!desbloqueoPermitido(registro) && !pidePin && (
           <div className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg p-2">

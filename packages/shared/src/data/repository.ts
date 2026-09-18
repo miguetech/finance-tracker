@@ -1,9 +1,10 @@
 import { SheetsApi } from '../sheets/api'
 import { DriveApi, type UploadImagenInput } from '../drive/api'
-import { TABLES, HEADER_ROWS, type TableName } from '../sheets/tables'
+import { TABLES, HEADER_ROWS, sheetName, type TableName } from '../sheets/tables'
 import { serializeRow } from '../sheets/rows'
-import { configFromRows, configToRows, createInitialSpreadsheet, ensureTables, crearSpreadsheetEventos, ensureTablasEvento, TABLAS_EVENTO_AÑO } from '../sheets/createSpreadsheet'
+import { configFromRows, configToRows, createInitialSpreadsheet, ensureTables, crearSpreadsheetEventos, ensureTablasEvento, estamparHuella, TABLAS_EVENTO_AÑO, TABLAS_BASE } from '../sheets/createSpreadsheet'
 import { withMutex } from '../sheets/mutex'
+import { SISTEMA_RANGO, esClaveSistema } from '../sheets/sistema'
 import { KEYS, type StorageAdapter } from './storage'
 import { createSheetsTableStore, type TableStore } from './tableStore'
 import { uid } from '../lib/uid'
@@ -45,12 +46,116 @@ export interface RepoContext {
   api: SheetsApi
   storage: StorageAdapter
   getSpreadsheetId(): Promise<string>
+  /** Gate de ownership (spec F3 §7). 'owner' (default) exige ser dueño;
+   *  'backend' (Hono/service account) se salta el gate y NUNCA auto-crea hojas. */
+  modo?: 'owner' | 'backend'
+}
+
+/** Identidad de una hoja para inventario/picker (spec F4 §5-§6). */
+export type HojaTipo = 'base' | 'eventos' | 'desconocido'
+export type HojaEstado = 'activo' | 'reemplazado' | 'borrado' | 'legacy'
+export type RolOwnership = 'es_dueño' | 'no_es_dueño' | 'no_verificable'
+
+export interface HojaInfo {
+  id: string
+  titulo: string
+  url: string
+  tipo: HojaTipo
+  /** `ft_instancia` de la huella (solo hojas estampadas). */
+  instancia?: string
+  estado: HojaEstado
+  /** Email del dueño cuando el namespace drive.file lo alcanza. */
+  dueño?: string
+  rol: RolOwnership
+  editable?: boolean
+}
+
+export interface InventarioHojas {
+  base: HojaInfo
+  años: { año: string; hoja: HojaInfo }[]
+  /** Otras bases con huella activa en la cuenta (pickers §5: "varios → elegir"). */
+  candidatas: HojaInfo[]
+}
+
+// ── Transferencia de propiedad (spec F7 §10) ────────────────────────────────
+export type EstadoTransferencia = 'hecho' | 'fallo'
+export interface RegistroTransferencia {
+  id: string
+  tipo: 'base' | 'eventos'
+  año?: string
+  estado: EstadoTransferencia
+}
+
+export interface HojaTransferencia {
+  id: string
+  tipo: 'base' | 'eventos'
+  año?: string
+  rol: RolOwnership
+  motivo?: string
+}
+
+export interface PreflightTransferencia {
+  email: string
+  hojas: HojaTransferencia[]
+  /** Ids con `fallo` pendiente de retomar (marcador `ft_transferencia`). */
+  retomables: string[]
+  /** ¿Todas las hojas son tuyas y transferibles? Si no, el flujo ofrece plan B. */
+  posible: boolean
+}
+
+export interface ResultadoTransferencia {
+  id: string
+  tipo: 'base' | 'eventos'
+  año?: string
+  estado: 'transferido' | 'ya_transferido' | 'rechazado'
+  motivo?: string
+}
+
+export interface TransferenciaResultado {
+  email: string
+  resultados: ResultadoTransferencia[]
+  transferidos: number
+  rechazados: number
+}
+
+const sepTrans = ';'
+const sepCampo = '|'
+
+/** `año|tipo|id|estado;…` — memo de transferencia (idempotente desde ambos lados). */
+function serializarTransferencia(regs: RegistroTransferencia[]): string {
+  return regs
+    .map(r => `${r.año ?? ''}${sepCampo}${r.tipo}${sepCampo}${r.id}${sepCampo}${r.estado}`)
+    .join(sepTrans)
+}
+
+function parsearTransferencia(valor?: string): RegistroTransferencia[] {
+  if (!valor) return []
+  const regs: RegistroTransferencia[] = []
+  for (const seg of valor.split(sepTrans)) {
+    const [año, tipo, id, estado] = seg.split(sepCampo)
+    if (!id || (tipo !== 'base' && tipo !== 'eventos')) continue
+    regs.push({ id, tipo, año: año || undefined, estado: estado === 'hecho' ? 'hecho' : 'fallo' })
+  }
+  return regs
 }
 
 export function createRepository(ctx: RepoContext) {
   const { api } = ctx
   const sid = ctx.getSpreadsheetId
-  const store: TableStore = createSheetsTableStore(api, sid)
+  const store: TableStore = new Proxy(createSheetsTableStore(api, sid), {
+    get(t, k, r) {
+      const v = Reflect.get(t, k, r)
+      // Cualquier escritura al BASE invalida el caché de pestañas (p. ej. una
+      // migración legacy que inyecta tabs) → el próximo probe la ve fresca.
+      if (typeof v === 'function' && (k === 'replace' || k === 'append' || k === 'setCell')) {
+        return (...a: unknown[]) => {
+          baseTablasCache = null
+          return (v as unknown as (...x: unknown[]) => Promise<unknown>).apply(t, a)
+        }
+      }
+      return typeof v === 'function' ? v.bind(t) : v
+    },
+  })
   const drive = new DriveApi(() => api.getToken())
 
   // ── Hoja-por-año (spec 2026-08-25 §2-§7) ──────────────────────────────────
@@ -68,25 +173,133 @@ export function createRepository(ctx: RepoContext) {
     return /^\d{4}/.test(f) ? f.slice(0, 4) : ''
   }
 
-  /** Registro de años vive como filas CRUDAS en Config (claves eventos_{año}
-   *  y anio_activo). NO pasa por configFromRows: el parser de Config descarta
-   *  claves desconocidas y las haría invisibles tras cada lectura. */
-  async function leerFilasConfigRaw(): Promise<Record<string, string>> {
+  /** Mapa id_factura → año de emisión (spec F5 §8): `Factura_Items` no tiene
+   *  fecha; su año se resuelve SIEMPRE por el padre, nunca por el año en curso. */
+  const mapaAnioFacturas = async (): Promise<Map<string, string>> => {
+    const facturas = await readTable<Factura>('Facturas')
+    const m = new Map<string, string>()
+    for (const f of facturas) {
+      const anio = añoDeFila(f as unknown as Record<string, unknown>)
+      if (anio && f.id_factura) m.set(f.id_factura, anio)
+    }
+    return m
+  }
+
+  /** Año de una fila de `Factura_Items` según su factura padre. '' si huérfana. */
+  async function anioDeItem(fila: Record<string, unknown>): Promise<string> {
+    const idPadre = String(fila.id_factura ?? '')
+    if (!idPadre) return ''
+    const map = await mapaAnioFacturas()
+    return map.get(idPadre) ?? ''
+  }
+
+/** Registro de años vive como filas CRUDAS en la pestaña Sistema (claves
+ *  eventos_{año}, anio_activo, mutex) — spec F1. NO pasa por configFromRows:
+ *  el parser de Config solo conoce claves de negocio fijas. */
+/** Valor centinela: año borrado explícitamente → no se vuelve a crear. */
+const BORRADO = 'borrado'
+
+/** Cache de Sistema para evitar leer Sheets en cada mutex/operación (TTL 30s,
+ *  keyed por sid: un cambio de BASE invalida de inmediato). */
+  let sistemaCache: { id: string; data: Record<string, string>; ts: number } | null = null
+  const SISTEMA_CACHE_TTL_MS = 30_000
+
+  async function leerSistema(): Promise<Record<string, string>> {
     const id = await sid()
-    const res = await api.batchGet(id, [`'Config'!A1:B500`])
+    const now = Date.now()
+    if (sistemaCache && sistemaCache.id === id && now - sistemaCache.ts < SISTEMA_CACHE_TTL_MS) {
+      return sistemaCache.data
+    }
+    const res = await api.batchGet(id, [SISTEMA_RANGO])
     const filas = res[Object.keys(res)[0]] ?? []
     const out: Record<string, string> = {}
     for (const r of filas) {
       if (!Array.isArray(r)) continue
       const clave = String(r[0] ?? '')
-      if (!clave || clave === 'mutex') continue
+      if (!clave) continue
       out[clave] = String(r[1] ?? '')
     }
+    sistemaCache = { id, data: out, ts: now }
     return out
   }
 
+/** Invalida cache de Sistema (p.ej. tras mutexWriteRow). */
+function invalidarSistemaCache(): void {
+    sistemaCache = null
+  }
+
+  /** Pestañas reales del BASE, cacheadas (TTL 30s). El BASE creado tras el
+   *  refactor hoja-por-año SOLO tiene catálogos/config: NO trae pestañas de
+   *  evento. Pedirlas a ciegas hace que Google devuelva 400 INVALID_ARGUMENT
+   *  ("Unable to parse range") y tumba el batchGet completo, dejando el espejo
+   *  sin datos. El fragmento legacy del BASE solo se consulta si la pestaña
+   *  existe aquí. Si la estructura NO se puede conocer (metadatos ilegibles o
+   *  fakes de test sin `sheets`), se vuelve al comportamiento original: leer
+   *  el BASE como legado monolítico (fail-open, nunca ocultar datos). */
+  interface BaseTablasInfo {
+    conocidas: boolean
+    set: Set<string>
+  }
+  let baseTablasCache: { id: string; info: BaseTablasInfo; ts: number } | null = null
+  const BASE_TABLAS_TTL_MS = 30_000
+
+  async function tablasDelBase(): Promise<BaseTablasInfo> {
+    const id = await sid()
+    const now = Date.now()
+    if (baseTablasCache && baseTablasCache.id === id && now - baseTablasCache.ts < BASE_TABLAS_TTL_MS) {
+      return baseTablasCache.info
+    }
+    let info: BaseTablasInfo = { conocidas: false, set: new Set() }
+    try {
+      const meta = await api.getSpreadsheet(id)
+      if (meta && Array.isArray(meta.sheets)) {
+        info = { conocidas: true, set: new Set(meta.sheets.map(s => s.properties.title)) }
+      }
+      // meta sin `sheets` (fake plano/`{}`): conocidas=false → legado monolítico.
+    } catch {
+      info = { conocidas: false, set: new Set() }
+    }
+    baseTablasCache = { id, info, ts: now }
+    return info
+  }
+
+  /** ¿El BASE tiene la pestaña? Desconocido ⇒ asumir que sí (legado BASE). */
+  async function baseTieneTabla(t: TableName): Promise<boolean> {
+    const { conocidas, set } = await tablasDelBase()
+    return conocidas ? set.has(sheetName(t)) : true
+  }
+
+  async function leerRango(archivoId: string, rango: string): Promise<(string | number)[][]> {
+    const res = await api.batchGet(archivoId, [rango])
+    return res[Object.keys(res)[0]] ?? []
+  }
+
+  /** Re-sync de UNA tabla de catálogo entre dos bases (F6 §11.5): clear +
+   *  reescritura desde la fila 2 (la fila 1 es cabecera). Devuelve las filas
+   *  copiadas. */
+  async function copiarTablaEntreBases(tabla: keyof typeof TABLES, fromId: string, toId: string): Promise<number> {
+    const rango = `'${sheetName(tabla)}'!A:ZZZ`
+    const rows = await leerRango(fromId, rango)
+    const datos = rows.slice(1).filter(r => Array.isArray(r) && r.some(c => c !== '' && c !== undefined))
+    if (datos.length === 0) return 0
+    await api.clearRange(toId, `'${sheetName(tabla)}'!A2:Z99999`)
+    await api.batchUpdate(toId, [{ range: `'${sheetName(tabla)}'!A2`, values: datos }])
+    return datos.length
+  }
+
+  /** Re-sync de Config (F6 §11.3): clear + reescritura de las parejas de
+   *  negocio (sin la fila de cabecera). */
+  async function copiarConfigEntreBases(fromId: string, toId: string): Promise<number> {
+    const rows = await leerRango(fromId, `'Config'!A:B`)
+    const datos = rows.slice(1).filter(r => Array.isArray(r) && String(r[0] ?? '').trim() !== '')
+    if (datos.length === 0) return 0
+    await api.clearRange(toId, `'Config'!A2:Z99999`)
+    await api.batchUpdate(toId, [{ range: `'Config'!A2`, values: datos }])
+    return datos.length
+  }
+
   async function idsDeAñosRegistrados(quien = '?'): Promise<{ año: string; id: string }[]> {
-    const raw = await leerFilasConfigRaw()
+    const raw = await leerSistema()
     return Object.keys(raw)
       .filter(k => /^eventos_\d{4}$/.test(k) && raw[k].trim().length >= 15)
       .map(k => ({ año: k.slice('eventos_'.length), id: raw[k] }))
@@ -102,6 +315,15 @@ export function createRepository(ctx: RepoContext) {
     try { return await readConfig() } catch { return null }
   }
 
+  /** Rango plausible de años (§8): [anio_activo − 20, anio_activo + 1].
+   *  Fuera de rango NUNCA se auto-crea (evita hojas basura por typos). */
+  async function añoPlausible(anio: string): Promise<boolean> {
+    const sistema = await leerSistema()
+    const activo = /^\d{4}$/.test(sistema.anio_activo ?? '') ? sistema.anio_activo : String(new Date().getFullYear())
+    const n = Number(anio)
+    return Number.isFinite(n) && n >= Number(activo) - 20 && n <= Number(activo) + 1
+  }
+
   function storeDeAñoSoloLectura(id: string): TableStore {
     let s = storesEvento.get(id)
     if (!s) { s = createSheetsTableStore(api, async () => id); storesEvento.set(id, s) }
@@ -112,6 +334,19 @@ export function createRepository(ctx: RepoContext) {
    *  `storeDeEventos` la usa con fallback; la UI la usa para reportar. */
   async function crearHojaEventos(anio: string): Promise<string> {
     const clave = `eventos_${anio}`
+    // Año borrado explícitamente: NO se recrea (el dueño lo decidió).
+    const previo = await mutexReadRow(clave).catch(() => null)
+    if (previo === BORRADO) throw new Error(`EVENTOS-${anio} fue borrado; vincula una hoja existente o escribe en el BASE`)
+    // Re-chequeo (spec §9): si OTRA tarea/dispositivo ya registró una hoja real
+    // para este año, la adoptamos en vez de crear un duplicado.
+    if (previo && previo.trim().length >= 15 && previo !== (await sid())) {
+      try {
+        await ensureTablasEvento(api, previo)
+        añosValidados.add(anio)
+        if (!storesEvento.has(previo)) storesEvento.set(previo, createSheetsTableStore(api, async () => previo))
+        return previo
+      } catch { /* hoja inválida → crear limpia */ }
+    }
     // Sonda de capacidad: la API REAL responde 404/throw para un id que no
     // existe (=> soportada); los fakes de test responden 200 sin `sheets`
     // (=> abortamos ANTES de escribir un solo header ajeno).
@@ -122,25 +357,48 @@ export function createRepository(ctx: RepoContext) {
     } catch { soportada = true } // 404 real: la API sí existe
     if (!soportada) throw new Error('estructura de hojas no disponible')
     const cfg = await readConfig().catch(() => null)
-    const nombre = `FinanceTracker${cfg?.empresa_nombre ? ` ${cfg.empresa_nombre}` : ''} ${anio}`.trim()
+    const sistema: Record<string, string> = await leerSistema().catch(() => ({}))
+    const instancia = sistema.ft_instancia || 'ftinst_?'
+    // Nombre ESTABLE: no depende de empresa_nombre (que cambia en Config).
+    // La personalización se hace vía Config.nombreBaseHoja (opcional, solo UI).
+    const base = (cfg?.nombreBaseHoja ?? 'FinanceTracker').trim()
+    const nombre = `${base} ${anio}`
     // Anti-duplicación: si ya existe un archivo con ESE nombre exacto, se
-    // ADOPTA (p. ej. tras perder el BASE y su registro).
+    // ADOPTA (p. ej. tras perder el BASE y su registro). NUNCA se adopta el
+    // propio BASE: ensureTablasEvento(api, BASE) inyectaría TODAS las tablas
+    // de evento (Facturas, Pagos…) en el spreadsheet de catálogos/Config.
     const driveBusqueda = new DriveApi(() => api.getToken())
-    const adoptable = await driveBusqueda.findSpreadsheet(nombre).catch(() => null)
+    const baseId = await sid()
+    const huellaAdoptables = await driveBusqueda.findEventos(instancia).catch(() => [])
+    const candidatos = []
+    for (const h of huellaAdoptables) {
+      if (h.id === baseId) continue
+      const p = await probeOwnership(h.id)
+      if (p.estado === 'no_es_dueño') continue // hoja ajena compartida: jamás adoptar
+      if (p.estado === 'no_verificable') await escribirHistorial(`adopción huérfano sin owner verificable (${h.id})`)
+      candidatos.push(h)
+    }
     let id: string
-    if (adoptable) {
-      id = adoptable.id
+    if (candidatos.length === 1) {
+      id = candidatos[0].id
       await ensureTablasEvento(api, id)
-      console.info(`[hoja-año] EVENTOS-${anio} adoptado (${id})`)
+      console.info(`[hoja-año] EVENTOS-${anio} adoptado por huella (${id})`)
+    } else if (candidatos.length > 1) {
+      // Huérfanos de la instancia sin registro: nunca decidir por nombre
+      // (spec §12). Si hay varios, se adopta el más reciente y se deja el resto
+      // para su manejo explícito en el inventario.
+      const masReciente = [...candidatos].sort((a, b) => String(b.modifiedTime ?? '').localeCompare(String(a.modifiedTime ?? '')))[0]
+      id = masReciente.id
+      await ensureTablasEvento(api, id)
+      console.warn(`[hoja-año] múltiples huérfanos; adoptado el más reciente (${id})`)
     } else {
       console.info(`[hoja-año] creando EVENTOS-${anio}…`)
-      const creada = await crearSpreadsheetEventos(api, nombre)
+      const creada = await crearSpreadsheetEventos(api, nombre, { drive: driveBusqueda, instancia })
       id = creada.spreadsheetId
       await ensureTablasEvento(api, id)
     }
     await mutexWriteRow(clave, id)
     añosValidados.add(anio)
-    await mutexWriteRow(clave, id)
     console.info(`[hoja-año] EVENTOS-${anio} creado (${id})`)
     return id
   }
@@ -151,35 +409,78 @@ export function createRepository(ctx: RepoContext) {
    *  la escritura. */
   const añosValidados = new Set<string>()
 
-  async function storeDeEventos(anio: string): Promise<TableStore> {
+  async function storeDeEventos(anio: string): Promise<{ id: string; st: TableStore }> {
     const clave = `eventos_${anio}`
+    const anioActual = String(new Date().getFullYear())
+    const baseId = await sid()
     let id = ''
-    if (!añosValidados.has(anio)) {
-      const existente = await mutexReadRow(clave)
-      id = existente && existente.trim().length >= 15 ? existente : ''
+    if (añosValidados.has(anio)) {
+      // Ya validado esta sesión: solo recuperar el id registrado (barato).
+      // NADA de re-crear: un re-create por escritura fabrica basura en Drive.
+      id = (await mutexReadRow(clave).catch(() => null)) ?? ''
     }
     if (id && !añosValidados.has(anio)) {
-      // Auto-sanado: archivo borrado/vacío en Drive → se recrea limpio.
-      try { await ensureTablasEvento(api, id); añosValidados.add(anio) }
-      catch { añosValidados.delete(anio); id = '' }
+      // Seguridad: el id registrado NUNCA puede ser el propio BASE (un
+      // registro así inyectaría las pestañas de evento con addSheet). Si es el
+      // año EN CURSO, se repara el registro creando la hoja real del año; si es
+      // pasado, se degrada al fragmento legacy del BASE sin tocar su estructura.
+      if (id === baseId) {
+        if (anio === anioActual) {
+          await mutexWriteRow(clave, '').catch(() => {})
+          id = ''
+        } else {
+          añosValidados.add(anio)
+          return { id: baseId, st: store }
+        }
+      } else {
+        try { await ensureTablasEvento(api, id); añosValidados.add(anio) }
+        catch {
+          // Archivo registrado pero ya no existe (papelera/borrado en Drive).
+          // Año pasado → marcar borrado y quedarse en BASE (NO recrear).
+          // Año actual → recrear limpio (rollover esperado).
+          añosValidados.delete(anio)
+          if (anio !== anioActual) {
+            await mutexWriteRow(clave, BORRADO).catch(() => {})
+            return { id: baseId, st: store }
+          }
+          id = ''
+        }
+      }
     }
     if (!id) {
+      // Año marcado borrado → nunca recrear (el dueño lo decidió): fragmento legacy.
+      const marcadoBorrado = await mutexReadRow(clave).catch(() => null)
+      if (marcadoBorrado === BORRADO) return { id: baseId, st: store }
+      // Año pasado sin hoja registrada → auto-crear SOLO si es plausible y en
+      // modo owner (§8). Fuera de rango → UI lo rechaza; acá cae al BASE.
+      if (anio !== anioActual && !(await añoPlausible(anio))) return { id: baseId, st: store }
+      if (anio !== anioActual && ctx.modo === 'backend') return { id: baseId, st: store }
       try {
         id = await crearHojaEventos(anio)
         añosValidados.add(anio)
       } catch (e) {
         console.warn(`[hoja-año] EVENTOS-${anio} no disponible; escribiendo en el BASE:`, e instanceof Error ? e.message : e)
-        return store
+        await escribirHistorial(`auto-creación ${anio} falló; fragmento legacy`).catch(() => {})
+        return { id: baseId, st: store }
       }
     }
     if (!storesEvento.has(id)) storesEvento.set(id, createSheetsTableStore(api, async () => id))
-    void mutexWriteRow('anio_activo', anio).catch(() => {})
-    return storesEvento.get(id)!
+    return { id, st: storesEvento.get(id)! }
   }
 
-  /** Store destino de una escritura: evento → su año; catálogo → BASE. */
-  async function storeDestino(t: keyof typeof TABLES, muestra: Record<string, unknown>): Promise<TableStore> {
-    if (!TABLAS_EVENTO.has(t)) return store
+  /** Store destino de una escritura: evento → su año; catálogo → BASE.
+   *  Devuelve también el id del spreadsheet para escrituras directas.
+   *  `Factura_Items` NO usa el año en curso: va por el año del padre (§8). */
+  async function storeDestino(t: keyof typeof TABLES, muestra: Record<string, unknown>): Promise<{ id: string; st: TableStore }> {
+    if (!TABLAS_EVENTO.has(t)) return { id: await sid(), st: store }
+    if (t === 'Factura_Items') {
+      const anioItem = await anioDeItem(muestra)
+      if (anioItem) return storeDeEventos(anioItem)
+      // Huérfano sin padre localizable: fragmento legacy del BASE si existe,
+      // en otro caso degrada al año en curso (no romper la escritura).
+      if (await baseTieneTabla('Factura_Items')) return { id: await sid(), st: store }
+      return storeDeEventos(String(new Date().getFullYear()))
+    }
     const anio = añoDeFila(muestra) || String(new Date().getFullYear())
     return storeDeEventos(anio)
   }
@@ -188,27 +489,124 @@ export function createRepository(ctx: RepoContext) {
    *  son legado del BASE: se reescriben ahí completas (nunca se duplican en
    *  un año nuevo). Requiere que `filas` sea el conjunto íntegro de la tabla
    *  (contrato actual de los flujos delete/update). */
+  /** Candado dedicado para operaciones largas (spec F5 §9): `ft_lock_largo` con
+   *  heartbeat (~15 s) y dueño (operación+ts). El segundo dispositivo espera y
+   *  reintenta; NUNCA escribe en paralelo. Se libera como `done` en finally. */
+  async function withLockLargo<T>(operacion: string, fn: () => Promise<T>): Promise<T> {
+    const CLAVE = 'ft_lock_largo'
+    const intentoAdquirir = async (now: number): Promise<boolean> => {
+      const actual = ((await leerSistema())[CLAVE] ?? '').split('|')
+      const ts = Number(actual[0])
+      const candadoViejo = !Number.isFinite(ts) || Date.now() - ts > 45_000 || actual[1] === 'done'
+      if (!candadoViejo) return false
+      await mutexWriteRow(CLAVE, `${now}|${operacion}|adquiriendo`)
+      return true
+    }
+    for (let i = 0; i < 12; i++) {
+      const now = Date.now()
+      if (await intentoAdquirir(now)) {
+        const confirm = ((await leerSistema())[CLAVE] ?? '').startsWith(`${now}|`)
+        if (confirm) {
+          const hb = setInterval(() => void mutexWriteRow(CLAVE, `${Date.now()}|${operacion}|heartbeat`).catch(() => {}), 15_000)
+          try {
+            return await fn()
+          } finally {
+            clearInterval(hb)
+            await mutexWriteRow(CLAVE, `${Date.now()}|done`).catch(() => {})
+          }
+        }
+      }
+      await new Promise(r => setTimeout(r, 1500 + Math.random() * 1000))
+    }
+    throw new Error(`Operación larga '${operacion}' está en curso (otro dispositivo la ejecuta); reintenta en unos segundos`)
+  }
+
+  /** Re-homing de `Factura_Items` (spec F5 §8/#3): recalcula la partición
+   *  COMPLETA por año del padre y reescribe base + cada hoja de año. Idempotente
+   *  (mismo resultado cada vez), una sola pasada marcada en Sistema. Los items
+   *  huérfanos o de año sin hoja registrada quedan en el fragmento legacy. */
+  async function reorganizarFacturaItems(): Promise<{ movidos: number }> {
+    if ((await leerSistema()).ft_rehome_done === '1') return { movidos: 0 }
+    return withLockLargo('rehome', hacerRehome)
+  }
+
+  /** Núcleo del re-homing (idempotente). Se ejecuta bajo `ft_lock_largo`. */
+  async function hacerRehome(): Promise<{ movidos: number }> {
+    if ((await leerSistema()).ft_rehome_done === '1') return { movidos: 0 }
+    const idsAño = await idsDeAñosRegistrados()
+    if (idsAño.length === 0) {
+      await mutexWriteRow('ft_rehome_done', '1').catch(() => {})
+      return { movidos: 0 }
+    }
+    const facturas = await readTable<Factura>('Facturas')
+    const padre = new Map<string, string>()
+    for (const f of facturas) {
+      const a = añoDeFila(f as unknown as Record<string, unknown>)
+      if (a && f.id_factura) padre.set(f.id_factura, a)
+    }
+    const porAñoRegistrado = new Map(idsAño.map(x => [x.año, x.id]))
+    const destino = new Map<string, Record<string, string | number>[]>()
+    const destinoLegacy: Record<string, string | number>[] = []
+    let movidos = 0
+    const baseTiene = await baseTieneTabla('Factura_Items')
+    const fuentes: { anio: string; rows: Record<string, string | number>[] }[] = []
+    if (baseTiene) fuentes.push({ anio: '', rows: await store.getAll('Factura_Items') })
+    for (const x of idsAño) fuentes.push({ anio: x.año, rows: await storeDeAñoSoloLectura(x.id).getAll('Factura_Items') })
+    for (const src of fuentes) {
+      for (const r of src.rows) {
+        const idPadre = String(r.id_factura ?? '')
+        const anio = padre.get(idPadre) ?? ''
+        const idRegistrado = anio ? porAñoRegistrado.get(anio) : undefined
+        if (!idRegistrado) {
+          destinoLegacy.push(r)
+        } else {
+          const lista = destino.get(anio)
+          if (lista) lista.push(r)
+          else destino.set(anio, [r])
+        }
+        if (anio !== src.anio) movidos++
+      }
+    }
+    if (baseTiene) {
+      await store.replace('Factura_Items', destinoLegacy)
+    }
+    for (const [anio, id] of porAñoRegistrado) {
+      await storeDeAñoSoloLectura(id).replace('Factura_Items', destino.get(anio) ?? [])
+    }
+    await mutexWriteRow('ft_rehome_done', '1')
+    return { movidos }
+  }
   async function reemplazarEventoFragmentado<T extends object>(t: keyof typeof TABLES, filas: T[]): Promise<void> {
     const idDeAño = new Map((await idsDeAñosRegistrados()).map(x => [x.año, x.id]))
+    // Items: el año lo dicta el PADRE, no la fila ni el año en curso (§8).
+    const mapItems = t === 'Factura_Items' ? await mapaAnioFacturas() : null
     const enBase: T[] = []
     const porAño = new Map<string, T[]>()
     for (const f of filas) {
       const r = f as Record<string, unknown>
-      const anio = añoDeFila(r) || String(new Date().getFullYear())
-      const id = idDeAño.get(anio)
-      if (!id) enBase.push(f)
+      const anio = mapItems
+        ? (mapItems.get(String(r.id_factura ?? '')) ?? '')
+        : (añoDeFila(r) || String(new Date().getFullYear()))
+      const id = anio ? idDeAño.get(anio) : undefined
+      if (!id) enBase.push(f) // sin año o sin spreadsheet registrado → legacy BASE
       else (porAño.get(anio) ?? porAño.set(anio, []).get(anio)!).push(f)
     }
     if (idDeAño.size === 0) {
       // Monolítico puro: sin años registrados el BASE ES la tabla completa
       // (incluye el borrado total: reemplazo con lista vacía limpia la hoja).
-      await store.replace(t, filas as Record<string, string | number>[])
+      // Solo si el BASE tiene la pestaña: un BASE post-refactor no la tiene
+      // y un replace ciego reventaría con 400.
+      if (await baseTieneTabla(t)) {
+        await store.replace(t, filas as Record<string, string | number>[])
+      }
       return
     }
     // Con años registrados TODAS las fuentes se reescriben con su fragmento
     // (aunque algún fragmento quede vacío: así un delete del último registro
     // sí elimina la fila en lugar de dejarla huérfana).
-    await store.replace(t, enBase as Record<string, string | number>[])
+    if (await baseTieneTabla(t)) {
+      await store.replace(t, enBase as Record<string, string | number>[])
+    }
     for (const [anio, grupo] of porAño) {
       const st = storeDeAñoSoloLectura(idDeAño.get(anio)!)
       await st.replace(t, grupo as Record<string, string | number>[])
@@ -221,7 +619,9 @@ export function createRepository(ctx: RepoContext) {
     }
   }
 
-  /** Lectura multi-tabla con unión de años (espejo/reportes/historial). */
+  /** Lectura multi-tabla con unión de años (espejo/reportes/historial).
+   *  Filtra años ANTES de pedir a Sheets para ahorrar cuota y latencia.
+   *  Serializa peticiones a distintos spreadsheets (evita 429 por ráfaga). */
   async function getVariasUnificado<T = Record<string, string | number>>(ts: TableName[], añosPermitidos?: (anio: string, t: TableName) => boolean): Promise<Partial<Record<TableName, T[]>>> {
     const evento = ts.filter(t => TABLAS_EVENTO.has(t as TableName))
     const base = ts.filter(t => !TABLAS_EVENTO.has(t as TableName))
@@ -229,17 +629,29 @@ export function createRepository(ctx: RepoContext) {
     if (base.length) Object.assign(out, await store.getVarias<T>(base as TableName[]))
     if (evento.length) {
       const idsAño = await idsDeAñosRegistrados()
+      // Filtrar años ANTES de crear fuentes: solo BASE + años permitidos
+      const añosRelevantes = !añosPermitidos
+        ? idsAño
+        : idsAño.filter(x => añosPermitidos(x.año, evento[0] as TableName))
+      // Fragmento legacy del BASE SOLO para las pestañas de evento que éste
+      // tenga de verdad. Un BASE post-refactor no tiene ninguna: consultárselas
+      // hace 400 INVALID_ARGUMENT y tumba el batchGet entero (espejo sin datos).
+      const baseTabs = await tablasDelBase()
+      const eventoBase = baseTabs.conocidas ? evento.filter(t => baseTabs.set.has(sheetName(t))) : evento
       const fuentes = [
-        { id: '__base__', st: store },
-        ...idsAño.map(x => ({ id: x.id, st: storeDeAñoSoloLectura(x.id) }))
+        ...(eventoBase.length ? [{ id: '__base__', st: store, tabs: eventoBase }] : []),
+        ...añosRelevantes.map(x => ({ id: x.id, st: storeDeAñoSoloLectura(x.id), tabs: evento }))
       ]
-      const partes = await Promise.all(fuentes.map(({ id, st }) =>
-        st.getVarias<T>(evento as TableName[]).then(p => ({ id, p }))
-      ))
+      // Serializar peticiones a spreadsheets distintos (evita 429 por ráfaga)
+      const partes = []
+      for (let i = 0; i < fuentes.length; i++) {
+        const { id, st, tabs } = fuentes[i]
+        const p = await st.getVarias<T>(tabs as TableName[])
+        partes.push({ id, p })
+        if (i < fuentes.length - 1) await new Promise(r => setTimeout(r, 200))
+      }
       for (const t of evento as TableName[]) {
-        out[t] = partes
-          .filter(({ id }) => !añosPermitidos || id === '__base__' || añosPermitidos(id.slice(0, 4), t as TableName))
-          .flatMap(({ p }) => p[t] ?? []) as T[]
+        out[t] = partes.flatMap(({ p }) => p[t] ?? []) as T[]
       }
     }
     return out
@@ -262,8 +674,12 @@ export function createRepository(ctx: RepoContext) {
     filas: Partial<Record<TableName, Record<string, string | number>[] | null>>
     alcance: Partial<Record<TableName, string[]>>
   }> {
-    const raw = await leerFilasConfigRaw()
+    const raw = await leerSistema()
     const activo = /^\d{4}$/.test(raw.anio_activo ?? '') ? raw.anio_activo : String(new Date().getFullYear())
+    // Asegurar que el año activo exista (crea/registra si es el año en curso)
+    await storeDeEventos(activo)
+    // Forzar refresh de Sistema para que getVariasUnificado vea el año recién registrado
+    invalidarSistemaCache()
     const filas = await getVariasUnificado<Record<string, string | number>>(ts, (anio, t) => añosVivosPara(t, activo)(anio))
     const alcance: Partial<Record<TableName, string[]>> = {}
     for (const t of ts) {
@@ -280,11 +696,12 @@ export function createRepository(ctx: RepoContext) {
 
   function readTable<T = Record<string, string | number>>(t: keyof typeof TABLES): Promise<T[]> {
     if (TABLAS_EVENTO.has(t)) {
-      // Unión: fragmento LEGACY del BASE (usuarios previos a hoja-por-año) +
+      // Unión: fragmento LEGACY del BASE SOLO si la pestaña existe ahí (un
+      // BASE post-refactor no la tiene; pedirla = 400 y readTable muere) +
       // todos los años registrados en Config (los ausentes se omiten).
       return (async () => {
         const idsAño = (await idsDeAñosRegistrados()).map(x => x.id)
-        const base = await store.getAll<T>(t)
+        const base = (await baseTieneTabla(t)) ? await store.getAll<T>(t) : []
         const partes = await Promise.all(idsAño.map(id => storeDeAñoSoloLectura(id).getAll<T>(t)))
         return [...base, ...partes.flat()]
       })()
@@ -294,7 +711,7 @@ export function createRepository(ctx: RepoContext) {
 
   async function appendRows<T extends object>(t: keyof typeof TABLES, rows: T[]): Promise<void> {
     if (!rows.length) return
-    const st = await storeDestino(t, rows[0] as Record<string, unknown>)
+    const { st } = await storeDestino(t, rows[0] as Record<string, unknown>)
     await st.append(t, rows as Record<string, string | number>[])
   }
 
@@ -307,7 +724,7 @@ export function createRepository(ctx: RepoContext) {
     const id = await sid()
     const res = await api.batchGet(id, [`'Config'!A1:B500`])
     const rows = res[Object.keys(res)[0]] ?? []
-    return configFromRows(rows.filter(r => String(r[0]) !== 'mutex'))
+    return configFromRows(rows)
   }
 
   async function writeConfig(config: Config): Promise<void> {
@@ -317,7 +734,7 @@ export function createRepository(ctx: RepoContext) {
 
   async function mutexReadRow(clave: string): Promise<string | null> {
     const id = await sid()
-    const res = await api.batchGet(id, [`'Config'!A1:B500`])
+    const res = await api.batchGet(id, [SISTEMA_RANGO])
     const rows = res[Object.keys(res)[0]] ?? []
     for (const r of rows) {
       if (!Array.isArray(r)) continue
@@ -328,15 +745,139 @@ export function createRepository(ctx: RepoContext) {
 
   async function mutexWriteRow(clave: string, valor: string): Promise<void> {
     const id = await sid()
-    const res = await api.batchGet(id, [`'Config'!A1:B500`])
+    const res = await api.batchGet(id, [SISTEMA_RANGO])
     const rows = res[Object.keys(res)[0]] ?? []
     let row = -1
     for (let i = 0; i < rows.length; i++) {
       if (!Array.isArray(rows[i])) continue
       if (String(rows[i][0]) === clave) { row = i + 1; break }
     }
-    if (row === -1) row = Math.max(rows.length + 1, 27)
-    await api.batchUpdate(id, [{ range: `'Config'!A${row}:B${row}`, values: [[clave, valor]] }])
+    if (row === -1) row = Math.max(rows.length + 1, 1)
+    await api.batchUpdate(id, [{ range: `'Sistema'!A${row}:B${row}`, values: [[clave, valor]] }])
+    invalidarSistemaCache()
+  }
+
+  // ── Gate de ownership (spec F3 §7) ────────────────────────────────────────
+  /** Lee una clave del Sistema de UN ESPREADSHEET concreto (no del sid actual). */
+  async function leerClaveSpreadsheet(archivoId: string, clave: string): Promise<string> {
+    const res = await api.batchGet(archivoId, [SISTEMA_RANGO])
+    const rows = res[Object.keys(res)[0]] ?? []
+    for (const r of rows) {
+      if (Array.isArray(r) && String(r[0]) === clave) return String(r[1] ?? '')
+    }
+    return ''
+  }
+
+  /** Escribe una clave del Sistema de UN ESPREADSHEET concreto (no del sid actual). */
+  async function escribirClaveSpreadsheet(archivoId: string, clave: string, valor: string): Promise<void> {
+    const res = await api.batchGet(archivoId, [SISTEMA_RANGO])
+    const rows = res[Object.keys(res)[0]] ?? []
+    let row = -1
+    for (let i = 0; i < rows.length; i++) {
+      if (!Array.isArray(rows[i])) continue
+      if (String(rows[i][0]) === clave) { row = i + 1; break }
+    }
+    if (row === -1) row = Math.max(rows.length + 1, 1)
+    await api.batchUpdate(archivoId, [{ range: `'Sistema'!A${row}:B${row}`, values: [[clave, valor]] }])
+  }
+
+  /** Añade una línea al historial del sistema (ft_historial, max ~8 líneas).
+   *  Mejor esfuerzo: nunca debe tumbar la operación que lo invoca. */
+  async function escribirHistorial(msg: string): Promise<void> {
+    try {
+      const previo = ((await leerSistema()).ft_historial || '').split('\n').filter(Boolean)
+      const linea = `${todayLocal()} ${new Date().toLocaleTimeString()} - ${msg}`
+      const valor = [...previo, linea].slice(-8).join('\n')
+      if (!valor) return
+      await mutexWriteRow('ft_historial', valor)
+    } catch {
+      // Historial solo diagnosticado; una caída aquí no bloquea la operación.
+    }
+  }
+
+  /** Probe de ownership en tres estados (spec §7): es_dueño / no_es_dueño /
+   *  no_verificable. En modo backend el gate se salta (service account
+   *  comparte-escritura, nunca dueño). Fail-open offline: sin metadata
+   *  alcanzable no se rechaza a un dueño ya operando. */
+  async function probeOwnership(id: string): Promise<{ estado: 'es_dueño' | 'no_es_dueño' | 'no_verificable'; motivo?: string }> {
+    if (ctx.modo === 'backend') return { estado: 'es_dueño', motivo: 'backend' }
+    let info: Awaited<ReturnType<typeof drive.getFileInfo>>
+    try {
+      info = await drive.getFileInfo(id)
+    } catch {
+      return { estado: 'no_verificable', motivo: 'no_verificable' } // offline/fuera de namespace → fail-open
+    }
+    if (!info) return { estado: 'no_verificable', motivo: 'no_verificable' }
+    if (info.capabilities && info.capabilities.canEdit === false) return { estado: 'no_es_dueño', motivo: 'solo_lectura' }
+    const owners = info.owners ?? []
+    if (owners.length > 0 && !owners.some(o => o.me === true)) return { estado: 'no_es_dueño', motivo: 'compartido' }
+    if (owners.some(o => o.me === true)) return { estado: 'es_dueño' }
+    return { estado: 'no_verificable', motivo: 'no_verificable' }
+  }
+
+  /** Gate aplicado tras un write-probe real (ensureTables/ensureTablasEvento):
+   *  dueño → ok; compartido/lectura → lanza; no_verificable → ok dejando traza
+   *  (prueba de edición ya dada por el write-probe). */
+  async function gateTrasWriteProbe(id: string, orquestando: string): Promise<void> {
+    const p = await probeOwnership(id)
+    if (p.estado === 'no_es_dueño') {
+      throw new Error('Esta hoja no es tuya o tiene permisos de solo lectura: el dueño debe vincularla')
+    }
+    if (p.estado === 'no_verificable') {
+      await escribirHistorial(`${orquestando}: owner no verificable, aceptado por write-probe (${id})`)
+    }
+  }
+
+  /** Sonda de identidad para UI/inventario (F4). Solo lectura del estado. */
+  async function verificarOwnership(id: string): Promise<{ estado: 'es_dueño' | 'no_es_dueño' | 'no_verificable'; motivo?: string }> {
+    return probeOwnership(id)
+  }
+
+  /** ¿Es este spreadsheet un BASE legacy (sin huella pero reconocible)?
+   *  `Config` o `Sistema` + al menos una pestaña catálogo FT (spec §14). */
+  async function esLegacyBase(id: string): Promise<boolean> {
+    const props = await drive.getAppProperties(id).catch(() => null)
+    if (props?.ft_tipo) return false
+    let meta
+    try { meta = await api.getSpreadsheet(id) } catch { return false }
+    const pestañas = (meta.sheets ?? []).map(s => (s.properties?.title ?? '').replace(/['"]/g, ''))
+    const reconocible = pestañas.includes('Config') || pestañas.includes('Sistema')
+    if (!reconocible) return false
+    return pestañas.some(t => (TABLAS_BASE as string[]).includes(t))
+  }
+
+  /** Sonda de identidad para inventario/picker (spec F4 §5-§6). */
+  async function infoHoja(id: string): Promise<HojaInfo> {
+    const [props, info, titulo] = await Promise.all([
+      drive.getAppProperties(id).catch(() => null),
+      drive.getFileInfo(id).catch(() => null),
+      api.getSpreadsheet(id).then(m => m.properties?.title || 'Sin título').catch(() => 'Sin título')
+    ])
+    const tipo: HojaTipo = props?.ft_tipo === 'base' ? 'base' : props?.ft_tipo === 'eventos' ? 'eventos' : 'desconocido'
+    const estado: HojaEstado =
+      props?.ft_estado === 'reemplazado' ? 'reemplazado' :
+      props?.ft_estado === 'borrado' ? 'borrado' :
+      props?.ft_tipo ? 'activo' :
+      'legacy'
+    const owners = info?.owners ?? []
+    let rol: RolOwnership
+    if (ctx.modo === 'backend') rol = 'es_dueño'
+    else if (info === null) rol = 'no_verificable'
+    else if (info.capabilities?.canEdit === false) rol = 'no_es_dueño'
+    else if (owners.length > 0 && !owners.some(o => o.me === true)) rol = 'no_es_dueño'
+    else if (owners.some(o => o.me === true)) rol = 'es_dueño'
+    else rol = 'no_verificable'
+    return {
+      id,
+      titulo,
+      url: `https://docs.google.com/spreadsheets/d/${id}/edit`,
+      tipo,
+      instancia: props?.ft_instancia,
+      estado,
+      dueño: owners.find(o => o.emailAddress)?.emailAddress,
+      rol,
+      editable: info?.capabilities?.canEdit ?? undefined
+    }
   }
 
   async function insertOrReplace<T extends object>(t: keyof typeof TABLES, idKey: string, obj: T): Promise<T> {
@@ -365,39 +906,122 @@ export function createRepository(ctx: RepoContext) {
     async getConfig(): Promise<Config> { return readConfig() },
 
     async uploadImagen(input: UploadImagenInput): Promise<string> {
-      const res = await drive.uploadBase64({ nombre: input.nombre, mimeType: input.mimeType, base64: input.base64 })
+      const modulo = input.modulo === 'configuracion' ? 'configuracion' : input.modulo === 'inventario' ? 'inventario' : 'otros'
+      const folderId = await drive.getAppFolder(modulo)
+      const res = await drive.uploadBase64({ nombre: input.nombre, mimeType: input.mimeType, base64: input.base64, parentFolderId: folderId })
       return res.url
     },
 
-    /** F4 (spec hoja-por-año §8): garantiza el spreadsheet EVENTOS-{año actual}
-     *  desde el arranque. NO traga errores: devuelve diagnóstico para la UI. */
-    async prepararAnioActual(): Promise<{ ok: boolean; modo: 'año' | 'monolítico'; error?: string }> {
+    /** F4 (spec hoja-por-año §8): garantiza el spreadsheet EVENTOS-{año actual}.
+     *  Desde el arranque NO recrea un año marcado como borrado (el dueño lo
+     *  decidió); desde el botón del panel (forzar=true) sí puede recrearlo.
+     *  NO traga errores: devuelve diagnóstico para la UI. */
+    async prepararAnioActual(forzar = false): Promise<{ ok: boolean; modo: 'año' | 'monolítico'; error?: string }> {
       if (!(await sid()).trim()) return { ok: false, modo: 'monolítico', error: 'sin spreadsheet base vinculado todavía' }
       const anio = String(new Date().getFullYear())
       try {
+        if (forzar) {
+          const clave = `eventos_${anio}`
+          const previo = await mutexReadRow(clave).catch(() => null)
+          if (previo === BORRADO) await mutexWriteRow(clave, '')
+        }
         await crearHojaEventos(anio)
+        // Re-homing: reescribe `Factura_Items` por año del padre (una sola pasada).
+        await reorganizarFacturaItems().catch(() => {})
         return { ok: true, modo: 'año' }
       } catch (e) {
         return { ok: false, modo: 'monolítico', error: e instanceof Error ? e.message : String(e) }
       }
     },
 
-    /** Elimina el archivo de un año (a papelera) y borra su registro.
-     *  El BASE nunca se elimina aquí. */
-    async eliminarAño(año: string): Promise<void> {
-      if (!/^\d{4}$/.test(año)) throw new Error('Año inválido')
-      const raw = await leerFilasConfigRaw()
-      const clave = `eventos_${año}`
-      const id = raw[clave] ?? ''
+/** Elimina el archivo de un año (a papelera) y lo marca como borrado para
+   *  que NO se vuelva a crear automáticamente. El BASE nunca se elimina aquí. */
+  async eliminarAño(año: string): Promise<void> {
+    if (!/^\d{4}$/.test(año)) throw new Error('Año inválido')
+    const raw = await leerSistema()
+    const clave = `eventos_${año}`
+    const id = raw[clave] ?? ''
+    if (id.trim().length >= 15) {
+      await new DriveApi(() => api.getToken()).enviarAPapelera(id)
+      añosValidados.delete(año)
+      storesEvento.delete(id)
+    }
+    await mutexWriteRow(clave, BORRADO)
+  },
+
+  /** F5: Reset completo — borra datos del BASE, envía EVENTOS a papelera,
+   *  limpia registro de años en Config y deja el sistema como recién instalado. */
+  async resetCompleto(): Promise<void> {
+    const baseId = await sid()
+    const drive = new DriveApi(() => api.getToken())
+
+    // 1. Borrar filas de TODAS las tablas del BASE (mantener headers)
+    for (const t of TABLAS_BASE) {
+      if (t === 'Config') continue
+      await store.replace(t, [])
+    }
+
+    // 2. Enviar todos los spreadsheets EVENTOS a papelera
+    const eventos = await idsDeAñosRegistrados()
+    for (const { año, id } of eventos) {
       if (id.trim().length >= 15) {
-        await new DriveApi(() => api.getToken()).enviarAPapelera(id)
+        await drive.enviarAPapelera(id)
         añosValidados.delete(año)
         storesEvento.delete(id)
       }
-      await mutexWriteRow(clave, '')
-    },
+    }
 
-    /** Panel Almacenamiento: dónde vive cada cosa (ids de Drive). */
+    // 3. Sistema: limpiar registro de años (eventos_*), anio_activo y mutex.
+    //    La identidad (ft_instancia/ft_id/ft_estado) se conserva.
+    const sistema = await leerSistema()
+    const aLimpiar = Object.keys(sistema).filter(k => /^eventos_\d{4}$/.test(k) || k === 'anio_activo' || k === 'mutex')
+    for (const k of aLimpiar) {
+      await mutexWriteRow(k, '')
+    }
+
+    // 4. Config: expulsar cualquier clave de sistema residual (estado
+    //    medio-migrado) dejando solo claves de negocio.
+    const cfg = await readConfig()
+    await api.clearRange(baseId, `'Config'!A1:B500`)
+    const negocio = configToRows(cfg).filter(r => !esClaveSistema(String(r[0])))
+    if (negocio.length > 0) {
+      await api.batchUpdate(baseId, [{ range: `'Config'!A1:B${negocio.length}`, values: negocio }])
+    }
+
+    // 5. Registrar historial de reset en Sistema
+    await mutexWriteRow('reset_historial', `${todayLocal()} ${new Date().toLocaleTimeString()} - resetCompleto`)
+
+    // Invalidar caches
+    invalidarSistemaCache()
+    añosValidados.clear()
+    storesEvento.clear()
+  },
+
+  /** F6: Reset nuclear — crea BASE nuevo, envía viejo a papelera, actualiza ID. */
+  async resetNuclear(): Promise<{ newSpreadsheetId: string }> {
+    const oldBaseId = await sid()
+    const drive = new DriveApi(() => api.getToken())
+
+    // 1. Crear BASE nuevo con nombre distintivo
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')
+    const nombre = `FinanceTracker ${timestamp}`
+    const { spreadsheetId: newBaseId } = await createInitialSpreadsheet(api, nombre, { drive })
+
+    // 2. Enviar BASE viejo a papelera
+    if (oldBaseId.trim().length >= 15) {
+      await drive.enviarAPapelera(oldBaseId)
+    }
+
+    // 3. Actualizar ID en storage y limpiar estado interno
+    await ctx.storage.set(KEYS.spreadsheetId, newBaseId)
+    invalidarSistemaCache()
+    añosValidados.clear()
+    storesEvento.clear()
+
+    return { newSpreadsheetId: newBaseId }
+  },
+
+  /** Panel Almacenamiento: dónde vive cada cosa (ids de Drive). */
     async estadoAlmacenamiento(): Promise<{
       anioActivo: string
       eventos: { año: string; id: string }[]
@@ -406,7 +1030,7 @@ export function createRepository(ctx: RepoContext) {
     }> {
       const baseId = await sid()
       const eventos = await idsDeAñosRegistrados()
-      const raw = await leerFilasConfigRaw()
+      const raw = await leerSistema()
       const anioActivo = /^\d{4}$/.test(raw.anio_activo ?? '') ? raw.anio_activo : String(new Date().getFullYear())
       return { anioActivo, eventos, baseId, creadoAñoActual: eventos.some(e => e.año === anioActivo) }
     },
@@ -839,8 +1463,7 @@ export function createRepository(ctx: RepoContext) {
       const pagosBase = HEADER_ROWS('Pagos') + 1
       const pagosLast = String.fromCharCode(64 + TABLES.Pagos.length)
       return withMutex<Pago>(mutexReadRow, mutexWriteRow, async () => {
-        const id = await sid()
-        const [rows, pagos, cfg] = await Promise.all([readTable(table), readTable('Pagos'), readConfig()])
+        const [rows, cfg] = await Promise.all([readTable(table), readConfig()])
         const target = rows.find(r => r[idKey] === parsed.id_origen)
         if (!target) throw new Error('Origen del pago no existe')
         const saldoActual = Number(target.saldo)
@@ -870,23 +1493,32 @@ export function createRepository(ctx: RepoContext) {
             tipo_cambio: tipoCambioOrigen
           }
         }
-        const updated = rows.map(r => {
+        // El documento vive en el spreadsheet del AÑO DE SU FECHA (hoja-por-año).
+        // El saldo y el pago se escriben en EL MISMO spreadsheet del documento,
+        // NUNCA en el BASE (post-refactor no tiene pestañas de evento → 400).
+        // Un documento legacy del BASE se actualiza en su fragmento del BASE.
+        const { id: idDestino, st: destino } = await storeDestino(table, target as Record<string, unknown>)
+        const [locales, pagosLocales] = await Promise.all([
+          destino.getAll(table) as Promise<Record<string, string | number>[]>,
+          destino.getAll('Pagos')
+        ])
+        const actualizar = (r: Record<string, string | number>) => {
           if (r[idKey] === parsed.id_origen) {
             if (table === 'Facturas') return { ...r, saldo: nuevoSaldo, fecha_pago: nuevoSaldo <= 0 ? parsed.fecha : String(r.fecha_pago ?? '') }
             return { ...r, saldo: nuevoSaldo, estado: nuevoSaldo <= 0 ? 'pagada' : 'parcial' }
           }
           return r
-        })
+        }
         const valueRanges: { range: string; values: (string | number)[][] }[] = [
-          { range: `'${table}'!A${base}:${last}`, values: updated.map(r => serializeRow(spec, r)) },
-          { range: `'Pagos'!A${pagosBase + pagos.length}:${pagosLast}`, values: [serializeRow(TABLES.Pagos, pagoRow as unknown as Record<string, unknown>)] }
+          { range: `'${table}'!A${base}:${last}`, values: locales.map(actualizar).map(r => serializeRow(spec, r)) },
+          { range: `'Pagos'!A${pagosBase + pagosLocales.length}:${pagosLast}`, values: [serializeRow(TABLES.Pagos, pagoRow as unknown as Record<string, unknown>)] }
         ]
         if (gastoGenerado) {
           const gastosBase = HEADER_ROWS('Gastos') + 1
-          const gastos = await readTable('Gastos')
-          valueRanges.push({ range: `'Gastos'!A${gastosBase + gastos.length}:I`, values: [serializeRow(TABLES.Gastos, gastoGenerado as unknown as Record<string, unknown>)] })
+          const gastosLocales = await destino.getAll('Gastos')
+          valueRanges.push({ range: `'Gastos'!A${gastosBase + gastosLocales.length}:I`, values: [serializeRow(TABLES.Gastos, gastoGenerado as unknown as Record<string, unknown>)] })
         }
-        await api.batchUpdate(id, valueRanges)
+        await api.batchUpdate(idDestino, valueRanges)
         return pagoRow
       })
     },
@@ -1124,6 +1756,166 @@ export function createRepository(ctx: RepoContext) {
       return { id, titulo, url: `https://docs.google.com/spreadsheets/d/${id}/edit` }
     },
 
+    /** Identidad de una hoja (spec F4 §6): tipo/instancia/estado/dueño/rol. */
+    async infoHoja(id: string): Promise<HojaInfo> {
+      return infoHoja(id)
+    },
+
+    /** Inventario completo (spec F4 §5-§6): BASE actual + años con su identidad
+     *  + otras bases con huella activa (candidatas del picker de arranque). */
+    async inventarioHojas(): Promise<InventarioHojas> {
+      const baseId = await sid()
+      const [base, eventos, encontradas] = await Promise.all([
+        infoHoja(baseId),
+        idsDeAñosRegistrados(),
+        drive.findBases().catch(() => [])
+      ])
+      const años = await Promise.all(eventos.map(async e => ({ año: e.año, hoja: await infoHoja(e.id) })))
+      const candidatas: HojaInfo[] = []
+      for (const c of encontradas) {
+        if (c.id === baseId) continue
+        candidatas.push(await infoHoja(c.id))
+      }
+      return { base, años, candidatas }
+    },
+
+    /** Sonda de ownership (spec F3 §7): es_dueño / no_es_dueño / no_verificable. */
+    async verificarOwnership(id: string): Promise<{ estado: 'es_dueño' | 'no_es_dueño' | 'no_verificable'; motivo?: string }> {
+      return probeOwnership(id)
+    },
+
+    /** ¿Es un BASE legacy sin huella pero reconocible (Config/Sistema + catálogo)? */
+    async esLegacyBase(id: string): Promise<boolean> {
+      return esLegacyBase(id)
+    },
+
+    /** Orden de transferencia (spec F7 §10.4): PRIMERO todos los EVENTOS, el
+     *  BASE al ÚLTIMO. Comparte el driver con `transferirSistema`. */
+    async preflightTransferencia(email: string): Promise<PreflightTransferencia> {
+      const baseId = (await sid()).trim()
+      if (!baseId) throw new Error('No hay BASE vinculado todavía')
+      const eventos = await idsDeAñosRegistrados()
+      const sistema = await leerSistema()
+      const previo = parsearTransferencia(sistema.ft_transferencia)
+      const estados = new Map(previo.map(r => [r.id, r.estado]))
+      const hojas: HojaTransferencia[] = []
+      for (const e of eventos) {
+        const p = await probeOwnership(e.id)
+        hojas.push({ id: e.id, tipo: 'eventos', año: e.año, rol: p.estado, motivo: p.estado === 'es_dueño' ? undefined : p.motivo })
+      }
+      const baseSep = await probeOwnership(baseId)
+      hojas.push({ id: baseId, tipo: 'base', rol: baseSep.estado, motivo: baseSep.estado === 'es_dueño' ? undefined : baseSep.motivo })
+      const retomables = hojas.filter(h => estados.get(h.id) === 'fallo').map(h => h.id)
+      const posible = hojas.every(h => h.rol === 'es_dueño')
+      return { email, hojas, retomables, posible }
+    },
+
+    /** Ejecuta la transferencia de propiedad al email destino (spec F7 §10):
+     *  secuencial EVENTOS → BASE, marcador `ft_transferencia` por hoja para
+     *  retomar desde cualquiera de los dos lados sin re-transferir lo migrado.
+     *  Si Google rechaza una hoja, se registra y el flujo continúa (plan B). */
+    async transferirSistema(email: string, onProgreso?: (avance: string) => void): Promise<TransferenciaResultado> {
+      if (ctx.modo === 'backend') throw new Error('La transferencia de propiedad solo aplica en modo owner')
+      const destino = email.trim().toLowerCase()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(destino)) throw new Error('Email destino inválido')
+      const baseId = await sid()
+      if (!baseId.trim()) throw new Error('No hay BASE vinculado todavía')
+      const eventos = await idsDeAñosRegistrados()
+      const orden: { id: string; tipo: 'base' | 'eventos'; año?: string }[] = [
+        ...eventos.map(e => ({ id: e.id, tipo: 'eventos' as const, año: e.año })),
+        { id: baseId, tipo: 'base' as const }
+      ]
+      const sistema = await leerSistema()
+      const lista: RegistroTransferencia[] = parsearTransferencia(sistema.ft_transferencia)
+      const estados = new Map(lista.map(r => [r.id, r.estado]))
+      const resultados: ResultadoTransferencia[] = []
+
+      for (const h of orden) {
+        if (estados.get(h.id) === 'hecho') {
+          resultados.push({ id: h.id, tipo: h.tipo, año: h.año, estado: 'ya_transferido' })
+          continue
+        }
+        const etiqueta = h.tipo === 'base' ? 'BASE' : `EVENTOS-${h.año}`
+        try {
+          const p = await probeOwnership(h.id)
+          if (p.estado === 'no_es_dueño') {
+            resultados.push({ id: h.id, tipo: h.tipo, año: h.año, estado: 'rechazado', motivo: `No eres dueño de ${etiqueta}` })
+            continue
+          }
+          onProgreso?.(`Transfiriendo ${etiqueta} a ${destino}…`)
+          // mejor esfuerzo: anotar dueño antes de mover; si falla, se continúa
+          await drive.setAppProperties(h.id, { ft_dueño_email: destino }).catch(() => {})
+          await drive.transferirOwnership(h.id, destino)
+          estados.set(h.id, 'hecho')
+          resultados.push({ id: h.id, tipo: h.tipo, año: h.año, estado: 'transferido' })
+        } catch (e) {
+          estados.set(h.id, 'fallo')
+          const msg = e instanceof Error ? e.message : String(e)
+          const codigo = (msg.match(/Drive API (\d+)/) ?? [])[1]
+          if (codigo === '403' || codigo === '400') {
+            resultados.push({ id: h.id, tipo: h.tipo, año: h.año, estado: 'rechazado', motivo: `Google rechazó la transferencia de ${etiqueta} (${codigo}); usa el plan B (compartir como editor)` })
+          } else {
+            resultados.push({ id: h.id, tipo: h.tipo, año: h.año, estado: 'rechazado', motivo: msg })
+          }
+        }
+        // marcador SIEMPRE actualizado tras cada hoja → retomable desde ambos lados
+        const regs: RegistroTransferencia[] = []
+        for (const r of orden) {
+          const estado = estados.get(r.id)
+          if (estado) regs.push({ id: r.id, tipo: r.tipo, año: r.año, estado })
+        }
+        await mutexWriteRow('ft_transferencia', serializarTransferencia(regs)).catch(() => {})
+      }
+
+      const transferidos = resultados.filter(r => r.estado !== 'rechazado').length
+      return { email: destino, resultados, transferidos, rechazados: resultados.length - transferidos }
+    },
+
+    /** Adopta un BASE legacy (spec §14): solo con confirmación explícita y si
+     *  el gate de ownership lo permite. Estampa la huella y lo vincula. */
+    async adoptarLegacyBase(spreadsheetId: string, confirmado: boolean): Promise<{ spreadsheetId: string }> {
+      const id = spreadsheetId.trim()
+      if (!/^[A-Za-z0-9_-]{15,}$/.test(id)) throw new Error('ID de hoja inválido')
+      if (!confirmado) throw new Error('Debes confirmar la adopción de esta hoja legacy')
+      if (!(await esLegacyBase(id))) throw new Error('Esta hoja no parece un BASE legacy reconocible (falta Config/Sistema o pestañas de catálogo)')
+      // Write-probe real: ensureTables añade Sistema/estructura si faltara.
+      await ensureTables(api, id)
+      await gateTrasWriteProbe(id, 'adopción legacy BASE')
+      const props = await drive.getAppProperties(id).catch(() => null)
+      const instancia = props?.ft_instancia || (await leerClaveSpreadsheet(id, 'ft_instancia')) || uid('ftinst_')
+      await estamparHuella(drive, id, 'base', instancia)
+      if (!(await leerClaveSpreadsheet(id, 'ft_instancia'))) await escribirClaveSpreadsheet(id, 'ft_instancia', instancia)
+      await ctx.storage.set(KEYS.spreadsheetId, id)
+      invalidarSistemaCache()
+      añosValidados.clear()
+      storesEvento.clear()
+      await escribirHistorial(`adopción legacy BASE (${id})`)
+      return { spreadsheetId: id }
+    },
+
+    /** Adopta un spreadsheet de año legacy (sin huella): confirmación explícita +
+     *  gate de ownership + estampa `ft_tipo=eventos` y registra `eventos_{año}`.
+     *  Usar tras adoptar el BASE legacy (la instancia se hereda de su Sistema). */
+    async adoptarAñoLegacy(año: string, spreadsheetId: string, confirmado: boolean): Promise<void> {
+      if (!/^\d{4}$/.test(año)) throw new Error('Año inválido')
+      const id = spreadsheetId.trim()
+      if (!/^[A-Za-z0-9_-]{15,}$/.test(id)) throw new Error('ID de hoja inválido')
+      if (!confirmado) throw new Error('Debes confirmar la adopción de esta hoja legacy')
+      if (id === (await sid())) throw new Error('Ese ID es el spreadsheet principal; elige un archivo de año (EVENTOS-{año})')
+      await ensureTablasEvento(api, id)
+      await gateTrasWriteProbe(id, `adopción legacy EVENTOS-${año}`)
+      const props = await drive.getAppProperties(id).catch(() => null)
+      if (!props?.ft_tipo) {
+        const instancia = (await leerClaveSpreadsheet(id, 'ft_instancia')) || (await leerSistema()).ft_instancia || uid('ftinst_')
+        await estamparHuella(drive, id, 'eventos', instancia)
+        if (!(await leerClaveSpreadsheet(id, 'ft_instancia'))) await escribirClaveSpreadsheet(id, 'ft_instancia', instancia)
+      }
+      await mutexWriteRow(`eventos_${año}`, id)
+      añosValidados.add(año)
+      if (!storesEvento.has(id)) storesEvento.set(id, createSheetsTableStore(api, async () => id))
+      await escribirHistorial(`adopción legacy EVENTOS-${año} (${id})`)
+    },
+
     /**
      * Conecta por nombre: si existe una hoja de la cuenta con ese nombre se
      * vincula (verificando permisos reales); si no, se crea con ese nombre.
@@ -1142,10 +1934,11 @@ export function createRepository(ctx: RepoContext) {
         } catch {
           throw new Error(`La hoja "${limpio}" existe pero esta cuenta no tiene permisos de edición sobre ella`)
         }
+        await gateTrasWriteProbe(existente.id, `conectar por nombre ${limpio}`)
         await ctx.storage.set(KEYS.spreadsheetId, existente.id)
         return { spreadsheetId: existente.id, url: existente.url ?? `https://docs.google.com/spreadsheets/d/${existente.id}`, creada: false }
       }
-      const creada = await createInitialSpreadsheet(api, limpio)
+      const creada = await createInitialSpreadsheet(api, limpio, { drive })
       await ctx.storage.set(KEYS.spreadsheetId, creada.spreadsheetId)
       return { spreadsheetId: creada.spreadsheetId, url: creada.url, creada: true }
     },
@@ -1163,17 +1956,71 @@ export function createRepository(ctx: RepoContext) {
       await new DriveApi(() => api.getToken()).renombrar(id.trim(), limpio)
     },
 
-    /** Crea un BASE NUEVO casi vacío (solo pestaña Config) y lo vincula.
-     *  ensureTables completa los catálogos en el próximo arranque/sync. */
+    /** F6 §11: "cambiar BASE" (nunca arrancar vacío). Crea un BASE nuevo
+     *  estampado con la MISMA `ft_instancia`, re-sincroniza Config + Sistema +
+     *  catálogos, invalida el BASE viejo (`ft_estado=reemplazado`) y propaga el
+     *  nuevo id vía appData. Solo modo owner, bajo `ft_lock_largo`. */
     async crearBaseVacia(nombre: string): Promise<{ spreadsheetId: string }> {
       const limpio = nombre.trim()
       if (!limpio) throw new Error('Escribe el nombre del archivo principal')
       if (limpio.length > 120) throw new Error('El nombre es demasiado largo (máx. 120)')
-      const creada = await api.createSpreadsheet(limpio)
-      await ctx.storage.set(KEYS.spreadsheetId, creada.spreadsheetId)
-      añosValidados.clear() // el registro de años vive en el BASE anterior
-      storesEvento.clear()
-      return { spreadsheetId: creada.spreadsheetId }
+      if (ctx.modo === 'backend') throw new Error('Cambiar el BASE no está disponible en modo backend')
+      return withLockLargo('rebase', async () => {
+        // 1. Preflight: write-probe real (ensureTables) + gate de ownership.
+        const baseId = await sid()
+        await ensureTables(api, baseId)
+        await gateTrasWriteProbe(baseId, 're-sync BASE origen')
+
+        // 2. BASE nuevo estampado con la misma instancia (los años siguen válidos).
+        const sis = await leerSistema()
+        const instancia = sis.ft_instancia ?? uid('ftinst_')
+        const { spreadsheetId: nuevoId } = await createInitialSpreadsheet(api, limpio, { drive, instancia })
+
+        // 3. Config (clear + reescritura).
+        await copiarConfigEntreBases(baseId, nuevoId)
+
+        // 4. Sistema: conserva eventos_{año}/anio_activo/historiales; ajusta ft_id.
+        const rowsSis = await leerRango(baseId, SISTEMA_RANGO)
+        const nuevas = rowsSis.map(r => {
+          const c = String(r[0] ?? '')
+          if (c === 'ft_id') return ['ft_id', nuevoId]
+          if (c === 'ft_estado') return ['ft_estado', 'activo']
+          return r
+        })
+        if (nuevas.length > 0) await api.batchUpdate(nuevoId, [{ range: SISTEMA_RANGO, values: nuevas }])
+
+        // 5. Catálogos pestaña a pestaña con validación de conteos al final.
+        for (const t of TABLAS_BASE) {
+          if (t === 'Config') continue
+          const filas = await copiarTablaEntreBases(t, baseId, nuevoId)
+          if (filas > 0) {
+            const verificadas = (await leerRango(nuevoId, `'${sheetName(t)}'!A:ZZZ`)).slice(1).filter(r => Array.isArray(r) && r.some(c => c !== '' && c !== undefined)).length
+            if (verificadas !== filas) throw new Error(`Re-sync de ${sheetName(t)} incompleto: ${verificadas}/${filas}`)
+          }
+        }
+
+        // 6. Invalidar el BASE viejo (evita dos sistemas vivos con esta instancia).
+        await drive.setAppProperties(baseId, { ft_estado: 'reemplazado' })
+        const rowsViejo = (await leerRango(baseId, SISTEMA_RANGO)).map(r => {
+          const c = String(r[0] ?? '')
+          if (c === 'ft_estado') return ['ft_estado', 'reemplazado']
+          return r
+        })
+        if (rowsViejo.length > 0) await api.batchUpdate(baseId, [{ range: SISTEMA_RANGO, values: rowsViejo }])
+
+        // 7. Propagar el nuevo id (PATCH al appDataFolder; otros dispositivos
+        //    toman el nuevo BASE al arrancar).
+        try {
+          await drive.saveAppConfig({ spreadsheetId: nuevoId })
+        } catch { /* fail-open: el boot re-resuelve por huella */ }
+
+        await ctx.storage.set(KEYS.spreadsheetId, nuevoId)
+        invalidarSistemaCache()
+        baseTablasCache = null
+        añosValidados.clear()
+        storesEvento.clear()
+        return { spreadsheetId: nuevoId }
+      })
     },
 
     /** Vincula el BASE por ID directo (desde el buscador). Valida edición. */
@@ -1185,7 +2032,37 @@ export function createRepository(ctx: RepoContext) {
       } catch {
         throw new Error('Esta cuenta no tiene permisos de edición sobre esa hoja')
       }
+      await gateTrasWriteProbe(id, 'conectarHojaPorId')
       await ctx.storage.set(KEYS.spreadsheetId, id)
+      
+      // NEW: sync to appDataFolder (non-blocking)
+      try {
+        await new DriveApi(() => api.getToken()).saveAppConfig({ spreadsheetId: id })
+      } catch (e) {
+        console.warn('[conectarHojaPorId] appData sync failed:', e instanceof Error ? e.message : e)
+      }
+    },
+
+    /** Vincula un spreadsheet de año existente (desde el buscador). Valida que
+     *  tenga las pestañas de evento y lo registra en Sistema como eventos_{año}. */
+    async conectarAñoPorId(año: string, spreadsheetId: string): Promise<void> {
+      if (!/^\d{4}$/.test(año)) throw new Error('Año inválido')
+      const id = spreadsheetId.trim()
+      if (!/^[A-Za-z0-9_-]{15,}$/.test(id)) throw new Error('ID de hoja inválido')
+      // El spreadsheet principal NO puede usarse como archivo de año: su rol es
+      // Config + catálogos. Conectarlo dispararía ensureTablasEvento (addSheet
+      // de Facturas, Pagos…) sobre el BASE.
+      if (id === (await sid())) throw new Error('Ese ID es el spreadsheet principal; elige un archivo de año (EVENTOS-{año})')
+      try {
+        await ensureTablasEvento(api, id)
+      } catch {
+        throw new Error('Esta cuenta no tiene permisos de edición o la hoja no tiene las pestañas de evento')
+      }
+      await gateTrasWriteProbe(id, `conectarAñoPorId ${año}`)
+      await mutexWriteRow(`eventos_${año}`, id)
+      añosValidados.add(año)
+      if (!storesEvento.has(id)) storesEvento.set(id, createSheetsTableStore(api, async () => id))
+      void mutexWriteRow('anio_activo', año).catch(() => {})
     },
 
     /** Varias tablas en una sola petición batchGet (para pulls del espejo). */
