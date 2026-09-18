@@ -267,7 +267,7 @@ import { execSync } from 'node:child_process'
 import { globSync } from 'node:fs'
 
 const ROOT = new URL('..', import.meta.url).pathname
-const IGNORE = /(node_modules|\.output|dist|\.wxt|\.vercel|pnpm-lock|tsbuildinfo)/
+const IGNORE = /(node_modules|\.output|dist|\.wxt|\.vercel|pnpm-lock|tsbuildinfo|scripts\/rename-map\.json)/
 const DRY = process.argv.includes('-n')
 
 function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') }
