@@ -294,7 +294,9 @@ function segment(text) {
       while (j < n && text[j] !== q) {
         if (text[j] === '\\') j += 2; else j++
       }
-      i = Math.min(j + 1, n); codeStart = i
+      const end = Math.min(j + 1, n)
+      segs.push({ code: false, start: i, end }) // el string SÍ se registra para el mapa `strings`
+      i = end; codeStart = end
       continue
     }
     i++
