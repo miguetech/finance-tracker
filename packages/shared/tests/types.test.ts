@@ -19,11 +19,11 @@ describe('schemas', () => {
     expect(ClienteSchema.safeParse({ nombre: 'ACME' }).success).toBe(true)
   })
   it('FacturaInputSchema exige >=1 item completo y cantidad>0', () => {
-    const base = { id_cliente: 'cli_1', fecha_emision: '2026-08-11', items: [] }
+    const base = { customer_id: 'cli_1', issue_date: '2026-08-11', items: [] }
     expect(FacturaInputSchema.safeParse(base).success).toBe(false)
-    const ok = { ...base, items: [{ descripcion: 'srv', cantidad: 2, precio_unitario: 100 }] }
+    const ok = { ...base, items: [{ descripcion: 'srv', cantidad: 2, unit_price: 100 }] }
     expect(FacturaInputSchema.safeParse(ok).success).toBe(true)
-    const mal = { ...base, items: [{ descripcion: 'srv', cantidad: 0, precio_unitario: -1 }] }
+    const mal = { ...base, items: [{ descripcion: 'srv', cantidad: 0, unit_price: -1 }] }
     expect(FacturaInputSchema.safeParse(mal).success).toBe(false)
   })
 })

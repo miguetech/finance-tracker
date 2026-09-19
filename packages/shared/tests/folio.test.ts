@@ -31,15 +31,15 @@ describe('folio template', () => {
 
 describe('config emisor', () => {
   it('ConfigSchema defaults de campos emisor vacíos', () => {
-    const c = ConfigSchema.parse({ empresa_nombre: 'X', prefijo_folio: 'FAC-' })
-    expect(c.empresa_cp).toBe('')
-    expect(c.empresa_ciudad).toBe('')
-    expect(c.empresa_pais).toBe('')
+    const c = ConfigSchema.parse({ company_name: 'X', serial_prefix: 'FAC-' })
+    expect(c.company_zip).toBe('')
+    expect(c.company_city).toBe('')
+    expect(c.company_country).toBe('')
   })
   it('configFromRows lee CP, ciudad y país', () => {
     const c = configFromRows([['empresa_cp', '45010'], ['empresa_ciudad', 'Guadalajara'], ['empresa_pais', 'México']])
-    expect(c.empresa_cp).toBe('45010')
-    expect(c.empresa_ciudad).toBe('Guadalajara')
-    expect(c.empresa_pais).toBe('México')
+    expect(c.company_zip).toBe('45010')
+    expect(c.company_city).toBe('Guadalajara')
+    expect(c.company_country).toBe('México')
   })
 })

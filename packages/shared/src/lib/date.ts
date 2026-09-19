@@ -10,3 +10,7 @@ export function todayLocal(d: Date = new Date()): string {
 export function monthLocal(d: Date = new Date()): string {
   return todayLocal(d).slice(0, 7)
 }
+
+export function hoyISO(d: Date = new Date()): string {
+  return d.toISOString().slice(0, 10)
+}

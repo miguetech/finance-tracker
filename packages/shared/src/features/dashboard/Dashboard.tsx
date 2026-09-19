@@ -1,14 +1,16 @@
 import React, { useState } from 'react'
 import { todayLocal } from '../../lib/date'
-import { useFacturas, useGastos, useCxp, useReportes, useProductos, useProveedores } from '../../store/queries'
+import { useFacturas, useGastos, useCxp, useReportes, useProductos, useProveedores, useReporteFinanciero, useReportesInventario } from '../../store/queries'
 import { formatMoney, formatMoneyConverted } from '../../currency'
 import { useAppStore } from '../../store/appStore'
 import { usePerms } from '../../store/perms'
 import { useI18n } from '../../i18n'
 import { StockBadge, stockLevel } from '../../ui/StockBadge'
-import { StatCard, Button } from '../../ui/components'
+import { StatCard, Button, Card, Badge } from '../../ui/components'
+import { Gauge, GroupedBarChart } from '../../ui/charts'
 import { IconCoins } from '../../ui/icons'
 import { VentaRapidaModal } from '../facturas/VentaRapidaModal'
+import { MetasChart } from '../reportes/Reportes'
 import type { NavKey } from '../../ui/layout/Layout'
 
 export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: NavKey) => void }) {
@@ -24,15 +26,21 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
   const { productos } = useProductos()
   const { proveedores } = useProveedores()
 
+  // Rango del mes para gráficas globales.
+  const desdeMes = `${mes}-01`
+  const hastaMes = `${mes}-${new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0).getDate()}`
+  const fin = useReporteFinanciero(desdeMes, hastaMes)
+  const inv = useReportesInventario(desdeMes, hastaMes)
+
   if (isLoading && !reportes) return <div className="p-8 text-gray-500">{t('common.cargando')}</div>
   const k = reportes?.kpis
-  const pendientes = facturas.filter(f => f.saldo > 0).sort((a, b) => (a.fecha_vencimiento || '9999').localeCompare(b.fecha_vencimiento || '9999'))
-  const vencidas = cxps.filter(c => c.saldo > 0 && c.fecha_vencimiento < todayLocal())
+  const pendientes = facturas.filter(f => f.saldo > 0).sort((a, b) => (a.due_date || '9999').localeCompare(b.due_date || '9999'))
+  const vencidas = cxps.filter(c => c.saldo > 0 && c.due_date < todayLocal())
   const alertas = productos
-    .filter(p => stockLevel(Number(p.stock), Number(p.stock_minimo)) !== 'ok' && String(p.activo) !== 'false')
-    .sort((a, b) => Number(a.stock) / Math.max(1, Number(a.stock_minimo)) - Number(b.stock) / Math.max(1, Number(b.stock_minimo)))
+    .filter(p => stockLevel(Number(p.stock), Number(p.minimum_stock)) !== 'ok' && String(p.activo) !== 'false')
+    .sort((a, b) => Number(a.stock) / Math.max(1, Number(a.minimum_stock)) - Number(b.stock) / Math.max(1, Number(b.minimum_stock)))
     .slice(0, 5)
-  const provMap = new Map(proveedores.map(p => [p.id_proveedor, p]))
+  const provMap = new Map(proveedores.map(p => [p.supplier_id, p]))
 
   return (
     <div className="space-y-6">
@@ -52,6 +60,8 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
         <StatCard label={t('dashboard.vencidas')} value={k ? formatMoney(k.vencidas, moneda) : '—'} tone="negative" />
         <StatCard label={t('dashboard.porVencerCxp')} value={k ? formatMoney(k.porVencer, moneda) : '—'} />
       </div>
+      <GraficasGlobales fin={fin.data} inv={inv.data} moneda={moneda} />
+      {canView('reportes') && <MetasChart meses={[mes, ...ultimosMeses(mes, 2)]} />}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white border border-gray-200 rounded-xl shadow-card p-4">
           <div className="flex items-center justify-between mb-3">
@@ -60,8 +70,8 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
           </div>
           {pendientes.length === 0 && <p className="text-sm text-gray-500">{t('dashboard.sinFacturasPendientes')}</p>}
           {pendientes.map(f => (
-            <div key={f.id_factura} className="flex justify-between py-1 text-sm border-b border-gray-50">
-              <span>{f.folio} · {f.nombre_cliente}</span><span>{formatMoneyConverted(f.saldo, f.moneda, moneda, config)}</span>
+            <div key={f.invoice_id} className="flex justify-between py-1 text-sm border-b border-gray-50">
+              <span>{f.folio} · {f.customer_name}</span><span>{formatMoneyConverted(f.saldo, f.moneda, moneda, config)}</span>
             </div>
           ))}
         </div>
@@ -69,8 +79,8 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
           <div className="font-semibold mb-3">{t('dashboard.cxpVencidas')}</div>
           {vencidas.length === 0 && <p className="text-sm text-gray-500">{t('dashboard.sinCuentasVencidas')}</p>}
           {vencidas.map(c => (
-            <div key={c.id_cxp} className="flex justify-between py-1 text-sm border-b border-gray-50">
-              <span>{c.nombre_proveedor} · {c.folio_documento || c.descripcion}</span><span>{formatMoneyConverted(c.saldo, c.moneda, moneda, config)}</span>
+            <div key={c.ap_id} className="flex justify-between py-1 text-sm border-b border-gray-50">
+              <span>{c.supplier_name} · {c.document_serial || c.descripcion}</span><span>{formatMoneyConverted(c.saldo, c.moneda, moneda, config)}</span>
             </div>
           ))}
         </div>
@@ -81,10 +91,10 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
             <Button variant="ghost" size="sm" onClick={() => onNavigate('inventario')}>{t('dashboard.verInventario')}</Button>
           </div>
           {alertas.map(p => {
-            const prov = provMap.get(String(p.id_proveedor))
+            const prov = provMap.get(String(p.supplier_id))
             return (
-              <div key={p.id_producto} className="flex justify-between items-center py-1 text-sm border-b border-gray-50">
-                <span>{p.nombre} <StockBadge stock={Number(p.stock)} minimo={Number(p.stock_minimo)} /></span>
+              <div key={p.product_id} className="flex justify-between items-center py-1 text-sm border-b border-gray-50">
+                <span>{p.nombre} <StockBadge stock={Number(p.stock)} minimo={Number(p.minimum_stock)} /></span>
                 <span className="text-xs text-gray-500">{t('dashboard.quedan')} {p.stock} {p.unidad || 'pieza'}{prov ? ` · ${prov.nombre}` : ''}</span>
               </div>
             )
@@ -93,6 +103,54 @@ export function Dashboard({ mes, onNavigate }: { mes: string; onNavigate: (k: Na
       )}
       <div className="text-sm text-gray-500">{t('dashboard.gastosMes')}: {gastos.length} {t('dashboard.registros')}</div>
       {ventaRapida && <VentaRapidaModal open onClose={() => setVentaRapida(false)} onSaved={() => setVentaRapida(false)} />}
+    </div>
+  )
+}
+
+function ultimosMeses(mes: string, n: number): string[] {
+  const base = new Date(`${mes}-15T00:00:00`)
+  const out: string[] = []
+  for (let i = 1; i <= n; i++) {
+    const d = new Date(base.getFullYear(), base.getMonth() - i, 1)
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+  }
+  return out.reverse()
+}
+
+/** Gráficas comparativas globales: pérdidas vs ganancias y picos de inventario. */
+function GraficasGlobales({ fin, inv, moneda }: {
+  fin?: NonNullable<ReturnType<typeof useReporteFinanciero>['data']>
+  inv?: NonNullable<ReturnType<typeof useReportesInventario>['data']>
+  moneda: string
+}) {
+  const { t } = useI18n()
+  if (!fin) return null
+  const eq = fin.equilibrio
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <Card title={t('reportesFin.perdidasVsGanancias')}>
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <Gauge pct={eq.cobertura_pct} label={`${Math.min(999, Math.round(eq.cobertura_pct))}%`} />
+          <div className="space-y-1.5 text-sm flex-1 w-full">
+            <div className="flex justify-between"><span className="text-muted-foreground">{t('dashboard.facturado')}</span><b>{formatMoney(fin.pl.ingresos_totales, moneda)}</b></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">{t('reportesFin.costosFijos')}</span><span>{formatMoney(eq.costos_fijos, moneda)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">{t('reportesFin.costosVariables')}</span><span>{formatMoney(eq.costos_variables, moneda)}</span></div>
+            <div className="flex justify-between border-t pt-1.5"><span className="text-muted-foreground">{t('dashboard.utilidad')}</span><b className={fin.pl.utilidad_neta >= 0 ? 'text-success' : 'text-danger'}>{formatMoney(fin.pl.utilidad_neta, moneda)}</b></div>
+            <Badge tone={eq.rentable ? 'green' : 'red'}>{eq.rentable ? `✓ ${t('states.pagado') === 'Pagado' ? 'Rentable' : 'Rentable'}` : '✗ Bajo el mínimo operativo'}</Badge>
+          </div>
+        </div>
+      </Card>
+      {inv && inv.movimientosMensuales.length > 0 && (
+        <Card title={t('reportesFin.picosInventario')}>
+          <GroupedBarChart
+            labels={inv.movimientosMensuales.map(m => m.mes)}
+            series={[
+              { name: t('reportesFin.entradas'), values: inv.movimientosMensuales.map(m => m.entradas) },
+              { name: t('reportesFin.salidas'), values: inv.movimientosMensuales.map(m => m.salidas) }
+            ]}
+            format={(n) => n.toLocaleString()} height={190} />
+        </Card>
+      )}
     </div>
   )
 }

@@ -48,7 +48,14 @@ const pt: Partial<Dict> = {
   inventario: {
     title: 'Inventário', nuevo: 'Novo produto', producto: 'Produto', stock: 'Estoque',
     stockMinimo: 'Estoque mínimo', precioCosto: 'Custo', precioVenta: 'Preço venda', unidad: 'Unidade',
-    entradaSalida: 'Entrada/Saída', historial: 'Histórico', movimiento: 'Movimento', motivo: 'Motivo'
+    entradaSalida: 'Entrada/Saída', historial: 'Histórico', movimiento: 'Movimento', motivo: 'Motivo',
+    imagen: 'Imagem'
+  },
+  imagenes: {
+    arrastrarSoltar: 'Arraste uma imagem aqui ou clique para enviar',
+    cambiar: 'Trocar imagem', quitar: 'Remover imagem',
+    errorTipo: 'O arquivo deve ser uma imagem', errorGrande: 'A imagem pesa mais de 10 MB',
+    subiendo: 'Enviando…'
   },
   reportes: {
     title: 'Relatórios', facturado: 'Faturado', cobrado: 'Recebido', pendiente: 'Pendente',
@@ -58,16 +65,59 @@ const pt: Partial<Dict> = {
     title: 'Configuração', datosEmpresa: 'Dados da empresa', empresaNombre: 'Nome',
     empresaRfc: 'RFC', prefijoFolio: 'Prefixo do folio', contadorFolio: 'Contador do folio',
     iva: 'IVA (%)', moneda: 'Moeda', categorias: 'Categorias', metodosPago: 'Métodos de pagamento',
-    idioma: 'Idioma', guardada: 'Configuração salva'
+    idioma: 'Idioma', guardada: 'Configuração salva',
+    logo: 'Logo (URL)', logoUrlOpcional: 'Ou cole a URL do logo'
   },
   compartir: {
     title: 'Compartilhar', generarLink: 'Gerar link', copiarLink: 'Copiar link',
-    roles: 'Perfis', backendUrl: 'URL do backend', usuarios: 'Usuários'
+    roles: 'Perfis', backendUrl: 'URL do backend', usuarios: 'Usuários',
+    codigos: 'Códigos de acesso',
+    generarCodigo: 'Gerar código',
+    generar: 'Gerar',
+    expira: 'Expira',
+    usos: 'Usos',
+    responsable: 'Responsável',
+    infinito: '∞',
+    copiarCodigo: 'Copiar código',
+    renovar: 'Renovar',
+    revocar: 'Revogar',
+    codigoGenerado: 'Código gerado: {codigo}',
+    codigoCopiado: 'Código copiado',
+    codigoRevocado: 'Código revogado',
+    codigoRenovado: 'Código renovado',
+    expiraEn: 'Expiração (vazio = infinito)',
+    usosMax: 'Usos máx (vazio = infinitos)',
+    codigoInfo: 'Quem tiver este código entra sem conta Google com o papel escolhido.',
+    rol: 'Papel',
+    modulosCodigo: 'Módulos',
+    eliminarCodigoTitulo: 'Revogar código',
+    eliminarCodigoMensaje: 'Este código deixará de funcionar imediatamente. Continuar?',
+    dispositivos: 'Dispositivos',
+    dispositivo: 'Dispositivo',
+    ipInfo: 'IP',
+    registradoEn: 'Registrado',
+    sinDispositivos: 'Nenhum dispositivo registrado',
+    removerDispositivo: 'Remover dispositivo',
+    removerDispositivoTitulo: 'Remover dispositivo',
+    removerDispositivoMensaje: 'Este navegador perderá o acesso imediatamente. Continuar?',
+    dispositivoRemovido: 'Dispositivo removido',
+    dispositivosInfo: 'Cada linha é um navegador autorizado com um código. Removê-lo encerra essa sessão.'
   },
   auth: {
+    loginTitle: 'Acesso ao painel',
+    conGoogle: 'Entrar com o Google',
+    conCodigo: 'Entrar com código de acesso',
+    codigo: 'Código de acesso',
+    entrar: 'Entrar',
+    codigoInvalido: 'Código inválido ou expirado',
     sinAcceso: 'Você não tem acesso a este painel. Peça acesso ao administrador.',
     conectando: 'Conectando…', conectandoSheets: 'Conectando ao Google Sheets…',
-    sesionRequerida: 'Sessão obrigatória', sesionInvalida: 'Sessão inválida'
+    sesionRequerida: 'Sessão obrigatória', sesionInvalida: 'Sessão inválida',
+    verifEnviado: 'Enviamos um código de verificação ao responsável. Digite aqui.',
+    verifCodigo: 'Código de verificação',
+    verificar: 'Verificar',
+    verifInvalido: 'Código de verificação inválido ou expirado',
+    espera: 'Muitas tentativas. Aguarde {min} min.'
   },
   errors: {
     nombreObligatorio: 'Nome obrigatório', cantidadMayor: 'Quantidade > 0', precioMayorIgual: 'Preço >= 0',
@@ -79,6 +129,17 @@ const pt: Partial<Dict> = {
     empleadoConNomina: 'Funcionário tem folha registrada',
     fechaVencimientoObligatoria: 'Data de vencimento obrigatória', mesFormato: 'Mês no formato AAAA-MM',
     folioBloqueado: 'Planilha ocupada, tente novamente'
+  },
+cola: {
+    pendientes: '{n} alterações pendentes de sincronizar',
+    conError: '{n} operações com erro',
+    reintentar: 'Tentar novamente',
+    descartar: 'Descartar'
+  },
+  sync: {
+    sinConexion: 'Offline',
+    pendientes: '{n} pendentes',
+    sincronizado: 'Sincronizado'
   }
 }
 

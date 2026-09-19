@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { todayLocal } from '../../lib/date'
-import { Dialog, Button, Input, Select } from '../../ui/components'
-import { useGastos, useCategorias, useMetodosPago } from '../../store/queries'
+import { Dialog, Button, Input, Select  } from '../../ui/components'
+import { useGastos, useMetodosPago } from '../../store/queries'
 import { useToast } from '../../ui/components'
+import { CategoriaQuickSelect } from '../../ui/CategoriaSelect'
 import { CurrencySelect } from '../../ui/currency'
 import { useI18n } from '../../i18n'
 import type { Gasto } from '../../types/entities'
@@ -10,21 +11,26 @@ import type { Gasto } from '../../types/entities'
 export function GastoFormModal({ open, onClose, initial }: { open: boolean; onClose: () => void; initial: Gasto | null }) {
   const { t } = useI18n()
   const { saveGasto } = useGastos()
-  const { data: categorias = [] } = useCategorias('gastos')
   const metodos = useMetodosPago()
   const toast = useToast()
-  const [form, setForm] = useState({ fecha: todayLocal(), categoria: '', descripcion: '', monto: '', metodo_pago: 'Efectivo', proveedor: '', moneda: '' })
+  const [form, setForm] = useState({ fecha: todayLocal(), categoria: '', descripcion: '', monto: '', payment_method: 'Efectivo', proveedor: '', moneda: '' })
   useEffect(() => {
-    if (open) setForm(initial ? { ...initial, monto: String(initial.monto) } : { fecha: todayLocal(), categoria: '', descripcion: '', monto: '', metodo_pago: 'Efectivo', proveedor: '', moneda: '' })
+    if (open) setForm(initial ? { ...initial, monto: String(initial.monto) } : { fecha: todayLocal(), categoria: '', descripcion: '', monto: '', payment_method: 'Efectivo', proveedor: '', moneda: '' })
   }, [open, initial])
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
+  const setCategoria = (v: string) => setForm(f => ({
+    ...f,
+    categoria: v,
+    // Si solo se eligió la categoría (ej. "Renta"), la descripción se rellena sola.
+    descripcion: f.descripcion.trim() === '' ? v : f.descripcion
+  }))
   const submit = async () => {
-    if (!form.descripcion.trim() || Number(form.monto) <= 0) {
-      toast(t('gastos.llenaDescripcion'), 'error')
-      return
-    }
+    if (!form.categoria.trim()) { toast(t('gastos.seleccionaCategoria'), 'error'); return }
+    if (!form.descripcion.trim()) { toast(t('gastos.llenaDescripcion'), 'error'); return }
+    const montoNum = Number(form.monto)
+    if (!Number.isFinite(montoNum) || montoNum <= 0) { toast(t('errors.montoMayorCero'), 'error'); return }
     try {
-      await saveGasto.mutateAsync({ ...(initial ?? {}), ...form, monto: Number(form.monto) } as Gasto)
+      await saveGasto.mutateAsync({ ...(initial ?? {}), ...form, monto: montoNum } as Gasto)
       toast(t('gastos.guardado'))
       onClose()
     } catch (e) {
@@ -38,14 +44,14 @@ export function GastoFormModal({ open, onClose, initial }: { open: boolean; onCl
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">{t('common.fecha')}</label><Input type="date" value={form.fecha} onChange={set('fecha')} /></div>
           <div><label className="text-xs text-gray-500">{t('common.categoria')}</label>
-            <Select value={form.categoria} onChange={v => setForm(f => ({ ...f, categoria: v }))} options={categorias.map(c => ({ value: c, label: c }))} />
+            <CategoriaQuickSelect configKey="expense_categories" value={form.categoria} onChange={setCategoria} />
           </div>
         </div>
         <div><label className="text-xs text-gray-500">{t('gastos.descripcion')} *</label><Input value={form.descripcion} onChange={set('descripcion')} /></div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div><label className="text-xs text-gray-500">{t('common.monto')} *</label><Input type="number" value={form.monto} onChange={set('monto')} /></div>
           <div><label className="text-xs text-gray-500">{t('common.metodo')}</label>
-            <Select value={form.metodo_pago} onChange={v => setForm(f => ({ ...f, metodo_pago: v }))} options={metodos.map(v => ({ value: v, label: v }))} />
+            <Select value={form.payment_method} onChange={v => setForm(f => ({ ...f, payment_method: v }))} options={metodos.map(v => ({ value: v, label: v }))} />
           </div>
         </div>
         <CurrencySelect label={t('gastos.monedaGasto')} value={form.moneda} onChange={v => setForm(f => ({ ...f, moneda: v }))} />

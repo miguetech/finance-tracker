@@ -17,22 +17,28 @@ export function CuentasPagar() {
   const { canEdit, isAdmin } = usePerms()
   const toast = useToast()
   const [estado, setEstado] = useState('')
+  const [verPagadas, setVerPagadas] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [detalleId, setDetalleId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const moneda = config?.moneda ?? 'USD'
   const hoy = todayLocal()
-  const filtrados = cxps.filter(c => !estado || c.estado === estado)
-  const tone = (c: { saldo: number; estado: string; fecha_vencimiento: string }) =>
+  // Las facturas con saldo cero se archivan automáticamente de la vista principal.
+  const ocultarPagadas = !verPagadas && estado !== 'pagada'
+  const filtrados = cxps
+    .filter(c => !estado || c.estado === estado)
+    .filter(c => !ocultarPagadas || Number(c.saldo) > 0)
+  const pagadasCount = cxps.filter(c => Number(c.saldo) <= 0).length
+  const tone = (c: { saldo: number; estado: string; due_date: string }) =>
     c.saldo <= 0 ? 'green' as const
-    : c.fecha_vencimiento && c.fecha_vencimiento < hoy ? 'red' as const
+    : c.due_date && c.due_date < hoy ? 'red' as const
     : c.estado === 'parcial' ? 'yellow' as const
     : 'blue' as const
-  const estadoLabel = (c: { saldo: number; estado: string; fecha_vencimiento: string }) =>
-    c.saldo <= 0 ? t('states.pagada') : c.fecha_vencimiento && c.fecha_vencimiento < hoy ? t('states.vencida') : c.estado === 'parcial' ? t('states.parcial') : t('states.pendiente')
+  const estadoLabel = (c: { saldo: number; estado: string; due_date: string }) =>
+    c.saldo <= 0 ? t('states.pagada') : c.due_date && c.due_date < hoy ? t('states.vencida') : c.estado === 'parcial' ? t('states.parcial') : t('states.pendiente')
 
-  const totalPorPagar = cxps.filter(c => c.saldo > 0).reduce((s, c) => s + (Number(c.monto_total) || 0) / (Number(c.tipo_cambio) || 1), 0)
-  const totalVencidas = cxps.filter(c => c.saldo > 0 && c.fecha_vencimiento < hoy).reduce((s, c) => s + (Number(c.saldo) || 0) / (Number(c.tipo_cambio) || 1), 0)
+  const totalPorPagar = cxps.filter(c => c.saldo > 0).reduce((s, c) => s + (Number(c.total_amount) || 0) / (Number(c.exchange_rate) || 1), 0)
+  const totalVencidas = cxps.filter(c => c.saldo > 0 && c.due_date < hoy).reduce((s, c) => s + (Number(c.saldo) || 0) / (Number(c.exchange_rate) || 1), 0)
 
   return (
     <div className="space-y-4">
@@ -41,7 +47,13 @@ export function CuentasPagar() {
           <h1 className="text-xl font-bold">{t('cuentas.title')}</h1>
           <p className="text-sm text-muted-foreground">{t('cuentas.subtitulo')}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {pagadasCount > 0 && (
+            <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer">
+              <input type="checkbox" className="h-4 w-4" checked={verPagadas} onChange={e => setVerPagadas(e.target.checked)} />
+              {t('cuentas.mostrarPagadas')} ({pagadasCount})
+            </label>
+          )}
           <Select value={estado} onChange={setEstado} options={[{ value: 'pendiente', label: t('states.pendiente') }, { value: 'parcial', label: t('states.parcial') }, { value: 'pagada', label: t('states.pagada') }]} placeholder={t('common.estado')} />
           {canEdit('cuentas') && (<Button icon={<IconPlus className="w-4 h-4" />} onClick={() => setFormOpen(true)}>{t('cuentas.nuevaCxp')}</Button>)}
         </div>
@@ -53,16 +65,16 @@ export function CuentasPagar() {
       </div>
       <div className="bg-white border border-gray-200 rounded-xl shadow-card overflow-hidden">
         <Table columns={[
-          { key: 'prov', header: t('cuentas.proveedor'), render: r => String(r.nombre_proveedor) },
+          { key: 'prov', header: t('cuentas.proveedor'), render: r => String(r.supplier_name) },
           { key: 'desc', header: t('cuentas.descripcion'), render: r => String(r.descripcion) },
-          { key: 'venc', header: t('cuentas.vence'), render: r => <span className={String(r.fecha_vencimiento) < hoy && Number(r.saldo) > 0 ? 'text-red-600 font-medium' : ''}>{String(r.fecha_vencimiento)}</span> },
-          { key: 'total', header: t('facturas.total'), render: r => formatMoneyConverted(Number(r.monto_total), String(r.moneda), moneda, config) },
+          { key: 'venc', header: t('cuentas.vence'), render: r => <span className={String(r.due_date) < hoy && Number(r.saldo) > 0 ? 'text-red-600 font-medium' : ''}>{String(r.due_date)}</span> },
+          { key: 'total', header: t('facturas.total'), render: r => formatMoneyConverted(Number(r.total_amount), String(r.moneda), moneda, config) },
           { key: 'saldo', header: t('facturas.saldo'), render: r => formatMoneyConverted(Number(r.saldo), String(r.moneda), moneda, config) },
-          { key: 'estado', header: t('common.estado'), render: r => { const c = r as { saldo: number; estado: string; fecha_vencimiento: string }; return <Badge tone={tone(c)}>{estadoLabel(c)}</Badge> } },
+          { key: 'estado', header: t('common.estado'), render: r => { const c = r as { saldo: number; estado: string; due_date: string }; return <Badge tone={tone(c)}>{estadoLabel(c)}</Badge> } },
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => setDetalleId(String(r.id_cxp))}>{t('facturas.ver')}</Button>
-              {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_cxp))}>{t('common.eliminar')}</Button>)}
+              <Button variant="ghost" onClick={() => setDetalleId(String(r.ap_id))}>{t('facturas.ver')}</Button>
+              {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.ap_id))}>{t('common.eliminar')}</Button>)}
             </div>
           ) }
         ]} rows={filtrados as unknown as Record<string, unknown>[]} />

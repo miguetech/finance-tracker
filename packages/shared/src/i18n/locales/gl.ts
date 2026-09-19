@@ -47,7 +47,14 @@ const gl: Partial<Dict> = {
   inventario: {
     title: 'Inventario', nuevo: 'Novo produto', producto: 'Produto', stock: 'Stock',
     stockMinimo: 'Stock mínimo', precioCosto: 'Custo', precioVenta: 'Prezo venda', unidad: 'Unidade',
-    entradaSalida: 'Entrada/Saída', historial: 'Historial', movimiento: 'Movemento', motivo: 'Motivo'
+    entradaSalida: 'Entrada/Saída', historial: 'Historial', movimiento: 'Movemento', motivo: 'Motivo',
+    imagen: 'Imaxe'
+  },
+  imagenes: {
+    arrastrarSoltar: 'Arrastra unha imaxe aquí ou preme para subila',
+    cambiar: 'Cambiar imaxe', quitar: 'Quitar imaxe',
+    errorTipo: 'O arquivo debe ser unha imaxe', errorGrande: 'A imaxe pesa máis de 10 MB',
+    subiendo: 'Subindo…'
   },
   reportes: {
     title: 'Informes', facturado: 'Facturado', cobrado: 'Cobrado', pendiente: 'Pendente',
@@ -57,16 +64,59 @@ const gl: Partial<Dict> = {
     title: 'Configuración', datosEmpresa: 'Datos da empresa', empresaNombre: 'Nome',
     empresaRfc: 'NIF', prefijoFolio: 'Prefixo do folio', contadorFolio: 'Contador do folio',
     iva: 'IVE (%)', moneda: 'Moeda', categorias: 'Categorías', metodosPago: 'Métodos de pagamento',
-    idioma: 'Idioma', guardada: 'Configuración gardada'
+    idioma: 'Idioma', guardada: 'Configuración gardada',
+    logo: 'Logo (URL)', logoUrlOpcional: 'Ou pega a URL do logo'
   },
   compartir: {
     title: 'Compartir', generarLink: 'Xerar ligazón', copiarLink: 'Copiar ligazón',
-    roles: 'Roles', backendUrl: 'URL do backend', usuarios: 'Usuarios'
+    roles: 'Roles', backendUrl: 'URL do backend', usuarios: 'Usuarios',
+    codigos: 'Códigos de acceso',
+    generarCodigo: 'Xerar código',
+    generar: 'Xerar',
+    expira: 'Expira',
+    usos: 'Usos',
+    responsable: 'Responsable',
+    infinito: '∞',
+    copiarCodigo: 'Copiar código',
+    renovar: 'Renovar',
+    revocar: 'Revogar',
+    codigoGenerado: 'Código xerado: {codigo}',
+    codigoCopiado: 'Código copiado',
+    codigoRevocado: 'Código revogado',
+    codigoRenovado: 'Código renovado',
+    expiraEn: 'Caducidade (baleiro = infinito)',
+    usosMax: 'Usos máx (baleiro = infinitos)',
+    codigoInfo: 'Quen teña este código entra sen conta de Google co rol elixido.',
+    rol: 'Rol',
+    modulosCodigo: 'Módulos',
+    eliminarCodigoTitulo: 'Revogar código',
+    eliminarCodigoMensaje: 'Este código deixará de funcionar de inmediato. Continuar?',
+    dispositivos: 'Dispositivos',
+    dispositivo: 'Dispositivo',
+    ipInfo: 'IP',
+    registradoEn: 'Rexistrado',
+    sinDispositivos: 'Sen dispositivos rexistrados',
+    removerDispositivo: 'Quitar dispositivo',
+    removerDispositivoTitulo: 'Quitar dispositivo',
+    removerDispositivoMensaje: 'Este navegador perderá o acceso de inmediato. Continuar?',
+    dispositivoRemovido: 'Dispositivo quitado',
+    dispositivosInfo: 'Cada fila é un navegador autorizado cun código. Quitalo pecha esa sesión.'
   },
   auth: {
+    loginTitle: 'Acceso ao panel',
+    conGoogle: 'Entrar con Google',
+    conCodigo: 'Entrar con código de acceso',
+    codigo: 'Código de acceso',
+    entrar: 'Entrar',
+    codigoInvalido: 'Código non válido ou caducado',
     sinAcceso: 'Non tes acceso a este panel. Pide acceso ao administrador.',
     conectando: 'Conectando…', conectandoSheets: 'Conectando a Google Sheets…',
-    sesionRequerida: 'Sesión obrigatoria', sesionInvalida: 'Sesión inválida'
+    sesionRequerida: 'Sesión obrigatoria', sesionInvalida: 'Sesión inválida',
+    verifEnviado: 'Enviamos un código de verificación ao responsable. Escríbeo aquí.',
+    verifCodigo: 'Código de verificación',
+    verificar: 'Verificar',
+    verifInvalido: 'Código de verificación non válido ou caducado',
+    espera: 'Demasiados intentos. Agarda {min} min.'
   },
   errors: {
     nombreObligatorio: 'Nome obrigatorio', cantidadMayor: 'Cantidade > 0', precioMayorIgual: 'Prezo >= 0',
@@ -77,7 +127,18 @@ const gl: Partial<Dict> = {
     proveedorConCuentas: 'O provedor ten contas a pagar asociadas',
     empleadoConNomina: 'O empregado ten nómina rexistrada',
     fechaVencimientoObligatoria: 'Data de vencemento obrigatoria', mesFormato: 'Mes con formato AAAA-MM',
-    folioBloqueado: 'Folla ocupada, téntao de novo'
+folioBloqueado: 'Folla ocupada, téntao de novo'
+  },
+cola: {
+    pendientes: '{n} cambios pendentes de sincronizar',
+    conError: '{n} operacións con erro',
+    reintentar: 'Reintentar',
+    descartar: 'Descartar'
+  },
+  sync: {
+    sinConexion: 'Sen conexión',
+    pendientes: '{n} pendentes',
+    sincronizado: 'Sincronizado'
   }
 }
 

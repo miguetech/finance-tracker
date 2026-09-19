@@ -5,9 +5,9 @@ import { SheetsApi } from '../src/sheets/api'
 import { createInitialSpreadsheet, ensureTables } from '../src/sheets/createSpreadsheet'
 
 describe('tables', () => {
-  it('define esquema de 12 tablas', () => {
+  it('define esquema de 18 tablas', () => {
     const names = Object.keys(TABLES)
-    expect(names).toHaveLength(12)
+    expect(names).toHaveLength(18)
     expect(sheetName('Facturas')).toBe('Facturas')
   })
   it('Factura incluye saldo', () => {
@@ -18,12 +18,12 @@ describe('tables', () => {
 
 describe('rows', () => {
   it('serializa y deserializa redondo', () => {
-    const obj = { id_factura: 'fac_1', total: 100.5, fecha_emision: '2026-08-11', nombre: 'ACME' }
+    const obj = { invoice_id: 'fac_1', total: 100.5, issue_date: '2026-08-11', nombre: 'ACME' }
     const row = serializeRow(TABLES.Facturas, obj)
     const back = deserializeRow(TABLES.Facturas, row)
-    expect(back.id_factura).toBe('fac_1')
+    expect(back.invoice_id).toBe('fac_1')
     expect(back.total).toBe(100.5)
-    expect(back.fecha_emision).toBe('2026-08-11')
+    expect(back.issue_date).toBe('2026-08-11')
   })
   it('deserialize convierte numeros', () => {
     const back = deserializeRow(TABLES.Facturas, ['fac_1', 'FAC-1', 'c1', 'A', '2026-08-11', '', 100, 16, 116, 50, '', ''])
@@ -37,10 +37,11 @@ describe('rows', () => {
 })
 
 describe('api', () => {
-  it('batchGet parsea filas por rango', async () => {
+  it('batchGet parsea filas por rango (parametro repetido)', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const u = new URL(String(url))
-      const ranges = (u.searchParams.get('ranges') ?? '').split(',').filter(Boolean)
+      const ranges = u.searchParams.getAll('ranges')
+      expect(ranges).toEqual(['A1:A2', 'B1:B2']) // parametro repetido, no lista con comas
       const data: Record<string, { values?: (string | number)[][] }> = {}
       for (const r of ranges) data[r] = { values: [['a'], ['b']] }
       return { ok: true, json: async () => ({ valueRanges: Object.entries(data).map(([range, x]) => ({ range, values: x.values })) }) } as Response
@@ -87,11 +88,12 @@ describe('createInitialSpreadsheet', () => {
 })
 
 describe('ensureTables', () => {
-  it('crea las hojas faltantes (Empleados, Productos, Movimientos_Stock) con headers y sin añadir columnas extra', async () => {
+  it('crea las hojas faltantes (Empleados, Productos, Movimientos_Stock, Codigos_Acceso, Dispositivos) + Sistema y sin añadir columnas extra', async () => {
     const calls: { url: string; init?: RequestInit }[] = []
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url: String(url), init: init ?? ({} as RequestInit) })
       const u = String(url)
+      if (u.includes('values:batchGet')) return { ok: true, json: async () => ({ valueRanges: [] }) } as Response
       if (u.includes('values:batchUpdate')) return { ok: true, json: async () => ({ responses: [] }) } as Response
       if (u.includes(':batchUpdate')) return { ok: true, json: async () => ({ replies: [] }) } as Response
       const existing = ['Config', 'Clientes', 'Facturas', 'Factura_Items', 'Gastos', 'Proveedores', 'Cuentas_Pagar', 'Pagos', 'Usuarios']
@@ -103,10 +105,10 @@ describe('ensureTables', () => {
     const addSheets = calls.filter(c => c.url.includes(':batchUpdate') && !c.url.includes('values:batchUpdate'))
     expect(addSheets.length).toBe(1)
     const body = JSON.parse(String(addSheets[0].init?.body)) as { requests: { addSheet: { properties: { title: string } } }[] }
-    expect(body.requests.map(r => r.addSheet.properties.title)).toEqual(['Empleados', 'Productos', 'Movimientos_Stock'])
+    expect(body.requests.map(r => r.addSheet.properties.title)).toEqual(['Empleados', 'Productos', 'Codigos_Acceso', 'Dispositivos', 'Gastos_Fijos', 'Sistema'])
     const headerWrites = calls.filter(c => c.url.includes('values:batchUpdate'))
-    expect(headerWrites.length).toBe(1)
-    expect(String(headerWrites[0].init?.body)).toContain('id_empleado')
+    expect(headerWrites.length).toBe(2) // headers de negocio + semilla de Sistema
+    expect(String(headerWrites[0].init?.body)).toContain('employee_id')
     vi.unstubAllGlobals()
   })
 
@@ -115,6 +117,7 @@ describe('ensureTables', () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url: String(url), init: init ?? ({} as RequestInit) })
       const u = String(url)
+      if (u.includes('values:batchGet')) return { ok: true, json: async () => ({ valueRanges: [] }) } as Response
       if (u.includes('values:batchUpdate')) return { ok: true, json: async () => ({ responses: [] }) } as Response
       if (u.includes(':batchUpdate')) return { ok: true, json: async () => ({ replies: [] }) } as Response
       return { ok: true, json: async () => ({ sheets: Object.keys(TABLES).map((title, i) => ({ properties: { title, sheetId: i, gridProperties: { columnCount: 7 } } })) }) } as Response
@@ -122,20 +125,28 @@ describe('ensureTables', () => {
     vi.stubGlobal('fetch', fetchMock)
     const api = new SheetsApi(async () => 'T')
     await ensureTables(api, 'SID')
-    const grid = calls.find(c => c.url.includes(':batchUpdate') && !c.url.includes('values:batchUpdate'))
+    const grids = calls.filter(c => c.url.includes(':batchUpdate') && !c.url.includes('values:batchUpdate'))
+    const grid = grids.map(c => ({ url: c.url, body: JSON.parse(String(c.init?.body)) as { requests: { addDimension?: { range: { sheetId: number; startIndex: number; endIndex: number } } }[] } }))
+      .find(c => c.body.requests.some(r => r.addDimension))
     expect(grid).toBeTruthy()
-    const body = JSON.parse(String(grid?.init?.body)) as { requests: { addDimension: { range: { sheetId: number; startIndex: number; endIndex: number } } }[] }
-    expect(body.requests.length).toBeGreaterThan(0)
-    expect(body.requests[0].addDimension.range.endIndex).toBeGreaterThan(7)
+    const body = grid!.body as { requests: { addDimension: { range: { sheetId: number; startIndex: number; endIndex: number } } }[] }
+    const adds = body.requests.filter(r => r.addDimension).map(r => r.addDimension.range)
+    expect(adds[0].endIndex).toBeGreaterThan(7)
     vi.unstubAllGlobals()
   })
 
-  it('no hace nada si todas las hojas existen', async () => {
+  it('no hace nada si todas las hojas existen y Sistema ya tiene identidad', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const u = String(url)
+      if (u.includes('values:batchGet')) {
+        const ranges = new URL(u).searchParams.getAll('ranges')
+        return { ok: true, json: async () => ({ valueRanges: ranges.map(r => ({ range: r, values: r.includes('Sistema')
+          ? [['ft_vers', '1'], ['ft_instancia', 'ftinst_x'], ['ft_id', 'SID'], ['ft_estado', 'activo']]
+          : [['empresa_nombre', 'X']] })) }) } as Response
+      }
       if (u.includes('values:batchUpdate')) return { ok: true, json: async () => ({ responses: [] }) } as Response
       if (u.includes(':batchUpdate')) return { ok: true, json: async () => ({ replies: [] }) } as Response
-      return { ok: true, json: async () => ({ sheets: Object.keys(TABLES).map((title, i) => ({ properties: { title, sheetId: i, gridProperties: { columnCount: TABLES[title as keyof typeof TABLES]?.length ?? 2 } } })) }) } as Response
+      return { ok: true, json: async () => ({ sheets: [...Object.keys(TABLES).map((title, i) => ({ properties: { title, sheetId: i, gridProperties: { columnCount: TABLES[title as keyof typeof TABLES]?.length ?? 2 } } })), { properties: { title: 'Sistema', sheetId: 99, gridProperties: { columnCount: 2 } } }] }) } as Response
     })
     vi.stubGlobal('fetch', fetchMock)
     const api = new SheetsApi(async () => 'T')

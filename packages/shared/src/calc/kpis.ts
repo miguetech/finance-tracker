@@ -23,21 +23,21 @@ function toBaseMonto(monto: number, tipoCambio: number): number {
 }
 
 export function kpisForMonth(facturas: Factura[], gastos: Gasto[], cxps: CuentaPagar[], pagos: Pago[], mes: string): Kpis {
-  const f = facturas.filter(x => inMonth(x.fecha_emision, mes))
-  const facturado = round2(f.reduce((s, x) => s + toBaseMonto(x.total, x.tipo_cambio), 0))
-  const cobrado = round2(pagos.filter(p => p.tipo === 'cobro' && inMonth(p.fecha, mes)).reduce((s, p) => s + toBaseMonto(p.monto, p.tipo_cambio), 0))
-  const pendiente = round2(f.filter(x => x.saldo > 0).reduce((s, x) => s + toBaseMonto(x.saldo, x.tipo_cambio), 0))
-  const gastosMes = round2(gastos.filter(g => inMonth(g.fecha, mes)).reduce((s, g) => s + toBaseMonto(g.monto, g.tipo_cambio), 0))
+  const f = facturas.filter(x => inMonth(x.issue_date, mes))
+  const facturado = round2(f.reduce((s, x) => s + toBaseMonto(x.total, x.exchange_rate), 0))
+  const cobrado = round2(pagos.filter(p => p.tipo === 'cobro' && inMonth(p.fecha, mes)).reduce((s, p) => s + toBaseMonto(p.monto, p.exchange_rate), 0))
+  const pendiente = round2(f.filter(x => x.saldo > 0).reduce((s, x) => s + toBaseMonto(x.saldo, x.exchange_rate), 0))
+  const gastosMes = round2(gastos.filter(g => inMonth(g.fecha, mes)).reduce((s, g) => s + toBaseMonto(g.monto, g.exchange_rate), 0))
   const today = todayLocal()
-  const porPagar = round2(cxps.filter(x => x.saldo > 0).reduce((s, x) => s + toBaseMonto(x.saldo, x.tipo_cambio), 0))
-  const vencidas = round2(cxps.filter(x => x.saldo > 0 && x.fecha_vencimiento < today).reduce((s, x) => s + toBaseMonto(x.saldo, x.tipo_cambio), 0))
-  const porVencer = round2(cxps.filter(x => x.saldo > 0 && x.fecha_vencimiento >= today).reduce((s, x) => s + toBaseMonto(x.saldo, x.tipo_cambio), 0))
+  const porPagar = round2(cxps.filter(x => x.saldo > 0).reduce((s, x) => s + toBaseMonto(x.saldo, x.exchange_rate), 0))
+  const vencidas = round2(cxps.filter(x => x.saldo > 0 && x.due_date < today).reduce((s, x) => s + toBaseMonto(x.saldo, x.exchange_rate), 0))
+  const porVencer = round2(cxps.filter(x => x.saldo > 0 && x.due_date >= today).reduce((s, x) => s + toBaseMonto(x.saldo, x.exchange_rate), 0))
   return { facturado, cobrado, pendiente, gastos: gastosMes, utilidad: round2(cobrado - gastosMes), porPagar, vencidas, porVencer }
 }
 
 export function topClientes(facturas: Factura[]): { nombre: string; total: number }[] {
   const map = new Map<string, number>()
-  for (const f of facturas) map.set(f.nombre_cliente, round2((map.get(f.nombre_cliente) ?? 0) + f.total))
+  for (const f of facturas) map.set(f.customer_name, round2((map.get(f.customer_name) ?? 0) + f.total))
   return [...map.entries()].map(([nombre, total]) => ({ nombre, total })).sort((a, b) => b.total - a.total).slice(0, 5)
 }
 

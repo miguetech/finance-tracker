@@ -13,14 +13,14 @@ export function calcImporte(cantidad: number, precio: number, decimals = 2): num
   return roundTo(cantidad * precio, decimals)
 }
 
-export function calcInvoiceTotals(items: { cantidad: number; precio_unitario: number }[], ivaPct: number, decimals = 2): InvoiceTotals {
-  const subtotal = roundTo(items.reduce((s, i) => s + calcImporte(i.cantidad, i.precio_unitario, decimals), 0), decimals)
+export function calcInvoiceTotals(items: { cantidad: number; unit_price: number }[], ivaPct: number, decimals = 2): InvoiceTotals {
+  const subtotal = roundTo(items.reduce((s, i) => s + calcImporte(i.cantidad, i.unit_price, decimals), 0), decimals)
   const iva = roundTo((subtotal * ivaPct) / 100, decimals)
   return { subtotal, iva, total: roundTo(subtotal + iva, decimals) }
 }
 
-export function buildFactura(items: { descripcion: string; cantidad: number; precio_unitario: number }[], ivaPct: number, decimals = 2): { items: FacturaItem[]; totals: InvoiceTotals } {
-  const withImporte = items.map(i => ({ ...i, importe: calcImporte(i.cantidad, i.precio_unitario, decimals) }))
+export function buildFactura(items: { descripcion: string; cantidad: number; unit_price: number }[], ivaPct: number, decimals = 2): { items: FacturaItem[]; totals: InvoiceTotals } {
+  const withImporte = items.map(i => ({ ...i, importe: calcImporte(i.cantidad, i.unit_price, decimals) }))
   const totals = calcInvoiceTotals(withImporte, ivaPct, decimals)
   return { items: withImporte, totals }
 }

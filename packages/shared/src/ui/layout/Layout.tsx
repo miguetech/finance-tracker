@@ -3,18 +3,34 @@ import type { ReactNode } from 'react'
 import { cx } from '../components'
 import { IconDashboard, IconInvoice, IconClient, IconUsers, IconPayables, IconReceivable, IconProvider, IconExpense, IconReport, IconSettings, IconMenu, IconLogo, IconBox } from '../icons'
 import { useI18n } from '../../i18n'
+import { OfflineBanner } from '../hooks'
+import { BarraSync } from '../BarraSync'
+import { RateBubble } from '../RateBubble'
+import { ColaBubble } from '../colaSync'
+import { SyncStatusBar } from '../SyncStatusBar'
+import { EspejoProvider } from '../../store/espejoContext'
+import { crearStoreEspejo } from '../../sync/stores/sqlite'
+import type { EspejoStore } from '../../sync/espejo'
+import { useEffect } from 'react'
 
 export type NavKey = 'dashboard' | 'facturas' | 'clientes' | 'empleados' | 'cuentas' | 'cxc' | 'proveedores' | 'gastos' | 'reportes' | 'configuracion' | 'compartir' | 'inventario'
 
 export interface NavItem { key: NavKey; label: string; Icon: (p: { className?: string }) => ReactNode }
 
-export function Layout({ current, onNavigate, children, headerExtra, filterNav, extraItems }: {
+export function Layout({ current, onNavigate, children, headerExtra, filterNav, extraItems, espejoForzado, espejoApagado, storeExterno }: {
   current: NavKey
   onNavigate: (k: NavKey) => void
   children: ReactNode
   headerExtra?: ReactNode
   filterNav?: (key: NavKey) => boolean
   extraItems?: NavItem[]
+  /** Sesión offline: activa el espejo aunque el flag de entorno esté off. */
+  espejoForzado?: boolean
+  /** Host fuerza espejo OFF: volcado cifrado sin clave desbloqueada; online
+   *  se trabaja directo contra Sheets y el PIN solo se pide al caer la red. */
+  espejoApagado?: boolean
+  /** Store ya creado por el host (p. ej. espejo cifrado con PIN). */
+  storeExterno?: EspejoStore | null
 }) {
   const { t } = useI18n()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -53,8 +69,11 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
       ))}
     </nav>
   )
-  return (
+  const contenido = (
     <div className="min-h-screen bg-muted md:flex">
+      <OfflineBanner />
+      <BarraSync />
+      <SyncStatusBar />
       <aside className="hidden md:flex md:flex-col md:w-60 md:min-h-screen bg-surface border-r border-gray-100">{nav}</aside>
       {mobileOpen && (
         <div className="fixed inset-0 z-40 md:hidden bg-black/40" onClick={() => setMobileOpen(false)}>
@@ -69,6 +88,25 @@ export function Layout({ current, onNavigate, children, headerExtra, filterNav, 
         </header>
         <main className="flex-1 p-4 md:p-8"><div className="max-w-6xl mx-auto">{children}</div></main>
       </div>
+      <RateBubble onNavigate={onNavigate} />
+      <ColaBubble />
     </div>
+  )
+  // El espejo se activa con VITE_ESPEJO=on (o forzado en sesión offline); por
+  // defecto queda en ruta directa a Sheets. Un store externo (cifrado) manda.
+  const flagEntorno = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_ESPEJO ?? 'off'
+  const flag = storeExterno || espejoForzado ? 'on' : espejoApagado ? 'off' : flagEntorno
+  const [espejoStore, setEspejoStore] = useState<EspejoStore | null>(storeExterno ?? null)
+  useEffect(() => {
+    if (storeExterno) { setEspejoStore(storeExterno); return }
+    if (flag !== 'on') return
+    let vivo = true
+    void crearStoreEspejo().then(s => { if (vivo) setEspejoStore(s) })
+    return () => { vivo = false }
+  }, [flag, storeExterno])
+  return (
+    <EspejoProvider flag={flag} store={espejoStore}>
+      {contenido}
+    </EspejoProvider>
   )
 }

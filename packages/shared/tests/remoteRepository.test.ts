@@ -26,4 +26,32 @@ describe('createRemoteRepository', () => {
     const repo = createRemoteRepository({ apiUrl: 'https://script.example/exec', getIdToken: async () => 'TOK' })
     await expect(repo.deleteGasto('x')).rejects.toThrow('No tienes permiso')
   })
+  it('con getSessionToken manda token y NO id_token', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: true, data: [] }) })
+    const repo = createRemoteRepository({ apiUrl: 'https://script.example/exec', getIdToken: async () => 'TOK', getSessionToken: async () => 'SESS' })
+    await repo.listClientes()
+    const [url] = fetchMock.mock.calls[0]
+    const qs = new URLSearchParams(String(url.split('?')[1]))
+    expect(qs.get('token')).toBe('SESS')
+    expect(qs.get('id_token')).toBeNull()
+  })
+  it('getSessionToken que devuelve null usa id_token', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: true, data: [] }) })
+    const repo = createRemoteRepository({ apiUrl: 'https://script.example/exec', getIdToken: async () => 'TOK', getSessionToken: async () => null })
+    await repo.listClientes()
+    const [url] = fetchMock.mock.calls[0]
+    const qs = new URLSearchParams(String(url.split('?')[1]))
+    expect(qs.get('id_token')).toBe('TOK')
+    expect(qs.get('token')).toBeNull()
+  })
+  it('listDispositivos y removerDispositivo usan las acciones del backend', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: true, data: [] }) })
+    const repo = createRemoteRepository({ apiUrl: 'https://script.example/exec', getIdToken: async () => 'TOK' })
+    await repo.listDispositivos()
+    expect(new URLSearchParams(String(fetchMock.mock.calls[0][0].split('?')[1])).get('action')).toBe('listDispositivos')
+    await repo.removerDispositivo('dev-1')
+    const qs = new URLSearchParams(String(fetchMock.mock.calls[1][0].split('?')[1]))
+    expect(qs.get('action')).toBe('removerDispositivo')
+    expect(qs.get('payload')).toBe(JSON.stringify('dev-1'))
+  })
 })

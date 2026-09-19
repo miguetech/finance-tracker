@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { createRepository, type Repository } from '../src/data/repository'
-import { AppProvider, useClientes, useConfig } from '../src/store/queries'
+import { AppProvider, useClientes, useConfig, useDispositivos } from '../src/store/queries'
 import { SheetsApi } from '../src/sheets/api'
 import type { StorageAdapter } from '../src/data/storage'
 import React from 'react'
@@ -30,6 +30,11 @@ describe('queries', () => {
   it('useConfig devuelve config default', async () => {
     const { result } = renderHook(() => useConfig(), { wrapper })
     await waitFor(() => expect(result.current.isLoading).toBe(false))
-    expect(result.current.config?.prefijo_folio).toBe('FAC-')
+    expect(result.current.config?.serial_prefix).toBe('FAC-')
+  })
+  it('useDispositivos devuelve lista vacía', async () => {
+    const { result } = renderHook(() => useDispositivos(), { wrapper })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.dispositivos).toEqual([])
   })
 })

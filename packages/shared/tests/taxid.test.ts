@@ -25,9 +25,9 @@ describe('taxid', () => {
 
 describe('config tipo_doc', () => {
   it('ConfigSchema default tipo_doc RFC', () => {
-    const c = ConfigSchema.parse({ empresa_nombre: 'X', prefijo_folio: 'FAC-' })
+    const c = ConfigSchema.parse({ company_name: 'X', serial_prefix: 'FAC-' })
     expect(c.tipo_doc).toBe('RFC')
-    expect(c.tipo_doc_etiqueta).toBe('')
+    expect(c.doc_type_label).toBe('')
   })
   it('configFromRows lee tipo_doc de la hoja', () => {
     const c = configFromRows([['tipo_doc', 'NIF'], ['tipo_doc_etiqueta', '']])
@@ -36,6 +36,6 @@ describe('config tipo_doc', () => {
   it('configFromRows sin claves cae a default RFC', () => {
     const c = configFromRows([['empresa_nombre', 'A']])
     expect(c.tipo_doc).toBe('RFC')
-    expect(c.tipo_doc_etiqueta).toBe('')
+    expect(c.doc_type_label).toBe('')
   })
 })

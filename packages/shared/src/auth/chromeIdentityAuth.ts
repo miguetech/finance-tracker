@@ -4,6 +4,7 @@ export function chromeIdentityAuth(_clientId: string): AuthProvider {
   const ext = chrome as unknown as {
     identity?: {
       getAuthToken: (opts: { interactive: boolean }, cb: (token: string) => void) => void
+      getProfileUserInfo: ((cb: (info: { email?: string }) => void) => void) & ((opts: { email: boolean }, cb: (info: { email?: string }) => void) => void)
       clearAllCachedAuthTokens: (cb: () => void) => void
     }
   }
@@ -22,7 +23,12 @@ export function chromeIdentityAuth(_clientId: string): AuthProvider {
     async getSignedInUser(): Promise<{ email: string } | null> {
       try {
         await this.getToken(false)
-        return { email: 'user' }
+        // getProfileUserInfo da el email sin permiso extra en cuentas del perfil.
+        const info = await new Promise<{ email?: string }>(resolve => {
+          try { identity!.getProfileUserInfo({ email: true }, resolve) } catch { identity!.getProfileUserInfo(resolve) }
+        })
+        const email = typeof info?.email === 'string' && info.email ? info.email : 'user'
+        return { email }
       } catch {
         return null
       }

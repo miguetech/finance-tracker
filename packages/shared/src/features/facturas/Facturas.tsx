@@ -33,7 +33,7 @@ export function Facturas() {
     return t('states.pendiente')
   }
 
-  const filtradas = facturas.filter(f => (!estado || etiquetaEstado(f) === estado) && (!mes || f.fecha_emision.slice(0, 7) === mes))
+  const filtradas = facturas.filter(f => (!estado || etiquetaEstado(f) === estado) && (!mes || f.issue_date.slice(0, 7) === mes))
 
   return (
     <div className="space-y-4">
@@ -53,16 +53,16 @@ export function Facturas() {
           { key: 'folio', header: t('facturas.folio'), render: r => (
             <span className="inline-flex items-center gap-1.5">{String(r.folio)} {String(r.editada) === 'true' && <Badge tone="gray">{t('common.editada')}</Badge>}</span>
           ) },
-          { key: 'cliente', header: t('facturas.cliente'), render: r => String(r.nombre_cliente) },
-          { key: 'emision', header: t('facturas.emision'), render: r => String(r.fecha_emision) },
+          { key: 'cliente', header: t('facturas.cliente'), render: r => String(r.customer_name) },
+          { key: 'emision', header: t('facturas.emision'), render: r => String(r.issue_date) },
           { key: 'total', header: t('facturas.total'), render: r => formatMoneyConverted(Number(r.total), String(r.moneda), moneda, config) },
           { key: 'saldo', header: t('facturas.saldo'), render: r => formatMoneyConverted(Number(r.saldo), String(r.moneda), moneda, config) },
           { key: 'estado', header: t('common.estado'), render: r => { const e = estadoDe(r as { saldo: number; total: number }); return <Badge tone={e.tone}>{t(e.key)}</Badge> } },
           { key: 'acciones', header: '', render: r => (
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => setDetalleId(String(r.id_factura))}>{t('facturas.ver')}</Button>
+              <Button variant="ghost" onClick={() => setDetalleId(String(r.invoice_id))}>{t('facturas.ver')}</Button>
               {isAdmin && (<Button variant="ghost" icon={<IconEdit className="w-4 h-4" />} onClick={() => setEditando(r as unknown as Factura)}>{t('common.editar')}</Button>)}
-              {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.id_factura))}>{t('common.eliminar')}</Button>)}
+              {isAdmin && (<Button variant="danger" icon={<IconTrash className="w-4 h-4" />} onClick={() => setDeleteId(String(r.invoice_id))}>{t('common.eliminar')}</Button>)}
             </div>
           ) }
         ]} rows={filtradas as unknown as Record<string, unknown>[]} />

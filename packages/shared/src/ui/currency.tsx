@@ -4,10 +4,14 @@ import { useConfig } from '../store/queries'
 import { activeCurrencies, getCurrency, formatMoney } from '../currency'
 import type { Config } from '../types/entities'
 
-export function CurrencySelect({ value, onChange, label }: { value: string; onChange: (v: string) => void; label?: string }) {
+export function CurrencySelect({ value, onChange, label, opciones }: { value: string; onChange: (v: string) => void; label?: string; opciones?: string[] }) {
   const { config } = useConfig()
   const currencies = activeCurrencies(config)
-  const options = currencies.map(c => ({ value: c.code, label: `${c.code} · ${c.symbol} · ${c.name}` }))
+  const codes = opciones?.length ? opciones : currencies.map(c => c.code)
+  const options = codes.map(code => {
+    const c = getCurrency(code || config?.moneda || 'USD')
+    return { value: code, label: `${c.code} · ${c.symbol} · ${c.name}` }
+  })
   return (
     <div>
       {label && <label className="text-xs text-gray-500">{label}</label>}

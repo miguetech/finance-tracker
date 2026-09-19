@@ -14,10 +14,10 @@ export function MovimientoModal({ producto, onClose }: { producto: Producto; onC
   const [tipo, setTipo] = useState<TipoMovimiento>('entrada')
   const [cantidad, setCantidad] = useState('')
   const [motivo, setMotivo] = useState('')
-  const [id_proveedor, setIdProveedor] = useState(producto.id_proveedor || '')
+  const [supplier_id, setIdProveedor] = useState(producto.supplier_id || '')
   const [error, setError] = useState('')
 
-  useEffect(() => { setCantidad(''); setMotivo(''); setError(''); setTipo('entrada'); setIdProveedor(producto.id_proveedor || '') }, [producto])
+  useEffect(() => { setCantidad(''); setMotivo(''); setError(''); setTipo('entrada'); setIdProveedor(producto.supplier_id || '') }, [producto])
 
   const submit = async () => {
     setError('')
@@ -25,7 +25,7 @@ export function MovimientoModal({ producto, onClose }: { producto: Producto; onC
     if (!n || n <= 0) { setError(t('errors.cantidadMayorCero')); return }
     if (tipo === 'salida' && n > Number(producto.stock)) { setError(t('errors.soloHay', { cantidad: String(producto.stock) })); return }
     try {
-      await registrar.mutateAsync({ id_producto: producto.id_producto, tipo, cantidad: n, motivo: motivo.trim(), id_proveedor: tipo === 'entrada' ? id_proveedor : '', fecha: todayLocal() })
+      await registrar.mutateAsync({ product_id: producto.product_id, tipo, cantidad: n, motivo: motivo.trim(), supplier_id: tipo === 'entrada' ? supplier_id : '', fecha: todayLocal() })
       toast(t('inventario.movimientoRegistrado'))
       onClose()
     } catch (e) {
@@ -54,8 +54,8 @@ export function MovimientoModal({ producto, onClose }: { producto: Producto; onC
         <div><label className="text-xs text-gray-500">{t('facturas.cantidad')} ({producto.unidad || 'pieza'}) *</label><Input type="number" min={0} step="any" value={cantidad} onChange={e => setCantidad(e.target.value)} autoFocus /></div>
         {tipo === 'entrada' && (
           <div><label className="text-xs text-gray-500">{t('inventario.proveedor')}</label>
-            <Select value={id_proveedor} onChange={setIdProveedor}
-              options={proveedores.map(p => ({ value: p.id_proveedor, label: p.nombre }))} placeholder={t('inventario.sinProveedor')} />
+            <Select value={supplier_id} onChange={setIdProveedor}
+              options={proveedores.map(p => ({ value: p.supplier_id, label: p.nombre }))} placeholder={t('inventario.sinProveedor')} />
           </div>
         )}
         {tipo !== 'ajuste' && <div><label className="text-xs text-gray-500">{t('inventario.motivoReferencia')}</label><Input value={motivo} onChange={e => setMotivo(e.target.value)} placeholder={t('inventario.ejCompra')} /></div>}

@@ -1,4 +1,4 @@
-export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Usuarios' | 'Productos' | 'Movimientos_Stock'
+export type TableName = 'Config' | 'Clientes' | 'Empleados' | 'Facturas' | 'Factura_Items' | 'Gastos' | 'Proveedores' | 'Cuentas_Pagar' | 'Pagos' | 'Usuarios' | 'Productos' | 'Movimientos_Stock' | 'Codigos_Acceso' | 'Dispositivos' | 'Gastos_Fijos' | 'Tasas_Historial' | 'Nomina_Detalles' | 'Asistencias'
 
 export interface ColumnSpec {
   key: string
@@ -16,95 +16,105 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'valor', header: 'valor', type: S }
   ],
   Clientes: [
-    { key: 'id_cliente', header: 'id_cliente', type: S },
+    { key: 'customer_id', header: 'customer_id', type: S },
     { key: 'nombre', header: 'nombre', type: S },
     { key: 'rfc', header: 'rfc', type: S },
     { key: 'email', header: 'email', type: S },
     { key: 'telefono', header: 'telefono', type: S },
     { key: 'direccion', header: 'direccion', type: S },
-    { key: 'fecha_registro', header: 'fecha_registro', type: D }
+    { key: 'created_at', header: 'created_at', type: D },
+    { key: 'alias', header: 'alias', type: S },
+    { key: 'address_country', header: 'address_country', type: S },
+    { key: 'address_state', header: 'address_state', type: S },
+    { key: 'address_zip', header: 'address_zip', type: S }
   ],
   Empleados: [
-    { key: 'id_empleado', header: 'id_empleado', type: S },
+    { key: 'employee_id', header: 'employee_id', type: S },
     { key: 'nombre', header: 'nombre', type: S },
     { key: 'rfc', header: 'rfc', type: S },
     { key: 'puesto', header: 'puesto', type: S },
     { key: 'salario', header: 'salario', type: N },
-    { key: 'salario_moneda', header: 'salario_moneda', type: S },
-    { key: 'fecha_ingreso', header: 'fecha_ingreso', type: D },
-    { key: 'activo', header: 'activo', type: S }
+    { key: 'salary_currency', header: 'salary_currency', type: S },
+    { key: 'hire_date', header: 'hire_date', type: D },
+    { key: 'activo', header: 'activo', type: S },
+    { key: 'clock_in', header: 'clock_in', type: S },
+    { key: 'clock_out', header: 'clock_out', type: S },
+    { key: 'pay_schedule', header: 'pay_schedule', type: S },
+    { key: 'overtime_rate', header: 'overtime_rate', type: N }
   ],
   Facturas: [
-    { key: 'id_factura', header: 'id_factura', type: S },
+    { key: 'invoice_id', header: 'invoice_id', type: S },
     { key: 'folio', header: 'folio', type: S },
-    { key: 'id_cliente', header: 'id_cliente', type: S },
-    { key: 'nombre_cliente', header: 'nombre_cliente', type: S },
-    { key: 'fecha_emision', header: 'fecha_emision', type: D },
-    { key: 'fecha_vencimiento', header: 'fecha_vencimiento', type: D },
+    { key: 'customer_id', header: 'customer_id', type: S },
+    { key: 'customer_name', header: 'customer_name', type: S },
+    { key: 'issue_date', header: 'issue_date', type: D },
+    { key: 'due_date', header: 'due_date', type: D },
     { key: 'subtotal', header: 'subtotal', type: N },
     { key: 'iva', header: 'iva', type: N },
     { key: 'total', header: 'total', type: N },
     { key: 'saldo', header: 'saldo', type: N },
-    { key: 'fecha_pago', header: 'fecha_pago', type: D },
+    { key: 'paid_at', header: 'paid_at', type: D },
     { key: 'notas', header: 'notas', type: S },
     { key: 'moneda', header: 'moneda', type: S },
-    { key: 'tipo_cambio', header: 'tipo_cambio', type: N },
+    { key: 'exchange_rate', header: 'exchange_rate', type: N },
     { key: 'editada', header: 'editada', type: S },
-    { key: 'fecha_edicion', header: 'fecha_edicion', type: D }
+    { key: 'edited_at', header: 'edited_at', type: D }
   ],
   Factura_Items: [
-    { key: 'id_factura', header: 'id_factura', type: S },
+    { key: 'invoice_id', header: 'invoice_id', type: S },
+    { key: 'linea', header: 'linea', type: N },
     { key: 'descripcion', header: 'descripcion', type: S },
     { key: 'cantidad', header: 'cantidad', type: N },
-    { key: 'precio_unitario', header: 'precio_unitario', type: N },
-    { key: 'importe', header: 'importe', type: N }
+    { key: 'unit_price', header: 'unit_price', type: N },
+    { key: 'importe', header: 'importe', type: N },
+    { key: 'product_id', header: 'product_id', type: S }
   ],
   Gastos: [
-    { key: 'id_gasto', header: 'id_gasto', type: S },
+    { key: 'expense_id', header: 'expense_id', type: S },
     { key: 'fecha', header: 'fecha', type: D },
     { key: 'categoria', header: 'categoria', type: S },
     { key: 'descripcion', header: 'descripcion', type: S },
     { key: 'monto', header: 'monto', type: N },
-    { key: 'metodo_pago', header: 'metodo_pago', type: S },
+    { key: 'payment_method', header: 'payment_method', type: S },
     { key: 'proveedor', header: 'proveedor', type: S },
     { key: 'moneda', header: 'moneda', type: S },
-    { key: 'tipo_cambio', header: 'tipo_cambio', type: N }
+    { key: 'exchange_rate', header: 'exchange_rate', type: N }
   ],
   Proveedores: [
-    { key: 'id_proveedor', header: 'id_proveedor', type: S },
+    { key: 'supplier_id', header: 'supplier_id', type: S },
     { key: 'nombre', header: 'nombre', type: S },
     { key: 'rfc', header: 'rfc', type: S },
     { key: 'email', header: 'email', type: S },
     { key: 'telefono', header: 'telefono', type: S },
     { key: 'direccion', header: 'direccion', type: S },
-    { key: 'fecha_registro', header: 'fecha_registro', type: D }
+    { key: 'created_at', header: 'created_at', type: D }
   ],
   Cuentas_Pagar: [
-    { key: 'id_cxp', header: 'id_cxp', type: S },
-    { key: 'id_proveedor', header: 'id_proveedor', type: S },
-    { key: 'nombre_proveedor', header: 'nombre_proveedor', type: S },
-    { key: 'folio_documento', header: 'folio_documento', type: S },
+    { key: 'ap_id', header: 'ap_id', type: S },
+    { key: 'supplier_id', header: 'supplier_id', type: S },
+    { key: 'supplier_name', header: 'supplier_name', type: S },
+    { key: 'document_serial', header: 'document_serial', type: S },
     { key: 'categoria', header: 'categoria', type: S },
     { key: 'descripcion', header: 'descripcion', type: S },
-    { key: 'fecha_emision', header: 'fecha_emision', type: D },
-    { key: 'fecha_vencimiento', header: 'fecha_vencimiento', type: D },
-    { key: 'monto_total', header: 'monto_total', type: N },
+    { key: 'issue_date', header: 'issue_date', type: D },
+    { key: 'due_date', header: 'due_date', type: D },
+    { key: 'total_amount', header: 'total_amount', type: N },
     { key: 'saldo', header: 'saldo', type: N },
     { key: 'estado', header: 'estado', type: S },
     { key: 'notas', header: 'notas', type: S },
     { key: 'moneda', header: 'moneda', type: S },
-    { key: 'tipo_cambio', header: 'tipo_cambio', type: N }
+    { key: 'exchange_rate', header: 'exchange_rate', type: N }
   ],
   Pagos: [
-    { key: 'id_pago', header: 'id_pago', type: S },
+    { key: 'payment_id', header: 'payment_id', type: S },
     { key: 'tipo', header: 'tipo', type: S },
-    { key: 'id_origen', header: 'id_origen', type: S },
+    { key: 'origin_id', header: 'origin_id', type: S },
     { key: 'fecha', header: 'fecha', type: D },
     { key: 'monto', header: 'monto', type: N },
-    { key: 'metodo_pago', header: 'metodo_pago', type: S },
+    { key: 'payment_method', header: 'payment_method', type: S },
     { key: 'notas', header: 'notas', type: S },
     { key: 'moneda', header: 'moneda', type: S },
-    { key: 'tipo_cambio', header: 'tipo_cambio', type: N }
+    { key: 'exchange_rate', header: 'exchange_rate', type: N }
   ],
   Usuarios: [
     { key: 'email', header: 'email', type: S },
@@ -113,28 +123,96 @@ export const TABLES: Record<TableName, ColumnSpec[]> = {
     { key: 'modulos_editar', header: 'modulos_editar', type: S }
   ],
   Productos: [
-    { key: 'id_producto', header: 'id_producto', type: S },
+    { key: 'product_id', header: 'product_id', type: S },
     { key: 'nombre', header: 'nombre', type: S },
     { key: 'categoria', header: 'categoria', type: S },
     { key: 'unidad', header: 'unidad', type: S },
     { key: 'stock', header: 'stock', type: N },
-    { key: 'stock_minimo', header: 'stock_minimo', type: N },
-    { key: 'precio_costo', header: 'precio_costo', type: N },
-    { key: 'precio_venta', header: 'precio_venta', type: N },
-    { key: 'id_proveedor', header: 'id_proveedor', type: S },
-    { key: 'nombre_proveedor', header: 'nombre_proveedor', type: S },
+    { key: 'minimum_stock', header: 'minimum_stock', type: N },
+    { key: 'cost_price', header: 'cost_price', type: N },
+    { key: 'sale_price', header: 'sale_price', type: N },
+    { key: 'supplier_id', header: 'supplier_id', type: S },
+    { key: 'supplier_name', header: 'supplier_name', type: S },
+    { key: 'imagen', header: 'imagen', type: S },
     { key: 'notas', header: 'notas', type: S },
     { key: 'activo', header: 'activo', type: S },
-    { key: 'fecha_registro', header: 'fecha_registro', type: D }
+    { key: 'created_at', header: 'created_at', type: D },
+    { key: 'moneda', header: 'moneda', type: S }
   ],
   Movimientos_Stock: [
-    { key: 'id_movimiento', header: 'id_movimiento', type: S },
-    { key: 'id_producto', header: 'id_producto', type: S },
+    { key: 'movement_id', header: 'movement_id', type: S },
+    { key: 'product_id', header: 'product_id', type: S },
     { key: 'tipo', header: 'tipo', type: S },
     { key: 'cantidad', header: 'cantidad', type: N },
     { key: 'motivo', header: 'motivo', type: S },
-    { key: 'id_proveedor', header: 'id_proveedor', type: S },
+    { key: 'supplier_id', header: 'supplier_id', type: S },
     { key: 'fecha', header: 'fecha', type: D }
+  ],
+  Codigos_Acceso: [
+    { key: 'codigo', header: 'codigo', type: S },
+    { key: 'rol', header: 'rol', type: S },
+    { key: 'modulos_ver', header: 'modulos_ver', type: S },
+    { key: 'modulos_editar', header: 'modulos_editar', type: S },
+    { key: 'expires_at', header: 'expires_at', type: S },
+    { key: 'max_uses', header: 'max_uses', type: S },
+    { key: 'usos', header: 'usos', type: S },
+    { key: 'responsable', header: 'responsable', type: S },
+    { key: 'email', header: 'email', type: S },
+    { key: 'creado', header: 'creado', type: S },
+    { key: 'activo', header: 'activo', type: S }
+  ],
+  Dispositivos: [
+    { key: 'codigo', header: 'codigo', type: S },
+    { key: 'dispositivo', header: 'dispositivo', type: S },
+    { key: 'ip_info', header: 'ip_info', type: S },
+    { key: 'registered_at', header: 'registered_at', type: S }
+  ],
+  Gastos_Fijos: [
+    { key: 'fixed_expense_id', header: 'fixed_expense_id', type: S },
+    { key: 'descripcion', header: 'descripcion', type: S },
+    { key: 'categoria', header: 'categoria', type: S },
+    { key: 'monto', header: 'monto', type: N },
+    { key: 'moneda', header: 'moneda', type: S },
+    { key: 'due_day', header: 'due_day', type: N },
+    { key: 'supplier_id', header: 'supplier_id', type: S },
+    { key: 'supplier_name', header: 'supplier_name', type: S },
+    { key: 'payment_link', header: 'payment_link', type: S },
+    { key: 'notas', header: 'notas', type: S },
+    { key: 'activo', header: 'activo', type: S }
+  ],
+  Tasas_Historial: [
+    { key: 'rate_id', header: 'rate_id', type: S },
+    { key: 'fecha', header: 'fecha', type: D },
+    { key: 'base', header: 'base', type: S },
+    { key: 'moneda', header: 'moneda', type: S },
+    { key: 'tasa', header: 'tasa', type: N },
+    { key: 'fuente', header: 'fuente', type: S }
+  ],
+  Nomina_Detalles: [
+    { key: 'id_detalle', header: 'id_detalle', type: S },
+    { key: 'employee_id', header: 'employee_id', type: S },
+    { key: 'mes', header: 'mes', type: S },
+    { key: 'base_salary', header: 'base_salary', type: N },
+    { key: 'horas_extra', header: 'horas_extra', type: N },
+    { key: 'overtime_rate', header: 'overtime_rate', type: N },
+    { key: 'overtime_amount', header: 'overtime_amount', type: N },
+    { key: 'bonos', header: 'bonos', type: N },
+    { key: 'comisiones', header: 'comisiones', type: N },
+    { key: 'total', header: 'total', type: N },
+    { key: 'moneda', header: 'moneda', type: S },
+    { key: 'payment_method', header: 'payment_method', type: S },
+    { key: 'split_payments', header: 'split_payments', type: S },
+    { key: 'fecha', header: 'fecha', type: D },
+    { key: 'expense_id', header: 'expense_id', type: S }
+  ],
+  Asistencias: [
+    { key: 'attendance_id', header: 'attendance_id', type: S },
+    { key: 'employee_id', header: 'employee_id', type: S },
+    { key: 'employee_name', header: 'employee_name', type: S },
+    { key: 'fecha', header: 'fecha', type: D },
+    { key: 'clock_in', header: 'clock_in', type: S },
+    { key: 'clock_out', header: 'clock_out', type: S },
+    { key: 'notas', header: 'notas', type: S }
   ]
 }
 

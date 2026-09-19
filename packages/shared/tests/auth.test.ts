@@ -22,7 +22,7 @@ describe('popupOAuth id_token', () => {
   it('descarta id_token cuyo nonce no coincide', async () => {
     const realSetTimeout = window.setTimeout
     vi.stubGlobal('setTimeout', (fn: (...a: unknown[]) => void, ms: number, ...args: unknown[]) => {
-      if (ms >= 15000) { queueMicrotask(() => fn(...args)); return 0 }
+      if (ms >= 6000) { queueMicrotask(() => fn(...args)); return 0 }
       return realSetTimeout(fn, ms, ...args)
     })
     sessionStorage.setItem('ft_web_oauth_nonce', 'NONCE123')

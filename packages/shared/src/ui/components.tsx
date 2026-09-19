@@ -47,6 +47,71 @@ export function Input({ error, className, ...props }: React.InputHTMLAttributes<
   )
 }
 
+/** Campo de notas expandible para modales. */
+export function Textarea({ error, rows = 3, className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { error?: string }) {
+  return (
+    <div className={className}>
+      <textarea {...props} rows={rows} className={cx('w-full px-3.5 py-2.5 border rounded-xl text-sm bg-surface transition-colors resize-y min-h-16 placeholder:text-muted-foreground focus:outline-none focus:ring-2', error ? 'border-danger focus:ring-danger/25' : 'border-gray-200 focus:border-primary focus:ring-primary/25')} />
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+    </div>
+  )
+}
+
+/**
+ * Select con buscador interno: filtra opciones al escribir.
+ * Mantiene la API de Select y añade `onCreated` para altas rápidas (+ nuevo).
+ */
+export function SearchSelect({ value, onChange, options, placeholder, error, className, nuevoLabel, onNuevo }: {
+  value: string
+  onChange: (v: string) => void
+  options: { value: string; label: string }[]
+  placeholder?: string
+  error?: string
+  className?: string
+  nuevoLabel?: string
+  onNuevo?: () => void
+}) {
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const { t } = useI18n()
+  const sel = options.find(o => o.value === value)
+  const filtradas = q.trim() ? options.filter(o => o.label.toLowerCase().includes(q.trim().toLowerCase())) : options
+  return (
+    <div className={cx('relative', className)}>
+      {open ? (
+        <div className="rounded-xl border border-gray-200 bg-surface shadow-card">
+          <input autoFocus value={q} onChange={e => setQ(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}
+            onBlur={() => setTimeout(() => setOpen(false), 150)}
+            placeholder={`${t('common.buscar')}…`}
+            className="w-full h-10 px-3.5 text-sm bg-transparent rounded-t-xl border-b border-gray-100 focus:outline-none" />
+          <div className="max-h-52 overflow-auto p-1">
+            {filtradas.map(o => (
+              <button key={o.value} type="button" onMouseDown={() => { onChange(o.value); setOpen(false); setQ('') }}
+                className={cx('w-full text-left px-3 py-2 rounded-lg text-sm hover:bg-muted', o.value === value && 'bg-primary-soft text-primary font-medium')}>
+                {o.label}
+              </button>
+            ))}
+            {filtradas.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">{t('common.sinResultados')}</p>}
+          </div>
+          {onNuevo && (
+            <button type="button" onMouseDown={onNuevo} className="w-full border-t border-gray-100 px-3 py-2 text-sm text-primary font-medium hover:bg-primary-soft/50">
+              + {nuevoLabel ?? t('common.nuevo')}
+            </button>
+          )}
+        </div>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)}
+          className={cx('w-full min-h-10 h-auto px-3.5 py-2 text-left border rounded-xl text-sm bg-surface transition-colors flex items-center justify-between gap-2 focus:outline-none focus:ring-2', error ? 'border-danger focus:ring-danger/25' : 'border-gray-200 hover:border-primary focus:border-primary focus:ring-primary/25')}>
+          <span className={sel ? '' : 'text-muted-foreground'}>{sel?.label ?? placeholder ?? t('common.seleccionar')}</span>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden><path d="M3 4.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+        </button>
+      )}
+      {error && !open && <p className="mt-1 text-xs text-danger">{error}</p>}
+    </div>
+  )
+}
+
 export function Select({ value, onChange, options, placeholder, error, className }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[]; placeholder?: string; error?: string; className?: string }) {
   return (
     <div className={className}>
@@ -59,9 +124,9 @@ export function Select({ value, onChange, options, placeholder, error, className
   )
 }
 
-export function Card({ title, children, footer }: { title?: ReactNode; children: ReactNode; footer?: ReactNode }) {
+export function Card({ title, children, footer, className }: { title?: ReactNode; children: ReactNode; footer?: ReactNode; className?: string }) {
   return (
-    <div className="bg-surface border border-gray-100 rounded-2xl shadow-card">
+    <div className={cx('bg-surface border border-gray-100 rounded-2xl shadow-card', className)}>
       {title && <div className="px-5 py-4 border-b border-gray-100 font-semibold">{title}</div>}
       <div className="p-5">{children}</div>
       {footer && <div className="px-5 py-4 border-t border-gray-100">{footer}</div>}

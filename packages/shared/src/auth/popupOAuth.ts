@@ -1,8 +1,15 @@
 import type { AuthProvider } from './types'
 
+export const SCOPE = encodeURIComponent([
+  'openid',
+  'email',
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/drive.appdata',
+  'https://www.googleapis.com/auth/spreadsheets'
+].join(' '))
+
 export function popupOAuth(options: { clientId: string; redirectUri: string }): AuthProvider & { getIdToken: (interactive: boolean) => Promise<string> } {
   const { clientId, redirectUri } = options
-  const SCOPE = encodeURIComponent(['openid', 'email', 'https://www.googleapis.com/auth/drive.file'].join(' '))
   const NONCE_KEY = 'ft_web_oauth_nonce'
   let memAccess: string | null = null
   let memIdToken: string | null = null
@@ -80,7 +87,7 @@ export function popupOAuth(options: { clientId: string; redirectUri: string }): 
       iframe.style.display = 'none'
       iframe.src = authUrl('none')
       const cleanup = () => { iframe.remove() }
-      const timer = window.setTimeout(() => { cleanup(); resolve({ access: null, idToken: null }) }, 15000)
+      const timer = window.setTimeout(() => { cleanup(); resolve({ access: null, idToken: null }) }, 6000)
       iframe.onload = () => {
         try {
           const hash = iframe.contentWindow?.location.hash ?? ''
@@ -95,6 +102,11 @@ export function popupOAuth(options: { clientId: string; redirectUri: string }): 
   }
 
   function fullRedirect(): never {
+    // Sin red la navegación a accounts.google.com deja la pestaña muerta
+    // hasta que vuelva: mejor fallar ya y dejar que la cola local guarde.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      throw new Error('Failed to fetch: sin conexión')
+    }
     window.location.href = authUrl('consent')
     throw new Error('Redirecting a OAuth…')
   }
@@ -110,6 +122,7 @@ export function popupOAuth(options: { clientId: string; redirectUri: string }): 
       }
       const cached = storedAccessToken()
       if (cached) return cached
+      if (!navigator.onLine) throw new Error('Failed to fetch: sin conexión')
       const refreshed = await silentRefresh()
       if (refreshed.access) return refreshed.access
       if (!interactive) throw new Error('No token')
@@ -125,6 +138,7 @@ export function popupOAuth(options: { clientId: string; redirectUri: string }): 
       }
       const cached = storedIdToken()
       if (cached) return cached
+      if (!navigator.onLine) throw new Error('Failed to fetch: sin conexión')
       const refreshed = await silentRefresh()
       if (refreshed.idToken) return refreshed.idToken
       if (!interactive) throw new Error('No token')

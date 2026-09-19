@@ -1,25 +1,46 @@
 const BASE = 'https://sheets.googleapis.com/v4/spreadsheets'
 
+import { marcarFalloRed, marcarRedOk } from '../sync/redStore'
+
 export interface ValueRange {
   range: string
   values: (string | number)[][]
 }
 
 export class SheetsApi {
-  constructor(private getToken: () => Promise<string>) {}
+  constructor(private tokenGetter: () => Promise<string>) {}
+
+  getToken(): Promise<string> {
+    return this.tokenGetter()
+  }
 
   private async request<T>(url: string, init: RequestInit = {}): Promise<T> {
     const maxAttempts = 4
     for (let attempt = 0; ; attempt++) {
-      const token = await this.getToken()
-      const res = await fetch(url, {
-        ...init,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          ...(init.headers ?? {})
-        }
-      })
+      const token = await this.tokenGetter()
+      // Timeout reducido a 3s para que el fallback a cola offline sea rápido.
+      const ctrl = new AbortController()
+      const temporizador = setTimeout(() => ctrl.abort(), 3_000)
+      let res: Response
+      try {
+        res = await fetch(url, {
+          ...init,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            ...(init.headers ?? {})
+          },
+          signal: init.signal ?? ctrl.signal
+        })
+      } catch (e) {
+        // fetch abortado por timeout o sin red: señal REAL de desconexión
+        // (navigator.onLine puede seguir diciendo online). La UI muestra el
+        // modal de paso a modo offline sin esperar a recargar.
+        marcarFalloRed()
+        throw e
+      } finally {
+        clearTimeout(temporizador)
+      }
       if (!res.ok) {
         if (attempt < maxAttempts - 1 && (res.status === 429 || res.status === 500 || res.status === 503)) {
           const delay = 500 * 2 ** attempt + Math.random() * 250
@@ -29,21 +50,26 @@ export class SheetsApi {
         const text = await res.text()
         throw new Error(`Sheets API ${res.status}: ${text.slice(0, 300)}`)
       }
+      marcarRedOk()
       return res.json() as Promise<T>
     }
   }
 
-  createSpreadsheet(title: string): Promise<{ spreadsheetId: string; url: string }> {
+  createSpreadsheet(
+    title: string,
+    /** Pestañas iniciales; por defecto solo Config (BASE). Los archivos de
+     *  año pasan SUS pestañas de evento y nacen sin Config ni catálogos. */
+    pestañas: { properties: { title: string; gridProperties?: { rowCount?: number; columnCount?: number } } }[] = [
+      { properties: { title: 'Config', gridProperties: { rowCount: 200, columnCount: 2 } } }
+    ]
+  ): Promise<{ spreadsheetId: string; url: string }> {
     return this.request<{ spreadsheetId: string; spreadsheetUrl: string }>(`${BASE}`, {
       method: 'POST',
-      body: JSON.stringify({
-        properties: { title },
-        sheets: [{ properties: { title: 'Config', gridProperties: { rowCount: 200, columnCount: 2 } } }]
-      })
+      body: JSON.stringify({ properties: { title }, sheets: pestañas })
     }).then(r => ({ spreadsheetId: r.spreadsheetId, url: r.spreadsheetUrl }))
   }
 
-  getSpreadsheet(spreadsheetId: string): Promise<{ sheets: { properties: { title: string; sheetId: number; gridProperties?: { columnCount?: number } } }[] }> {
+  getSpreadsheet(spreadsheetId: string): Promise<{ properties?: { title?: string }; sheets: { properties: { title: string; sheetId: number; gridProperties?: { columnCount?: number } } }[] }> {
     return this.request<{ sheets: { properties: { title: string; sheetId: number; gridProperties?: { columnCount?: number } } }[] }>(`${BASE}/${spreadsheetId}`)
   }
 
@@ -66,7 +92,8 @@ export class SheetsApi {
 
   async batchGet(spreadsheetId: string, ranges: string[]): Promise<Record<string, (string | number)[][]>> {
     const params = new URLSearchParams()
-    params.set('ranges', ranges.join(','))
+    // La API espera el parámetro repetido (ranges=A&ranges=B), no una lista separada por comas.
+    for (const r of ranges) params.append('ranges', r)
     params.set('majorDimension', 'ROWS')
     params.set('valueRenderOption', 'UNFORMATTED_VALUE')
     const url = `${BASE}/${spreadsheetId}/values:batchGet?${params.toString()}`
