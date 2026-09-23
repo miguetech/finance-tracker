@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeAll, afterAll, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import React from 'react'
-import { Facturas } from '../src/features/facturas/Facturas'
+import { Facturas } from '../src/features/invoices/Facturas'
 import { AppProvider } from '../src/store/queries'
 import { createRepository } from '../src/data/repository'
 import { SheetsApi } from '../src/sheets/api'
